@@ -1045,7 +1045,7 @@
 <td>Practice Exam</td>
 <td>All domains</td>
 <td>—</td>
-<td>72 questions</td>
+<td>60 questions</td>
 <td>~2 hrs</td>
 </tr>
 <tr>
@@ -1092,7 +1092,7 @@
 </code></pre>
 <p>You should see Claude respond. If using the IDE extension, open the Claude panel and send a test message.</p>
 <h2>Step 3: Create your lab workspace</h2>
-<p>Open Claude Code in your terminal and run:</p>
+<p>Open a terminal (not Claude Code) and run these commands to create the directory structure:</p>
 <pre><code class="language-bash">mkdir -p ~/claude-architect-labs
 cd ~/claude-architect-labs
 mkdir -p lab-d1-agentic-arch
@@ -1102,12 +1102,17 @@ mkdir -p lab-d4-prompt-eng
 mkdir -p lab-d5-context-reliability
 mkdir -p lab-final-scenario
 </code></pre>
+<p>Then start Claude Code from inside that directory:</p>
+<pre><code class="language-bash">cd ~/claude-architect-labs
+claude
+</code></pre>
+<p>This is where you&#39;ll do all your lab work.</p>
 <h2>How labs work</h2>
 <p>Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Overview, Try it, Reference code, Run it, Check your understanding, Exam tips, and Key takeaways.</p>
 <p>When a lab has reference code, ask Claude Code to create and run it — Claude Code handles dependencies and API access automatically.</p>
 <h2>Troubleshooting — Common Issues</h2>
 <ol>
-<li><p><strong>Claude Code not connecting</strong>: Run <code>claude /doctor</code> to diagnose. Check that your subscription is active.</p>
+<li><p><strong>Claude Code not connecting</strong>: Inside Claude Code, type <code>/doctor</code> to run diagnostics. If Claude Code won&#39;t start at all, check that your subscription is active at claude.ai.</p>
 </li>
 <li><p><strong>Python version</strong>: Some labs use Python scripts. Requires Python 3.8+. Check with <code>python --version</code>. If you have <code>python3</code> instead of <code>python</code>, use <code>python3</code> throughout.</p>
 </li>
@@ -1184,17 +1189,18 @@ mkdir -p lab-final-scenario
 <li>You forget to send tool results back as <code>role: &quot;user&quot;</code> → Claude never gets the data it asked for</li>
 </ul>
 <h2>Try it</h2>
-<p>Watch the agentic loop in action using Claude Code&#39;s own built-in tools. Open Claude Code in your lab workspace and try this:</p>
-<pre><code>Find all Python files in this project, then read the contents of the first one you find and summarize what it does.
+<p>Watch the agentic loop in action using Claude Code&#39;s own built-in tools. Open Claude Code in your lab workspace and ask it to do a multi-step task:</p>
+<pre><code>List all the directories in this project, then create a file called hello.py in the lab-d1-agentic-arch directory that prints &quot;Hello from Lab 1.1&quot;, then run it.
 </code></pre>
 <p>Watch what happens in the output. Claude Code will:</p>
 <ol>
-<li>Use the <strong>Glob</strong> tool to find <code>.py</code> files (first tool call — one loop iteration)</li>
-<li>Use the <strong>Read</strong> tool to read the file (second tool call — another loop iteration)</li>
-<li>Compose a final summary response (no more tools needed — loop ends)</li>
+<li>Use the <strong>Bash</strong> tool to list directories (first tool call — one loop iteration)</li>
+<li>Use the <strong>Write</strong> tool to create the file (second tool call — another loop iteration)</li>
+<li>Use the <strong>Bash</strong> tool to run the script (third tool call — another loop iteration)</li>
+<li>Compose a final response confirming what it did (no more tools needed — loop ends)</li>
 </ol>
-<p>This is the agentic loop pattern: Claude decides which tool to call, your code executes it and sends the result back, and the loop continues until Claude has all the information it needs.</p>
-<p>The reference code below shows the same pattern built from scratch with the Claude API — with custom tools (<code>get_customer</code>, <code>lookup_order</code>) instead of built-in ones.</p>
+<p>This is the agentic loop pattern: Claude decides which tool to call next, executes it, gets the result, and loops until the task is complete.</p>
+<p>The reference code below shows this same pattern built from scratch with the Claude API — with custom tools (<code>get_customer</code>, <code>lookup_order</code>) instead of built-in ones.</p>
 <h3>Challenge Mode (optional — try before looking at the reference)</h3>
 <p><strong>Build it yourself first.</strong> Before reading the code below, ask Claude Code:</p>
 <pre><code>Build me a Python script with a while True agentic loop. It should:
@@ -1368,6 +1374,7 @@ That &quot;someone&quot; is the <strong>coordinator</strong> — a central agent
 routes context between them.</p>
 <p><strong>Exam connection (Sample Q7):</strong> When a multi-agent report misses entire topics, the root cause
 is almost always the coordinator&#39;s task decomposition being too narrow — not a subagent failure.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
 <li>The hub-and-spoke pattern: coordinator talks to all subagents, subagents never talk to each other</li>
 <li>Why context is isolated by default (and why that&#39;s a feature, not a bug)</li>
@@ -3008,6 +3015,7 @@ You don&#39;t need routing classifiers or few-shot examples. You just need bette
 <p><strong>Exam connection (Sample Q2):</strong> &quot;What&#39;s the most effective first step to improve tool selection
 reliability?&quot; → Expand tool descriptions. Not routing layers, not consolidation, not examples.
 Descriptions are the lowest-effort, highest-leverage fix.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
 <li>Why minimal descriptions (&quot;Retrieves X&quot;) cause tool confusion</li>
 <li>The 5-part description template: purpose, input format, output format, when-to-use, when-NOT-to-use</li>
@@ -3787,6 +3795,7 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p>Both support <code>${ENV_VAR}</code> expansion for credentials — the config file says <em>which</em> env var to read, not the actual secret. Secrets stay in each developer&#39;s environment, never in git.</p>
 <p><strong>Exam connection:</strong> The exam tests whether you know which scope to use for team-shared tools (project) vs personal tools (user), and that <code>${ENV_VAR}</code> is the credential pattern.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
 <li>How to configure MCP servers in <code>.mcp.json</code> (project) and <code>~/.claude.json</code> (user)</li>
 <li>Why <code>${ENV_VAR}</code> expansion matters for team security</li>
@@ -10911,7 +10920,7 @@ If compliance is required, it must be programmatic. If guidance is sufficient, u
         const heroEl = document.createElement('div');
         heroEl.innerHTML = '<div class="course-stats">' +
           '<span><span class="stat-num">31</span> labs</span>' +
-          '<span><span class="stat-num">72</span> practice questions</span>' +
+          '<span><span class="stat-num">78</span> practice questions</span>' +
           '<span><span class="stat-num">5</span> domains</span>' +
           '<span>\u2713 Exam-aligned</span>' +
           '</div>';
