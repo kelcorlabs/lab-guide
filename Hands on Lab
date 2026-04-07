@@ -43,6 +43,17 @@ Every lab follows the same structure so you always know where you are:
 - Basic Python familiarity (for reading reference code)
 - Labs are sequential within each module — start at Lab X.1 and work through
 
+## Running reference code (optional)
+
+The reference code in each lab is Python that calls the Claude API. You can study it without running it — the exam tests your understanding of the patterns, not your ability to execute scripts.
+
+If you want to actually run the reference code, you'll need:
+- **Python 3.8+** installed (`python --version` to check)
+- **The anthropic package** (`pip install anthropic`)
+- **An API key** set as an environment variable (`export ANTHROPIC_API_KEY="your-key"`)
+
+You can get an API key at console.anthropic.com. This is separate from your Claude Pro subscription — the API has its own usage-based pricing.
+
 ---
 
 # SETUP — Do This First
@@ -99,7 +110,7 @@ This is where you'll do all your lab work.
 
 Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Overview, Try it, Reference code, Run it, Check your understanding, Exam tips, and Key takeaways.
 
-When a lab has reference code, ask Claude Code to create and run it — Claude Code handles dependencies and API access automatically.
+The **Try it** sections use Claude Code directly — no extra setup needed. The **Reference code** sections contain Python scripts that call the Claude API. You can study them without running them. If you want to run them, see "Running reference code" in the Course Overview.
 
 ## Troubleshooting — Common Issues
 
@@ -332,10 +343,13 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+> **Requires:** Python 3.8+, `pip install anthropic`, and `ANTHROPIC_API_KEY` environment variable. See "Running reference code" in the Course Overview if you haven't set this up. You can skip this step and still learn the pattern from reading the code.
 
-```
-Create the file lab-d1-agentic-arch/basic_loop.py with the code above and run it
+If you have the prerequisites, create and run the file:
+
+```bash
+cd ~/claude-architect-labs
+python lab-d1-agentic-arch/basic_loop.py
 ```
 
 **What you should see:** iteration 1 → stop_reason: tool_use → iteration 2 → stop_reason: tool_use → iteration 3 → stop_reason: end_turn.

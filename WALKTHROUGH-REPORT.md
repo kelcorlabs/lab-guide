@@ -212,3 +212,50 @@ Also found and fixed 2 more dangling bullet lists in Labs 2.1 and 2.4.
 
 ### Overall verdict:
 The guide is now clean and functional. Every "Try it" prompt works in Claude Code. The section structure is consistent across all 31 labs. The content is accurate and exam-aligned.
+
+---
+
+## LIVE WALKTHROUGH: Doing Lab 1.1 as a real student
+
+### Setup
+- Created workspace directories ✓
+- No Python installed on this machine — discovered during testing
+
+### Lab 1.1 walkthrough
+- **Learning objectives, Recall, Overview**: Read and understood. Clear. ✓
+- **Try it**: Created hello.py, demonstrated multi-step tool usage concept ✓
+- **Challenge Mode**: Skipped (optional) — would work for students who want to try first ✓
+- **Reference code**: Read and understood the 100-line agentic loop. Clear comments. ✓
+- **Run it**: **CANNOT RUN** — Python not installed, and even if it were, `anthropic.Anthropic()` needs ANTHROPIC_API_KEY which we removed from Setup
+
+### CRITICAL FINDING: "Run it" sections are broken for all API labs
+
+**Problem:** The restructuring removed API key setup ("you do NOT need a separate API key") but the reference code scripts all call `anthropic.Anthropic()` which reads `ANTHROPIC_API_KEY` from the environment. Claude Code's own auth does NOT flow through to child Python processes.
+
+**What this means:** A student following the instructions literally cannot run any reference code without:
+1. Python 3.8+ installed
+2. `pip install anthropic`
+3. `export ANTHROPIC_API_KEY="sk-ant-..."` (requires separate API billing)
+
+**Fix applied:**
+- Added "Running reference code (optional)" section to Course Overview explaining the requirements
+- Updated Lab 1.1 "Run it" with a requirements callout and direct `python` command
+- Updated "How labs work" to stop claiming "Claude Code handles dependencies and API access automatically"
+- Made clear that studying the code is sufficient — running it is optional
+
+### Check your understanding (as a student)
+- Exercise 1: Traced through code, understood why removing tool_result breaks the loop ✓
+- Exercise 2: Understood the text-parsing anti-pattern ✓
+- Exercise 3: Traced 3 loop iterations correctly ✓
+
+### Exam tips and Key takeaways
+- Read and internalized. Clear distractor awareness. ✓
+
+### Student assessment of Lab 1.1
+After completing this lab (reading only, not running), I feel I understand:
+- What an agentic loop is and how stop_reason controls it ✓
+- Why tool results must be role "user" ✓
+- Why text parsing is an anti-pattern ✓
+- How to trace loop iterations ✓
+
+I would feel confident answering an exam question about this topic.
