@@ -1145,8 +1145,15 @@ mkdir -p lab-final-scenario
 </ul>
 <hr>
 <h1>LAB 1.1: BUILD A REAL AGENTIC LOOP</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.1</span> <span class="badge badge-concept">stop_reason lifecycle, tool results, anti-patterns</span> <span class="badge badge-time">~30 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.1</span> <span class="badge badge-concept">stop_reason lifecycle, tool results, anti-patterns</span> <span class="badge badge-time">~30 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Implement agentic loop control flow that continues when <code>stop_reason</code> is <code>&quot;tool_use&quot;</code> and terminates when <code>stop_reason</code> is <code>&quot;end_turn&quot;</code></li>
+<li>Append tool results to conversation context between loop iterations so the model can incorporate new information into its reasoning</li>
+<li>Identify and avoid anti-patterns such as parsing natural language signals for loop termination, setting arbitrary iteration caps, or checking for assistant text content as a completion indicator</li>
+</ul>
 <h2>Recall</h2>
 <p>Before starting, review these key terms from Module 1 above:</p>
 <ul>
@@ -1160,7 +1167,7 @@ mkdir -p lab-final-scenario
 <p>This lab is the foundation for everything else in the certification. <strong>27% of exam questions trace back to this pattern.</strong></p>
 <p><strong>The problem it solves:</strong> Claude can&#39;t run tools by itself. It can only <em>ask</em> your code to run them.</p>
 <p>Your code needs a loop that keeps going until Claude says &quot;I&#39;m done.&quot; That signal is <code>stop_reason</code>.</p>
-<h2>How the Agentic Loop Works</h2>
+<h3>How it works</h3>
 <p>Think of it like a conversation between your code and Claude:</p>
 <ol>
 <li><strong>Your code</strong> sends the question + tool definitions to Claude</li>
@@ -1187,7 +1194,7 @@ mkdir -p lab-final-scenario
 <li>Receive that result and compose a final response</li>
 </ol>
 <p>Each tool call is one iteration of the agentic loop. The loop continues until Claude has all the information it needs — that&#39;s the <code>stop_reason: &quot;end_turn&quot;</code> signal.</p>
-<h2>Challenge Mode (optional — try before looking at the reference)</h2>
+<h3>Challenge Mode (optional — try before looking at the reference)</h3>
 <p><strong>Build it yourself first.</strong> Before reading the code below, ask Claude Code:</p>
 <pre><code>Build me a Python script with a while True agentic loop. It should:
 - Define two tools: get_customer (by email) and lookup_order (by order_id) with fake data
@@ -1334,9 +1341,17 @@ Trace through the code: iteration 1 calls <code>get_customer</code>, iteration 2
 </ul>
 <hr>
 <h1>LAB 1.2: MULTI-AGENT COORDINATOR</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.2</span> <span class="badge badge-concept">Hub-and-spoke, isolated context, dynamic subagent selection</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.2</span> <span class="badge badge-concept">Hub-and-spoke, isolated context, dynamic subagent selection</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.1
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Design coordinator agents that analyze query requirements and dynamically select which subagents to invoke rather than always routing through the full pipeline</li>
+<li>Partition research scope across subagents to minimize duplication by assigning distinct subtopics or source types to each agent</li>
+<li>Implement iterative refinement loops where the coordinator evaluates synthesis output for gaps and re-delegates targeted queries</li>
+<li>Route all subagent communication through the coordinator for observability and controlled information flow</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What is the ONLY valid signal for loop termination in an agentic loop? (Lab 1.1)</li>
@@ -1567,9 +1582,17 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 1.3: SUBAGENT CONTEXT PASSING AND SPAWNING</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.3</span> <span class="badge badge-concept">AgentDefinition, structured handoffs, parallel spawning</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.3</span> <span class="badge badge-concept">AgentDefinition, structured handoffs, parallel spawning</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.2
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Include complete findings from prior agents directly in the subagent&#39;s prompt to preserve context across handoffs</li>
+<li>Configure structured data formats that separate content from metadata (source URLs, document names, page numbers) when passing context between agents</li>
+<li>Spawn parallel subagents by emitting multiple Task tool calls in a single coordinator response</li>
+<li>Design coordinator prompts that specify research goals and quality criteria rather than step-by-step procedural instructions</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>In hub-and-spoke, do subagents automatically inherit the coordinator&#39;s context? (Lab 1.2)</li>
@@ -1585,6 +1608,21 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Goal-based vs step-by-step prompts:</strong> &quot;Find the root cause&quot; outperforms &quot;Step 1: check logs, Step 2: check metrics&quot; — Claude adapts better with goals</li>
 <li><strong>AgentDefinition:</strong> The SDK structure that configures each subagent (name, description, system_prompt, allowed_tools)</li>
 </ul>
+<h3>fork_session — Independent Exploration Branches</h3>
+<p><code>fork_session</code> creates independent branches from a shared analysis baseline. Each branch explores a different approach without contaminating the other.</p>
+<pre><code class="language-python"># Shared baseline: both branches start from the same codebase analysis
+# Branch A explores refactoring to class-based components
+# Branch B explores refactoring to functional components with hooks
+# Results are independent — Branch A&#39;s findings don&#39;t affect Branch B
+
+# In Claude Code CLI:
+# 1. Analyze the codebase in a named session
+# 2. Fork to explore approach A
+# 3. Fork again (from the original baseline) to explore approach B
+# 4. Compare results and pick the better approach
+</code></pre>
+<p><strong>Why fork instead of just starting two separate sessions?</strong> Forks share the initial analysis baseline — you don&#39;t repeat the exploration phase. Each fork inherits the shared understanding but diverges independently from that point.</p>
+<p><strong>When to fork vs when to start fresh:</strong> Fork when you want to compare approaches from the same starting point. Start fresh when the starting context itself is stale or degraded (see Lab 1.7 for the full decision framework).</p>
 <h2>Try it</h2>
 <p>Open Claude Code and try this:</p>
 <pre><code>I need you to do three things: (1) find all Python files in this directory, (2) count the total lines of code across them, and (3) summarize which files are the longest. Show me how you carried information from each step to the next.
@@ -1809,21 +1847,6 @@ Subagents can&#39;t share context between forks — each fork is isolated.</p>
 <p><strong>Exercise 3 — What is the latency difference between sequential and parallel subagent spawning?</strong></p>
 <p>In the parallel pattern, all Task tool calls appear in a single coordinator response and execute concurrently. Sequential spawning takes the sum of all subagent runtimes; parallel takes only the longest single runtime.</p>
 <p>The exam tests whether you know that multiple Task calls in ONE response = parallel execution.</p>
-<h2>fork_session — Independent Exploration Branches</h2>
-<p><code>fork_session</code> creates independent branches from a shared analysis baseline. Each branch explores a different approach without contaminating the other.</p>
-<pre><code class="language-python"># Shared baseline: both branches start from the same codebase analysis
-# Branch A explores refactoring to class-based components
-# Branch B explores refactoring to functional components with hooks
-# Results are independent — Branch A&#39;s findings don&#39;t affect Branch B
-
-# In Claude Code CLI:
-# 1. Analyze the codebase in a named session
-# 2. Fork to explore approach A
-# 3. Fork again (from the original baseline) to explore approach B
-# 4. Compare results and pick the better approach
-</code></pre>
-<p><strong>Why fork instead of just starting two separate sessions?</strong> Forks share the initial analysis baseline — you don&#39;t repeat the exploration phase. Each fork inherits the shared understanding but diverges independently from that point.</p>
-<p><strong>When to fork vs when to start fresh:</strong> Fork when you want to compare approaches from the same starting point. Start fresh when the starting context itself is stale or degraded (see Lab 1.7 for the full decision framework).</p>
 <h2>Exam tips</h2>
 <ul>
 <li><strong>If the exam says</strong> &quot;subagent lacks context from prior agents&quot; → pass findings explicitly in the prompt</li>
@@ -1843,9 +1866,16 @@ Subagents can&#39;t share context between forks — each fork is isolated.</p>
 </ul>
 <hr>
 <h1>LAB 1.4: PREREQUISITE GATES AND HANDOFF PATTERNS</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.4</span> <span class="badge badge-concept">Programmatic enforcement vs prompt guidance</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.4</span> <span class="badge badge-concept">Programmatic enforcement vs prompt guidance</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.3
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Implement programmatic prerequisites that block downstream tool calls until prerequisite steps have completed</li>
+<li>Decompose multi-concern customer requests into distinct items, then investigate each in parallel using shared context before synthesizing a unified resolution</li>
+<li>Compile structured handoff summaries (customer ID, root cause, refund amount, recommended action) when escalating to human agents</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>How do you spawn parallel subagents? (Lab 1.3)</li>
@@ -2033,7 +2063,7 @@ if __name__ == &quot;__main__&quot;:
 <p><strong>Why prompt-only enforcement fails:</strong></p>
 <p>Consider what happens if you replace the programmatic gate with <code>system=&quot;IMPORTANT: Always call get_customer before anything else.&quot;</code> and remove the code-level check. Run it five times — it will NOT always call get_customer first.</p>
 <p><strong>Prompt instructions have a non-zero failure rate.</strong> Financial operations need programmatic gates.</p>
-<h2>Reference code</h2>
+<h3>Reference code — Multi-concern decomposition</h3>
 <p>The exam tests: &quot;Decomposing multi-concern customer requests into distinct items,
 then investigating each in parallel using shared context before synthesizing a resolution.&quot;</p>
 <pre><code class="language-python">import anthropic, json
@@ -2143,6 +2173,13 @@ The agent should:
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.5</span> <span class="badge badge-concept">PostToolUse hooks, normalization, compliance enforcement</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.4
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Implement PostToolUse hooks to normalize heterogeneous data formats (Unix timestamps, ISO 8601, numeric status codes) before the agent processes them</li>
+<li>Implement tool call interception hooks that block policy-violating actions and redirect to alternative workflows</li>
+<li>Choose hooks over prompt-based enforcement when business rules require guaranteed compliance</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Why can&#39;t prompt instructions alone guarantee that get_customer is called before process_refund? (Lab 1.4)</li>
@@ -2347,9 +2384,16 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 1.6: TASK DECOMPOSITION STRATEGIES</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.6</span> <span class="badge badge-concept">Prompt chaining vs dynamic decomposition</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.6</span> <span class="badge badge-concept">Prompt chaining vs dynamic decomposition</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.1
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Select task decomposition patterns appropriate to the workflow: prompt chaining for predictable multi-aspect reviews, dynamic decomposition for open-ended investigation tasks</li>
+<li>Design per-file local analysis passes plus a separate cross-file integration pass to avoid attention dilution in large code reviews</li>
+<li>Decompose open-ended tasks by first mapping structure, identifying high-impact areas, then creating a prioritized plan that adapts as dependencies are discovered</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What&#39;s the difference between a hook and a gate? (Lab 1.5)</li>
@@ -2372,6 +2416,31 @@ The exam tests your judgment about WHICH strategy fits WHICH situation.</p>
 <li><strong>Dynamic decomposition:</strong> Agent analyzes the input first, then decides what subtasks to create. Best for complex, unpredictable problems.</li>
 <li><strong>Decision rule:</strong> Known steps → chain. Unknown complexity → decompose.</li>
 </ul>
+<h3>High-impact area identification (dynamic decomposition deep dive)</h3>
+<p>The exam specifically tests this pattern: &quot;Decomposing open-ended tasks by <strong>first mapping structure, identifying high-impact areas</strong>, then creating a prioritized plan that adapts as dependencies are discovered.&quot;</p>
+<p>Here&#39;s the concrete workflow for an open-ended task like &quot;add comprehensive tests to a legacy codebase&quot;:</p>
+<p><strong>Phase 1 — Map structure (don&#39;t write any tests yet)</strong></p>
+<ul>
+<li>List all modules/directories and their file counts</li>
+<li>Identify entry points (main functions, API endpoints, CLI commands)</li>
+<li>Note which modules import which others (dependency graph)</li>
+</ul>
+<p><strong>Phase 2 — Identify high-impact areas</strong></p>
+<ul>
+<li>Modules with the <strong>most callers</strong> — a bug here affects everything downstream</li>
+<li>Modules with <strong>zero existing tests</strong> — highest risk, highest value to test</li>
+<li>Modules with <strong>most recent bug fixes</strong> (git log) — historically unreliable code</li>
+<li>Modules at <strong>system boundaries</strong> (database, external APIs) — where integration bugs hide</li>
+</ul>
+<p><strong>Phase 3 — Create a prioritized plan that adapts</strong></p>
+<ul>
+<li>Start with the highest-impact module from Phase 2</li>
+<li>After testing it, <strong>re-evaluate</strong> — did you discover new dependencies? New risks?</li>
+<li>Adjust the plan: maybe module C turned out to be more critical than module B</li>
+<li>This is why dynamic decomposition beats prompt chaining — the plan evolves</li>
+</ul>
+<p><strong>Code Analysis — Why map structure first?</strong></p>
+<p>Starting with the largest file (or a random file) wastes effort — you might test a utility function that nothing calls, while the untested payment module processes real money. Mapping first ensures effort goes where it matters.</p>
 <h2>Try it</h2>
 <p>Open Claude Code and try this:</p>
 <pre><code>Analyze this project for potential improvements. Check for: (1) code quality issues, (2) missing tests, and (3) documentation gaps. For each category, give me specific findings.
@@ -2539,31 +2608,6 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Complex restructuring with unknown dependencies</strong> (e.g., monolith to microservices) → dynamic decomposition</li>
 </ul>
 <p>The key signal is whether you know the steps before you start.</p>
-<h2>High-Impact Area Identification (Dynamic Decomposition Deep Dive)</h2>
-<p>The exam specifically tests this pattern: &quot;Decomposing open-ended tasks by <strong>first mapping structure, identifying high-impact areas</strong>, then creating a prioritized plan that adapts as dependencies are discovered.&quot;</p>
-<p>Here&#39;s the concrete workflow for an open-ended task like &quot;add comprehensive tests to a legacy codebase&quot;:</p>
-<p><strong>Phase 1 — Map structure (don&#39;t write any tests yet)</strong></p>
-<ul>
-<li>List all modules/directories and their file counts</li>
-<li>Identify entry points (main functions, API endpoints, CLI commands)</li>
-<li>Note which modules import which others (dependency graph)</li>
-</ul>
-<p><strong>Phase 2 — Identify high-impact areas</strong></p>
-<ul>
-<li>Modules with the <strong>most callers</strong> — a bug here affects everything downstream</li>
-<li>Modules with <strong>zero existing tests</strong> — highest risk, highest value to test</li>
-<li>Modules with <strong>most recent bug fixes</strong> (git log) — historically unreliable code</li>
-<li>Modules at <strong>system boundaries</strong> (database, external APIs) — where integration bugs hide</li>
-</ul>
-<p><strong>Phase 3 — Create a prioritized plan that adapts</strong></p>
-<ul>
-<li>Start with the highest-impact module from Phase 2</li>
-<li>After testing it, <strong>re-evaluate</strong> — did you discover new dependencies? New risks?</li>
-<li>Adjust the plan: maybe module C turned out to be more critical than module B</li>
-<li>This is why dynamic decomposition beats prompt chaining — the plan evolves</li>
-</ul>
-<p><strong>Code Analysis — Why map structure first?</strong></p>
-<p>Starting with the largest file (or a random file) wastes effort — you might test a utility function that nothing calls, while the untested payment module processes real money. Mapping first ensures effort goes where it matters.</p>
 <h2>Exam tips</h2>
 <ul>
 <li><strong>If the exam says</strong> &quot;predictable multi-step review&quot; → prompt chaining (fixed pipeline)</li>
@@ -2581,9 +2625,17 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 1.7: SESSION STATE, RESUMPTION, AND FORKING</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.7</span> <span class="badge badge-concept">--resume, fork_session, stale tool results</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code (no API key needed)</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.7</span> <span class="badge badge-concept">--resume, fork_session, stale tool results</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 1.1
 
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Use <code>--resume</code> with session names to continue named investigation sessions across work sessions</li>
+<li>Use <code>fork_session</code> to create parallel exploration branches for comparing strategies from a shared codebase analysis</li>
+<li>Choose between session resumption (when prior context is mostly valid) and starting fresh with injected summaries (when prior tool results are stale)</li>
+<li>Inform a resumed session about specific file changes for targeted re-analysis rather than requiring full re-exploration</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When should you use prompt chaining vs dynamic decomposition? (Lab 1.6)</li>
@@ -2600,6 +2652,43 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p><strong>Exam connection:</strong> The exam tests whether you know when to resume vs fork vs start fresh.</p>
 <p>The rule: if tool results might be stale (files changed, APIs returned different data), start fresh with a structured summary of what you found — don&#39;t blindly resume.</p>
+<h3>Session strategy decision framework</h3>
+<p>The exam tests your ability to choose between three approaches. Use this table:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Approach</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Minor file changes since last session, context still valid</td>
+<td><code>--resume session-name</code></td>
+<td>Prior analysis and tool results are mostly accurate</td>
+</tr>
+<tr>
+<td>Exploring 2 competing approaches from the same analysis</td>
+<td><code>fork_session</code></td>
+<td>Creates independent branches from a shared baseline — no cross-contamination</td>
+</tr>
+<tr>
+<td>Significant time passed, code has changed substantially</td>
+<td>Start fresh + inject structured summary</td>
+<td>Stale tool results cause the agent to reference old code</td>
+</tr>
+<tr>
+<td>Agent says &quot;typically uses X&quot; instead of citing specific code</td>
+<td>Start fresh + inject structured summary</td>
+<td>Progressive summarization has lost specific details</td>
+</tr>
+<tr>
+<td>Need to re-analyze only the changed files</td>
+<td><code>--resume</code> + inform about changes</td>
+<td>Tell the agent exactly which files changed for targeted re-analysis</td>
+</tr>
+</tbody></table>
+<p><strong>The exam trap:</strong> &quot;Resume&quot; sounds efficient but is wrong when tool results are stale. &quot;Start fresh&quot; sounds wasteful but is correct when context has degraded. The key question is: <strong>are the prior tool results still accurate?</strong></p>
 <h2>Try it</h2>
 <p>Start a named session in Claude Code:</p>
 <pre><code class="language-bash">claude --resume my-test-session
@@ -2612,7 +2701,7 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Context degradation:</strong> Why long sessions produce worse results (Claude starts saying &quot;typically&quot; instead of citing specific code)</li>
 <li><strong>The decision rule:</strong> Stale tool results or degraded context → start fresh with injected summary. Recent, valid context → resume.</li>
 </ul>
-<h2>Step 1: Create lab-d1-agentic-arch/session_demo.py</h2>
+<h2>Reference code</h2>
 <p>This script demonstrates the core session management concepts with real code.
 It simulates what happens when tool results become stale and why injected
 summaries beat blind resumption.</p>
@@ -2796,7 +2885,7 @@ if __name__ == &quot;__main__&quot;:
     demo_context_degradation()
     print_decision_guide()
 </code></pre>
-<h2>Step 2: Run it</h2>
+<h2>Run it</h2>
 <p>Ask Claude Code to create and run this file:</p>
 <pre><code class="language-bash">python lab-d1-agentic-arch/session_demo.py
 </code></pre>
@@ -2807,7 +2896,7 @@ if __name__ == &quot;__main__&quot;:
 <li>Scenario 3: Shows how 50 turns of exploration causes &quot;typically&quot; answers instead of specific citations</li>
 <li>Decision guide: The exam-ready table of when to use each strategy</li>
 </ul>
-<h2>Step 3: Practice in Claude Code</h2>
+<h3>Practice in Claude Code</h3>
 <p>Now apply these concepts in a real Claude Code session:</p>
 <pre><code class="language-bash"># Start a named session
 claude --resume lab-session-test
@@ -2818,49 +2907,12 @@ claude --resume lab-session-test
 # Practice /compact to handle context degradation
 # In a long session, run /compact and notice how findings are preserved
 </code></pre>
-<h2>Break It — test your understanding</h2>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Resume a session after changing a file that was analyzed.</strong> Does Claude reference the old version? (Answer: yes — stale tool results persist in the resumed context)</li>
 <li><strong>Run 30+ turns without /compact.</strong> Ask Claude about a finding from turn 3. Does it cite the specific finding or say &quot;typically&quot;? (Answer: likely &quot;typically&quot; — context degradation)</li>
 <li><strong>Why not always start fresh?</strong> (Answer: you lose the full conversation context. Resume is better when context is still valid and tool results haven&#39;t gone stale)</li>
 </ol>
-<h2>Session Strategy Decision Framework</h2>
-<p>The exam tests your ability to choose between three approaches. Use this table:</p>
-<table>
-<thead>
-<tr>
-<th>Situation</th>
-<th>Approach</th>
-<th>Why</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Minor file changes since last session, context still valid</td>
-<td><code>--resume session-name</code></td>
-<td>Prior analysis and tool results are mostly accurate</td>
-</tr>
-<tr>
-<td>Exploring 2 competing approaches from the same analysis</td>
-<td><code>fork_session</code></td>
-<td>Creates independent branches from a shared baseline — no cross-contamination</td>
-</tr>
-<tr>
-<td>Significant time passed, code has changed substantially</td>
-<td>Start fresh + inject structured summary</td>
-<td>Stale tool results cause the agent to reference old code</td>
-</tr>
-<tr>
-<td>Agent says &quot;typically uses X&quot; instead of citing specific code</td>
-<td>Start fresh + inject structured summary</td>
-<td>Progressive summarization has lost specific details</td>
-</tr>
-<tr>
-<td>Need to re-analyze only the changed files</td>
-<td><code>--resume</code> + inform about changes</td>
-<td>Tell the agent exactly which files changed for targeted re-analysis</td>
-</tr>
-</tbody></table>
-<p><strong>The exam trap:</strong> &quot;Resume&quot; sounds efficient but is wrong when tool results are stale. &quot;Start fresh&quot; sounds wasteful but is correct when context has degraded. The key question is: <strong>are the prior tool results still accurate?</strong></p>
 <h2>Exam tips</h2>
 <ul>
 <li><strong>If the exam says</strong> &quot;agent references old code after files changed&quot; → start fresh with injected summary, NOT resume</li>
@@ -2921,8 +2973,14 @@ D) The analysis agent filtered out non-visual content</p>
 </ul>
 <hr>
 <h1>LAB 2.1: TOOL DESCRIPTION QUALITY</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.1</span> <span class="badge badge-concept">Descriptions affect tool selection reliability</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.1</span> <span class="badge badge-concept">Descriptions affect tool selection reliability</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Write tool descriptions that differentiate purpose, inputs, outputs, and boundaries</li>
+<li>Split generic tools into purpose-specific tools with defined input/output contracts</li>
+<li>Review system prompts for keyword-sensitive tool associations that override descriptions</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When should you use --resume vs fork_session vs starting fresh? (Lab 1.7)</li>
@@ -3115,7 +3173,7 @@ if __name__ == &quot;__main__&quot;:
 <li>BAD descriptions produce inconsistent or wrong selections (e.g., both queries route to the same vague tool), while GOOD descriptions correctly route web content to <code>extract_web_results</code> and documents to <code>extract_document_data</code></li>
 <li>A &quot;Tool Splitting Pattern&quot; section showing how 1 generic <code>analyze_document</code> tool becomes 3 specific tools (<code>extract_data_points</code>, <code>summarize_content</code>, <code>verify_claim_against_source</code>), each with a clear contract</li>
 </ul>
-<h2>The keyword-sensitive system prompt problem</h2>
+<h3>The keyword-sensitive system prompt problem</h3>
 <p>System prompt wording can accidentally override good tool descriptions.
 This is a real failure mode — and easy to miss.</p>
 <pre><code class="language-python"># BAD system prompt — &quot;document&quot; keyword creates unintended tool association
@@ -3179,9 +3237,15 @@ for w in warnings:
 </ul>
 <hr>
 <h1>LAB 2.2: STRUCTURED ERROR RESPONSES</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.2</span> <span class="badge badge-concept">Error categories, isRetryable, access failure vs empty result</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.2</span> <span class="badge badge-concept">Error categories, isRetryable, access failure vs empty result</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 2.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Return structured error metadata with errorCategory and isRetryable fields</li>
+<li>Distinguish access failures from valid empty results using the isError flag</li>
+<li>Implement local error recovery within subagents before propagating to the coordinator</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What is the #1 first step to fix tool selection reliability? (Lab 2.1)</li>
@@ -3204,7 +3268,7 @@ what went wrong and what to do next.</p>
 <p>&quot;Imagine you call a tool and get back <code>{\&quot;error\&quot;: \&quot;Operation failed\&quot;}</code>. Should you retry? Is the data gone? Was the input wrong? Now imagine you get back <code>{\&quot;isError\&quot;: true, \&quot;errorCategory\&quot;: \&quot;transient\&quot;, \&quot;isRetryable\&quot;: true, \&quot;message\&quot;: \&quot;Database timed out after 5 seconds\&quot;}</code>. How does the structured version change your decision? What would you do differently for a validation error vs a transient error vs a permission error?&quot;</p>
 </blockquote>
 <p>Notice how Claude Code explains the difference: generic errors leave the agent guessing, while structured errors with categories and <code>isRetryable</code> flags enable intelligent recovery decisions.</p>
-<h2>Challenge Mode (optional — try before looking at the solution)</h2>
+<h3>Challenge Mode (optional — try before looking at the solution)</h3>
 <p>Design error response functions for these 4 categories without looking ahead:</p>
 <ol>
 <li><strong>Transient</strong> (timeout, rate limit) — what fields? Is it retryable?</li>
@@ -3456,9 +3520,15 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 2.3: TOOL CHOICE AND TOOL DISTRIBUTION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.3</span> <span class="badge badge-concept">tool_choice options, scoped tool access, constrained tool replacement</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.3</span> <span class="badge badge-concept">tool_choice options, scoped tool access, constrained tool replacement</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 2.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Restrict tool sets to each agent&#39;s role to prevent cross-specialization misuse</li>
+<li>Configure tool_choice options (auto, any, forced) for different use cases</li>
+<li>Replace generic tools with constrained alternatives scoped to purpose</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Name the 4 error categories for structured error responses. (Lab 2.2)</li>
@@ -3682,6 +3752,12 @@ if __name__ == &quot;__main__&quot;:
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.4</span> <span class="badge badge-concept">Project vs user scope, environment variables, resources</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code (no API key needed)</span></div>
 # Prerequisites: Lab 2.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Configure project-scoped MCP servers in .mcp.json with environment variable expansion</li>
+<li>Configure personal MCP servers in ~/.claude.json for user-scoped integrations</li>
+<li>Design MCP resources for content catalogs that reduce exploratory tool calls</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>How many tools should a single agent ideally have access to? (Lab 2.3)</li>
@@ -3709,7 +3785,7 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>This shows all configured MCP servers and their available tools. If you have no servers configured yet, you&#39;ll see only the built-in tools.</p>
 <p>After this lab, you&#39;ll have project and personal MCP servers configured and visible here.</p>
-<h2>How MCP Works</h2>
+<h3>How MCP Works</h3>
 <p>MCP (Model Context Protocol) is a standard for connecting Claude to external tools.
 An MCP server is a small program that wraps your tool/API and exposes it to Claude.</p>
 <p>Example: The GitHub MCP server wraps GitHub&#39;s API. Once configured,
@@ -3721,7 +3797,7 @@ configured servers and makes their tools available alongside built-in tools.</p>
 <li><strong>Tools</strong>: Actions Claude can take (search_issues, create_pr, run_query)</li>
 <li><strong>Resources</strong>: Content catalogs Claude can browse (issue lists, documentation hierarchies, database schemas) — reduces exploratory tool calls</li>
 </ul>
-<h2>Step 1: Create the project MCP config</h2>
+<h3>Step 1: Create the project MCP config</h3>
 <p>In your Claude Code project folder, create <code>.mcp.json</code>:</p>
 <pre><code class="language-json">{
   &quot;mcpServers&quot;: {
@@ -3744,7 +3820,7 @@ configured servers and makes their tools available alongside built-in tools.</p>
 </code></pre>
 <p><strong>This is project-scoped</strong> — committed to version control, shared with all teammates.
 Note: <code>${GITHUB_TOKEN}</code> expands from your environment — the secret is never in the file.</p>
-<h2>Step 2: User-level config for personal/experimental servers</h2>
+<h3>Step 2: User-level config for personal/experimental servers</h3>
 <p>Edit <code>~/.claude.json</code> (or <code>~/.config/claude/claude.json</code>) to add personal servers:</p>
 <pre><code class="language-json">{
   &quot;mcpServers&quot;: {
@@ -3757,7 +3833,7 @@ Note: <code>${GITHUB_TOKEN}</code> expands from your environment — the secret 
 </code></pre>
 <p><strong>This is user-scoped</strong> — not shared with teammates via version control.
 Use for: personal tools, experimental integrations, work-in-progress servers.</p>
-<h2>Step 3: Understand the scoping decision</h2>
+<h3>Step 3: Understand the scoping decision</h3>
 <p>Create <code>lab-d2-tool-design/mcp_config_guide.md</code>:</p>
 <pre><code class="language-markdown"># MCP Server Scoping Guide
 
@@ -3796,14 +3872,14 @@ STRONG: &quot;Searches codebase with semantic understanding of code structure.
          Returns: file path, line number, function context, and related imports.
          Better than text search for finding all places a pattern is used.&quot;
 </code></pre>
-<h2>Step 4: Test your MCP config</h2>
+<h3>Step 4: Test your MCP config</h3>
 <pre><code class="language-bash"># In Claude Code, check which MCP tools are available:
 &gt; /mcp
 
 # Or check the memory/context:
 &gt; What tools are available to you?
 </code></pre>
-<h2>Step 5: Verify your configs (runs without Claude Code)</h2>
+<h3>Step 5: Verify your configs (runs without Claude Code)</h3>
 <p>Create <code>lab-d2-tool-design/verify_mcp_config.py</code>:</p>
 <pre><code class="language-python">import json
 import os
@@ -3901,14 +3977,14 @@ if __name__ == &quot;__main__&quot;:
 <li>Status of each env var (set or not set)</li>
 <li>Scoping rules summary</li>
 </ul>
-<h2>Break It</h2>
+<h3>Break It</h3>
 <p>Try these misconfigurations and observe the consequences:</p>
 <ol>
 <li><strong>Hardcode a token in <code>.mcp.json</code></strong> — put a real <code>&quot;GITHUB_TOKEN&quot;: &quot;ghp_abc123...&quot;</code> value directly in the file. Now run <code>git diff</code> — your secret is in version control, visible to every teammate and anyone who clones the repo. Use <code>${GITHUB_TOKEN}</code> expansion instead.</li>
 <li><strong>Put a personal server in <code>.mcp.json</code> instead of <code>~/.claude.json</code></strong> — add your experimental <code>my-local-tool</code> to the project config. Every teammate now gets a broken server they can&#39;t run. Personal/experimental servers belong in <code>~/.claude.json</code>.</li>
 <li><strong>Forget to set the env var</strong> — remove <code>GITHUB_TOKEN</code> from your environment and start Claude Code. The MCP server fails silently at startup — the tool simply doesn&#39;t appear. Run <code>/mcp</code> to confirm it&#39;s missing, then <code>export GITHUB_TOKEN=&quot;...&quot;</code> and restart.</li>
 </ol>
-<h2>MCP Resources — Content Catalogs That Reduce Tool Calls</h2>
+<h3>MCP Resources — Content Catalogs That Reduce Tool Calls</h3>
 <p>The exam tests MCP <strong>resources</strong> as distinct from MCP <strong>tools</strong>. Resources expose data catalogs so the agent knows what&#39;s available without making exploratory tool calls.</p>
 <p><strong>Example:</strong> Instead of the agent calling <code>list_endpoints()</code>, <code>list_tables()</code>, <code>list_docs()</code> to discover what&#39;s available, expose a resource:</p>
 <pre><code class="language-json">{
@@ -3949,6 +4025,12 @@ if __name__ == &quot;__main__&quot;:
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.5</span> <span class="badge badge-concept">Right tool for each operation</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
 # Prerequisites: Lab 2.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Select Grep for content search vs Glob for path matching</li>
+<li>Build codebase understanding incrementally with Grep, Read, and Grep</li>
+<li>Use Edit for targeted modifications with unique text matching</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What&#39;s the difference between .mcp.json and ~/.claude.json? (Lab 2.4)</li>
@@ -3980,7 +4062,7 @@ The pattern: content search → Grep, path search → Glob, read file → Read, 
 </code></pre>
 <p>(Claude uses <strong>Read</strong> — viewing a specific file)</p>
 <p>Notice how Claude picks a different built-in tool for each task without being told which to use. The tool descriptions guide the selection — the same principle Lab 2.1 taught about custom tools.</p>
-<h2>Step 1: Practice the right tool for each task</h2>
+<h3>Step 1: Practice the right tool for each task</h3>
 <p>Open Claude Code and run these in order. Notice which tool Claude selects.</p>
 <h3>Content search (use Grep, not Bash grep):</h3>
 <pre><code>&gt; Find all places where &quot;process_refund&quot; is called in the lab code
@@ -4014,7 +4096,7 @@ Returns file paths sorted by modification time.</p>
 <li>Does NOT read all files upfront</li>
 </ol>
 <p><strong>This is the correct pattern</strong>: Grep to find entry points → Read to trace flows.</p>
-<h2>Step 2: Understand Edit vs Read+Write</h2>
+<h3>Step 2: Understand Edit vs Read+Write</h3>
 <p>Create a test file:</p>
 <pre><code class="language-bash">echo &quot;x = 1
 x = 1
@@ -4023,7 +4105,7 @@ x = 2&quot; &gt; /tmp/test_edit.py
 <pre><code>&gt; In /tmp/test_edit.py, change x = 1 on line 2 to x = 99
 </code></pre>
 <p>Edit will fail because <code>x = 1</code> appears twice — not unique. Claude should fall back to Read + Write with the full file.</p>
-<h2>Step 3: Create the tool selection reference</h2>
+<h3>Step 3: Create the tool selection reference</h3>
 <p>Create <code>lab-d2-tool-design/builtin_tools_guide.md</code>:</p>
 <pre><code class="language-markdown"># Built-in Tool Selection Guide
 
@@ -4063,7 +4145,7 @@ NOT for: file search (use Glob), content search (use Grep),
 3. Grep again to follow imports/references
 4. Build understanding incrementally
 </code></pre>
-<h2>Step 4: Test your tool selection knowledge (runs without Claude Code)</h2>
+<h3>Step 4: Test your tool selection knowledge (runs without Claude Code)</h3>
 <p>Create <code>lab-d2-tool-design/tool_selection_quiz.py</code>:</p>
 <pre><code class="language-python">import random
 
@@ -4135,7 +4217,7 @@ if __name__ == &quot;__main__&quot;:
 <pre><code class="language-bash">python lab-d2-tool-design/tool_selection_quiz.py
 </code></pre>
 <p><strong>What you should see:</strong> An interactive 12-question quiz testing your tool selection knowledge. Immediate feedback on each answer with the reasoning.</p>
-<h2>Break It — test your understanding</h2>
+<h3>Break It — test your understanding</h3>
 <ol>
 <li><strong>Use Bash to read a file</strong> instead of Read. Does the content appear in Claude&#39;s context properly? (Answer: it works but doesn&#39;t integrate with Claude Code&#39;s file tracking — Read is preferred)</li>
 <li><strong>Use Grep to find a file by name</strong> instead of Glob. Does it work? (Answer: no — Grep searches CONTENTS, Glob searches PATHS. Wrong tool for the job)</li>
@@ -4211,8 +4293,15 @@ D) The error should be suppressed and an empty result returned</p>
 <p><strong>Platform note:</strong> Labs 3.1-3.6 ask you to create configuration files by telling Claude Code what to create. The file contents are shown in code blocks so you can see exactly what goes in each file. You can also create these files manually if you prefer. Each lab includes a verification step to confirm your config files are correct.</p>
 <hr>
 <h1>LAB 3.1: CLAUDE.MD HIERARCHY AND MODULAR ORGANIZATION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.1</span> <span class="badge badge-concept">User/project/directory hierarchy, @import, .claude/rules/</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.1</span> <span class="badge badge-concept">User/project/directory hierarchy, @import, .claude/rules/</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Diagnose configuration hierarchy issues (e.g., a new team member not receiving instructions because they are in user-level rather than project-level configuration)</li>
+<li>Use @import to selectively include relevant standards files in each package&#39;s CLAUDE.md</li>
+<li>Split large CLAUDE.md files into focused topic-specific files in .claude/rules/</li>
+<li>Use the /memory command to verify which memory files are loaded and diagnose inconsistent behavior across sessions</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When should you use Grep vs Glob? (Lab 2.5)</li>
@@ -4238,6 +4327,7 @@ It works, but:</p>
 <p><strong>Exam connection (Sample Q6):</strong> &quot;Test files spread throughout the codebase need the same
 conventions&quot; → <code>.claude/rules/</code> with <code>paths: [&quot;**/*.test.*&quot;]</code>. NOT directory-level CLAUDE.md
 (can&#39;t cover files scattered across dirs).</p>
+<h3>What you will learn</h3>
 <ul>
 <li>The 3-level hierarchy and what belongs at each level (personal vs team vs directory)</li>
 <li><code>@import</code> for modular configuration that doesn&#39;t hit context limits</li>
@@ -4251,7 +4341,7 @@ conventions&quot; → <code>.claude/rules/</code> with <code>paths: [&quot;**/*.
 <p>You&#39;ll see which CLAUDE.md files and rules are active. Right now it may be empty or minimal.</p>
 <p>By the end of this lab, you&#39;ll have a full hierarchy -- user-level, project-level, and path-specific rules -- and /memory will show all of them.</p>
 <p><strong>Now try it:</strong> Run <code>/memory</code> in Claude Code to see what&#39;s currently loaded. Note which files appear. After creating the CLAUDE.md hierarchy in this lab, run <code>/memory</code> again to see the difference.</p>
-<h2>Step 1: Create the full CLAUDE.md hierarchy</h2>
+<h3>Step 1: Create the full CLAUDE.md hierarchy</h3>
 <p>Ask Claude Code to create the project-level CLAUDE.md and directory structure:</p>
 <blockquote>
 <p>&quot;Create the directories <code>.claude/rules</code>, <code>.claude/commands</code>, and <code>.claude/skills</code>. Then create a project-level <code>CLAUDE.md</code> with the content below.&quot;</p>
@@ -4271,7 +4361,7 @@ All Python files use the anthropic library with model claude-sonnet-4-6.
 - Tool results always appended as role &quot;user&quot; with type &quot;tool_result&quot;
 - Error responses always include: isError, errorCategory, isRetryable
 </code></pre>
-<h2>Step 2: Create modular rule files</h2>
+<h3>Step 2: Create modular rule files</h3>
 <p>Ask Claude Code to create these two rule files:</p>
 <blockquote>
 <p>&quot;Create the file <code>.claude/rules/testing.md</code> with the content below.&quot;</p>
@@ -4293,7 +4383,7 @@ All Python files use the anthropic library with model claude-sonnet-4-6.
 ## Always check stop_reason before processing response content
 ## Tool definitions: include purpose, input format, output, when-to-use, when-NOT-to-use
 </code></pre>
-<h2>Step 3: Create path-specific rules (Task Statement 3.3)</h2>
+<h3>Step 3: Create path-specific rules (Task Statement 3.3)</h3>
 <p>Path-specific rules load ONLY when editing matching files.
 This is better than directory-level CLAUDE.md when conventions span multiple dirs.</p>
 <p>Ask Claude Code to create these two path-specific rule files:</p>
@@ -4325,7 +4415,7 @@ paths:
 ## Never commit actual API tokens or secrets
 ## Include both project-scoped (.mcp.json) and note user-scoped (~/.claude.json)
 </code></pre>
-<h2>Step 4: Verify the hierarchy with /memory</h2>
+<h3>Step 4: Verify the hierarchy with /memory</h3>
 <p>In Claude Code, run:</p>
 <pre><code>/memory
 </code></pre>
@@ -4345,7 +4435,7 @@ paths:
 <li>If a path-specific rule isn&#39;t loading → verify the glob pattern matches the file being edited</li>
 <li>If rules load inconsistently across sessions → use <code>/memory</code> to diagnose which config files the session sees</li>
 </ul>
-<h2>Step 5: Create a user-level CLAUDE.md (personal, not shared)</h2>
+<h3>Step 5: Create a user-level CLAUDE.md (personal, not shared)</h3>
 <p>This file is NOT committed to version control. Ask Claude Code to create it:</p>
 <blockquote>
 <p>&quot;Create the file <code>~/.claude/CLAUDE.md</code> with the content below.&quot;</p>
@@ -4360,7 +4450,7 @@ paths:
 <p><strong>Key insight</strong>: If a new team member isn&#39;t getting project conventions,
 it&#39;s because the instructions are in their user-level <code>~/.claude/CLAUDE.md</code>
 instead of the project-level <code>CLAUDE.md</code>.</p>
-<h2>Step 6: Verify your setup</h2>
+<h3>Step 6: Verify your setup</h3>
 <p>Ask Claude Code to create and run this verification script:</p>
 <blockquote>
 <p>&quot;Create the file <code>lab-d3-claude-code/verify_config.py</code> with the code below and run it.&quot;</p>
@@ -4476,6 +4566,7 @@ if __name__ == &quot;__main__&quot;:
     verify_lab_3_3()
     print(&quot;\n✓ Verification complete. Fix any ✗ items above, then run /memory in Claude Code to confirm loading.&quot;)
 </code></pre>
+<h2>Run it</h2>
 <p>If Claude Code created the file but did not run it, ask:</p>
 <blockquote>
 <p>&quot;Run the verify_config.py script you just created.&quot;</p>
@@ -4486,7 +4577,7 @@ if __name__ == &quot;__main__&quot;:
 <li>Lab 3.2: List of commands and skills with their frontmatter features (fork, tools, hint)</li>
 <li>Lab 3.3: Path-specific rules with their glob patterns extracted from YAML frontmatter</li>
 </ul>
-<h2>Break It</h2>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Put team conventions in <code>~/.claude/CLAUDE.md</code> instead of project CLAUDE.md</strong> — new team members don&#39;t get them.</li>
 <li><strong>Remove <code>@import</code> and put everything in one giant CLAUDE.md</strong> — context fills up, Claude ignores rules at the bottom.</li>
@@ -4509,12 +4600,19 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 3.2: CUSTOM SLASH COMMANDS AND SKILLS</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.2</span> <span class="badge badge-concept">Project vs user commands, skills with frontmatter, context:fork</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.2</span> <span class="badge badge-concept">Project vs user commands, skills with frontmatter, context:fork</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 3.1
 
 <blockquote>
 <p><strong>Prerequisite:</strong> Complete Lab 3.1 first (CLAUDE.md hierarchy).</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<ul>
+<li>Create project-scoped slash commands in .claude/commands/ for team-wide availability via version control</li>
+<li>Use context: fork to isolate skills that produce verbose output from the main session</li>
+<li>Configure allowed-tools in skill frontmatter to restrict tool access during skill execution</li>
+<li>Choose between skills (on-demand invocation for task-specific workflows) and CLAUDE.md (always-loaded universal standards)</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What are the three levels of the CLAUDE.md hierarchy? (Lab 3.1)</li>
@@ -4535,6 +4633,7 @@ context (output doesn&#39;t pollute your session), <code>allowed-tools</code> re
 </ul>
 <p><strong>Exam connection (Sample Q4):</strong> &quot;Where should you create a shared <code>/review</code> command?&quot;
 → <code>.claude/commands/</code> (project-scoped, version-controlled). NOT <code>~/.claude/commands/</code> (personal).</p>
+<h3>What you will learn</h3>
 <ul>
 <li><strong>Commands vs Skills:</strong> When to use each, and why skills have capabilities commands don&#39;t</li>
 <li><strong><code>context: fork</code>:</strong> Run in isolation so output doesn&#39;t pollute your main session</li>
@@ -4547,7 +4646,7 @@ context (output doesn&#39;t pollute your session), <code>allowed-tools</code> re
 </code></pre>
 <p>You&#39;ll see built-in commands like /help, /memory, /compact.</p>
 <p>After this lab, your custom project commands and skills will appear here too -- shared with your team through version control.</p>
-<h2>Commands vs Skills — What&#39;s the Difference?</h2>
+<h3>Commands vs Skills — What&#39;s the Difference?</h3>
 <p>Both are invoked with <code>/name</code> in Claude Code. The difference is in capabilities:</p>
 <table>
 <thead>
@@ -4590,7 +4689,7 @@ context (output doesn&#39;t pollute your session), <code>allowed-tools</code> re
 </tbody></table>
 <p><strong>Exam concept (Sample Q4):</strong> Project-scoped commands go in <code>.claude/commands/</code> (shared via git).
 Personal commands go in <code>~/.claude/commands/</code> (not shared). Skills go in <code>.claude/skills/</code>.</p>
-<h2>Step 1: Create a project-scoped slash command</h2>
+<h3>Step 1: Create a project-scoped slash command</h3>
 <p>Ask Claude Code to create this command file:</p>
 <blockquote>
 <p>&quot;Create the file <code>.claude/commands/review-agent.md</code> with the content below.&quot;</p>
@@ -4604,7 +4703,7 @@ Personal commands go in <code>~/.claude/commands/</code> (not shared). Skills go
 Report: PASS or FAIL for each check, with specific line numbers for failures.
 </code></pre>
 <p>Usage in Claude Code: <code>/review-agent lab-d1-agentic-arch/basic_loop.py</code></p>
-<h2>Step 2: Create a skill with frontmatter</h2>
+<h3>Step 2: Create a skill with frontmatter</h3>
 <p>Ask Claude Code to create this skill file:</p>
 <blockquote>
 <p>&quot;Create the file <code>.claude/skills/explore-codebase.md</code> with the content below.&quot;</p>
@@ -4626,7 +4725,7 @@ Return a concise summary of findings — do not modify any files.
 <li>With fork: runs in isolated sub-agent, returns only the summary</li>
 <li>Use for: codebase exploration, brainstorming, verbose analysis</li>
 </ul>
-<h2>Step 3: Create a skill with allowed-tools restriction</h2>
+<h3>Step 3: Create a skill with allowed-tools restriction</h3>
 <p>Ask Claude Code to create this skill file:</p>
 <blockquote>
 <p>&quot;Create the file <code>.claude/skills/generate-tests.md</code> with the content below.&quot;</p>
@@ -4645,7 +4744,7 @@ Do NOT run tests. Do NOT install packages. Do NOT modify source files.
 </code></pre>
 <p>The <code>allowed-tools: Read, Write, Glob</code> prevents the skill from running Bash
 commands during test generation — no accidental <code>pip install</code> or <code>rm</code>.</p>
-<h2>Step 4: Create a personal variant</h2>
+<h3>Step 4: Create a personal variant</h3>
 <p>Ask Claude Code to create this personal skill (not shared with team):</p>
 <blockquote>
 <p>&quot;Create the file <code>~/.claude/skills/my-explore.md</code> with the content below.&quot;</p>
@@ -4661,7 +4760,7 @@ Explore: $ARGUMENTS
 Return findings as a bulleted list. Be concise.
 </code></pre>
 <p>This won&#39;t affect teammates — it&#39;s in ~/.claude/skills/, not .claude/skills/.</p>
-<h2>Step 5: Understand skills vs CLAUDE.md</h2>
+<h3>Step 5: Understand skills vs CLAUDE.md</h3>
 <pre><code>CLAUDE.md: Always-loaded universal standards
   → Use for: project-wide conventions, always-on rules
 
@@ -4669,8 +4768,9 @@ Skills: On-demand invocation for specific workflows
   → Use for: tasks you run sometimes (not always)
   → Example: /generate-tests, /review-agent, /explore-codebase
 </code></pre>
-<p><strong>What you should see</strong> when you run <code>verify_config.py</code>: Your commands listed under &quot;.claude/commands/&quot; and skills listed with their frontmatter features ([context:fork], [allowed-tools], [argument-hint]).</p>
-<h2>Break It — test your understanding</h2>
+<h2>Run it</h2>
+<p>Run <code>verify_config.py</code> from Lab 3.1. <strong>What you should see:</strong> Your commands listed under &quot;.claude/commands/&quot; and skills listed with their frontmatter features ([context:fork], [allowed-tools], [argument-hint]).</p>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Run a skill WITHOUT <code>context: fork</code>.</strong> Does its output appear in your main conversation? (Answer: yes — without fork, all the skill&#39;s verbose output pollutes your context)</li>
 <li><strong>Remove <code>allowed-tools</code> from the skill.</strong> Can it now call Bash, Write, and other tools? (Answer: yes — without restrictions, the skill has full access, which is a security risk)</li>
@@ -4693,12 +4793,18 @@ Skills: On-demand invocation for specific workflows
 </ul>
 <hr>
 <h1>LAB 3.3: PATH-SPECIFIC RULES</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.3</span> <span class="badge badge-concept">YAML frontmatter paths, glob patterns, conditional loading</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.3</span> <span class="badge badge-concept">YAML frontmatter paths, glob patterns, conditional loading</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 3.1
 
 <blockquote>
-<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.2 first.</p>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1-3.2 first.</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<ul>
+<li>Create .claude/rules/ files with YAML frontmatter path scoping (e.g., paths: [&quot;terraform/**/*&quot;]) so rules load only when editing matching files</li>
+<li>Use glob patterns in path-specific rules to apply conventions to files by type regardless of directory location (e.g., **/*.test.tsx for all test files)</li>
+<li>Choose path-specific rules over subdirectory CLAUDE.md files when conventions must apply to files spread across the codebase</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What does context:fork do in a skill&#39;s frontmatter? (Lab 3.2)</li>
@@ -4708,15 +4814,14 @@ Skills: On-demand invocation for specific workflows
 <p>Your test files are scattered across 12 directories. You put test conventions in a directory-level CLAUDE.md -- but now you need 12 copies. When conventions change, you update one and forget the others.</p>
 <p><strong>Path-specific rules</strong> with glob patterns (<code>paths: [**/*.test.*]</code>) apply automatically regardless of directory.</p>
 <p><strong>Exam connection (Sample Q6):</strong> Test files spread throughout the codebase → .claude/rules/ with glob patterns. NOT directory-level CLAUDE.md.</p>
-<p>Path-specific rules load ONLY when editing matching files.
-Better than directory-level CLAUDE.md when conventions apply to files spread across dirs.</p>
+<p>Path-specific rules load ONLY when editing matching files. Better than directory-level CLAUDE.md when conventions apply to files spread across dirs.</p>
 <h2>Try it</h2>
 <p>Open a test file in your project and ask Claude Code:</p>
 <pre><code>What conventions or rules apply to this file?
 </code></pre>
 <p>Then open a non-test source file and ask the same question. Right now, the answer is the same for both.</p>
 <p>After this lab, path-specific rules will automatically load different conventions based on the file you&#39;re editing -- test files get testing rules, API files get API conventions.</p>
-<h2>Step 1: Create path-scoped rule files</h2>
+<h3>Step 1: Create path-scoped rule files</h3>
 <p>Ask Claude Code to create these three path-scoped rule files:</p>
 <blockquote>
 <p>&quot;Create the file <code>.claude/rules/test-conventions.md</code> with the content below.&quot;</p>
@@ -4767,7 +4872,7 @@ paths:
 ## Return structured error responses (same format as MCP tools)
 ## Authentication check before any data access
 </code></pre>
-<h2>Step 2: Compare to directory-level CLAUDE.md</h2>
+<h3>Step 2: Compare to directory-level CLAUDE.md</h3>
 <pre><code>Path-specific rules (.claude/rules/test-conventions.md with paths: [&quot;**/*.test.py&quot;]):
 ✓ Applies to ALL test files regardless of directory
 ✓ Single file to maintain
@@ -4784,14 +4889,15 @@ EXAM RULE: When conventions apply to files spread across the codebase
 (e.g., test files, config files, API routes) → use path-specific rules.
 When conventions apply to one specific directory → use directory CLAUDE.md.
 </code></pre>
-<h2>Step 3: Verify rules load correctly</h2>
+<h2>Run it</h2>
+<h3>Step 3: Verify rules load correctly</h3>
 <p>In Claude Code, open a test file and ask:</p>
 <pre><code>&gt; What testing conventions apply to this file?
 </code></pre>
 <p>Claude should mention the test-conventions.md rules.
 Then open a regular source file and ask the same — those rules should NOT appear.</p>
 <p><strong>What you should see:</strong> When editing a test file (e.g., test_basic.py), Claude cites the Arrange-Act-Assert pattern and naming convention from test-conventions.md. When editing a regular source file (e.g., basic_loop.py), those test rules do NOT appear — only rules matching that file’s path load.</p>
-<h2>Break It - test your understanding</h2>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Remove the paths: frontmatter</strong> from test-conventions.md. Now the rule loads for ALL files, not just test files. You’ve lost the scoping benefit — every file gets test conventions cluttering its context.</li>
 <li><strong>Use directory CLAUDE.md for scattered test files</strong> — put test conventions in src/tests/CLAUDE.md. Files in src/api/tests/, src/models/tests/, etc. don’t get the rules. You need 12 copies.</li>
@@ -4814,12 +4920,19 @@ Then open a regular source file and ask the same — those rules should NOT appe
 </ul>
 <hr>
 <h1>LAB 3.4: PLAN MODE VS DIRECT EXECUTION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.4</span> <span class="badge badge-concept">When to plan first, when to act directly, Explore subagent</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.4</span> <span class="badge badge-concept">When to plan first, when to act directly, Explore subagent</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 3.1
 
 <blockquote>
-<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.3 first.</p>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1-3.3 first.</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<ul>
+<li>Select plan mode for tasks with architectural implications (e.g., microservice restructuring, library migrations affecting 45+ files)</li>
+<li>Select direct execution for well-understood changes with clear scope (e.g., a single-file bug fix with a clear stack trace)</li>
+<li>Use the Explore subagent for verbose discovery phases to prevent context window exhaustion</li>
+<li>Combine plan mode for investigation with direct execution for implementation</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When are path-specific rules better than directory-level CLAUDE.md? (Lab 3.3)</li>
@@ -4850,13 +4963,14 @@ for a one-line fix. Total waste of time.</p>
 </code></pre>
 <p>Notice the difference: direct execution acts immediately. Plan mode explores first, considers approaches, then presents a plan for your approval before making changes.</p>
 <p>The decision of which to use is an exam-tested concept.</p>
+<h3>What you will learn</h3>
 <ul>
 <li><strong>Plan mode:</strong> Explore and design before committing — prevents costly rework on complex tasks</li>
 <li><strong>Direct execution:</strong> Act immediately on clear, well-scoped changes</li>
 <li><strong>Explore subagent:</strong> Isolates verbose discovery output so your main context stays clean</li>
 <li><strong>Combined pattern:</strong> Plan → execute → /compact when context fills up</li>
 </ul>
-<h2>Step 1: Decision guide</h2>
+<h3>Step 1: Decision guide</h3>
 <p>Create <code>lab-d3-claude-code/plan_vs_direct.md</code>:</p>
 <pre><code class="language-markdown"># Plan Mode vs Direct Execution Decision Guide
 
@@ -4897,7 +5011,7 @@ then report back with a summary before we plan the migration.&quot;
 3. Review and approve (or modify) the plan
 4. Exit plan mode → execute the approved approach
 </code></pre>
-<h2>Step 2: Practice in Claude Code</h2>
+<h3>Step 2: Practice in Claude Code</h3>
 <pre><code># SCENARIO A: Direct execution (simple fix)
 &gt; The validate_email function in lab-d2-tool-design/tool_descriptions.py
   doesn&#39;t handle None input. Fix it.
@@ -4913,7 +5027,7 @@ then report back with a summary before we plan the migration.&quot;
 <li>Where to store the history</li>
 <li>How to handle backward compatibility</li>
 </ul>
-<h2>Step 3: Using the Explore subagent</h2>
+<h3>Step 3: Using the Explore subagent</h3>
 <p>The Explore subagent isolates verbose discovery output so your main context stays clean.</p>
 <pre><code># Request an Explore subagent for verbose discovery
 &gt; Use an Explore subagent to map the entire lab codebase structure:
@@ -4929,7 +5043,7 @@ then report back with a summary before we plan the migration.&quot;
 </ol>
 <p><strong>Without Explore</strong>: All those file reads fill your context → model degrades.
 <strong>With Explore</strong>: You get just the summary → context stays clean for planning.</p>
-<h2>Step 4: Combining plan mode + direct execution</h2>
+<h3>Step 4: Combining plan mode + direct execution</h3>
 <p>The real power is using plan mode for investigation, then switching to direct execution:</p>
 <pre><code># Phase 1: Plan mode — investigate and design
 &gt; /plan
@@ -4946,7 +5060,7 @@ then report back with a summary before we plan the migration.&quot;
 <p><strong>Exam concept</strong>: Plan mode prevents costly rework on complex tasks.
 Direct execution is efficient for clear, well-scoped changes.
 Combining them = best of both worlds.</p>
-<h2>Step 5: Observe context preservation with /compact</h2>
+<h3>Step 5: Observe context preservation with /compact</h3>
 <p>In a long exploration session:</p>
 <pre><code>&gt; Let&#39;s explore the entire lab codebase — read every file and understand all the patterns.
 </code></pre>
@@ -4956,7 +5070,7 @@ Then try:</p>
 </code></pre>
 <p>Claude summarizes what&#39;s in context, clearing verbose tool outputs.
 The key findings are preserved; the noise is removed.</p>
-<h2>Step 6: Test your judgment</h2>
+<h3>Step 6: Test your judgment</h3>
 <p>Ask Claude Code to create and run this quiz script:</p>
 <blockquote>
 <p>&quot;Create the file <code>lab-d3-claude-code/plan_vs_direct_quiz.py</code> with the code below and run it.&quot;</p>
@@ -5001,12 +5115,13 @@ def run_quiz():
 if __name__ == &quot;__main__&quot;:
     run_quiz()
 </code></pre>
+<h2>Run it</h2>
 <p>If Claude Code created the file but did not run it, ask:</p>
 <blockquote>
 <p>&quot;Run the plan_vs_direct_quiz.py script you just created.&quot;</p>
 </blockquote>
 <p><strong>What you should see:</strong> 8 real-world scenarios where you decide plan vs direct. Immediate feedback with reasoning.</p>
-<h2>Break It — test your understanding</h2>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Use direct execution for a monolith-to-microservices migration.</strong> What happens? (Answer: costly rework — you discover dependencies 3 files in and have to undo everything)</li>
 <li><strong>Use plan mode for a one-line bug fix.</strong> What happens? (Answer: 5 minutes wasted exploring when you could have fixed it in 30 seconds)</li>
@@ -5029,12 +5144,19 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 3.5: ITERATIVE REFINEMENT TECHNIQUES</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.5</span> <span class="badge badge-concept">Examples > descriptions, test-driven iteration, interview pattern</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Claude Code or API key</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.5</span> <span class="badge badge-concept">Examples > descriptions, test-driven iteration, interview pattern</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 3.1
 
 <blockquote>
 <p><strong>Prerequisite:</strong> Complete Lab 3.4 first (plan mode).</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<ul>
+<li>Use 2-3 concrete input/output examples to clarify transformation requirements when natural language descriptions produce inconsistent results</li>
+<li>Create test suites covering expected behavior and edge cases before implementation, then iterate by sharing test failures</li>
+<li>Use the interview pattern to surface design considerations before implementing solutions in unfamiliar domains</li>
+<li>Choose between addressing multiple interacting issues in a single message versus sequential iteration for independent issues</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When should you use plan mode vs direct execution? (Lab 3.4)</li>
@@ -5043,6 +5165,7 @@ if __name__ == &quot;__main__&quot;:
 <h2>Overview</h2>
 <p>You tell Claude &quot;handle edge cases gracefully.&quot; It produces code that crashes on null input. You say &quot;be more robust.&quot; It adds try/except everywhere.</p>
 <p><strong>The problem:</strong> prose instructions are ambiguous. <strong>The fix:</strong> show concrete input/output examples -- Claude replicates the pattern exactly.</p>
+<h3>What you will learn</h3>
 <ul>
 <li><strong>Examples beat prose:</strong> When prose instructions produce inconsistent results, examples fix it.</li>
 <li><strong>Test-driven iteration:</strong> Write tests first, share failures to guide improvement.</li>
@@ -5254,12 +5377,19 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 3.6: CI/CD INTEGRATION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.6</span> <span class="badge badge-concept">-p flag, --output-format json, independent review instances</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.6</span> <span class="badge badge-concept">-p flag, --output-format json, independent review instances</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 3.1
 
 <blockquote>
-<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.5 first.</p>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1-3.5 first.</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<ul>
+<li>Configure Claude Code to run in CI with the -p flag to prevent interactive input hangs</li>
+<li>Use --output-format json with --json-schema to produce machine-parseable structured findings for automated PR comments</li>
+<li>Configure re-review workflows that include prior findings in context to avoid duplicate comments</li>
+<li>Document testing standards, valuable test criteria, and available fixtures in CLAUDE.md to improve CI-driven test generation quality</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What are the three iterative refinement techniques? (Lab 3.5)</li>
@@ -5281,6 +5411,7 @@ when Claude changes its formatting.</p>
 </ul>
 <p><strong>Exam connection (Sample Q10):</strong> &quot;Pipeline hangs&quot; → <code>-p</code> flag. This is directly tested.</p>
 <p><strong>(Sample Q11):</strong> &quot;Reduce costs&quot; → Batch API for overnight reports, synchronous for blocking checks.</p>
+<h3>What you will learn</h3>
 <ul>
 <li><strong><code>-p</code> flag:</strong> Non-interactive mode for CI/CD — the #1 pipeline integration fix</li>
 <li><strong><code>--output-format json</code> + <code>--json-schema</code>:</strong> Machine-parseable, schema-validated output</li>
@@ -5293,7 +5424,7 @@ when Claude changes its formatting.</p>
 </code></pre>
 <p>Notice how it processes the prompt, outputs the answer, and exits -- no interactive session. This is exactly what CI/CD pipelines need.</p>
 <p>Without <code>-p</code>, the job would hang waiting for interactive input (the #1 CI integration bug).</p>
-<h2>Step 1: Create the CI review script</h2>
+<h3>Step 1: Create the CI review script</h3>
 <p>Ask Claude Code to create the file <code>lab-d3-claude-code/ci_review.sh</code> with the following content:</p>
 <blockquote>
 <p>&quot;Create the file <code>lab-d3-claude-code/ci_review.sh</code> with the content below and make it executable.&quot;</p>
@@ -5332,7 +5463,7 @@ echo &quot;=== Review complete ===&quot;
 <p>&quot;Run <code>./lab-d3-claude-code/ci_review.sh</code>&quot;</p>
 </blockquote>
 <p><strong>What you should see:</strong> A JSON array of findings with file, line, severity, issue, and suggestion fields. The -p flag causes Claude to process the prompt and exit without waiting for input. The --output-format json wraps the response in a machine-parseable JSON structure.</p>
-<h2>Step 2: Create the CLAUDE.md for CI context</h2>
+<h3>Step 2: Create the CLAUDE.md for CI context</h3>
 <p>Create this file in your project to give CI reviews the right context:</p>
 <blockquote>
 <p>&quot;Create the file <code>lab-d3-claude-code/CLAUDE.md</code> with the content below.&quot;</p>
@@ -5355,7 +5486,7 @@ Don&#39;t suggest tests that duplicate: basic_loop_test.py (already exists)
 ## Prior Review Findings (for re-review after commits)
 Include these when re-reviewing to avoid duplicate comments.
 </code></pre>
-<h2>Step 3: Practice the independent review pattern</h2>
+<h3>Step 3: Practice the independent review pattern</h3>
 <p>This pattern uses two separate Claude Code sessions. Study how the <code>-p</code> flag enables this:</p>
 <pre><code class="language-bash"># Generate code with one Claude instance
 claude -p &quot;Write a Python function that validates customer email addresses&quot; &gt; generated_code.py
@@ -5365,7 +5496,7 @@ claude -p &quot;Review this code for bugs and security issues: $(cat generated_c
   --output-format json
 </code></pre>
 <p><strong>Why independent?</strong> The generator&#39;s reasoning context makes it less likely to question its own decisions. An independent reviewer has no attachment to the original approach.</p>
-<h2>Step 4: The re-review pattern (avoid duplicate comments)</h2>
+<h3>Step 4: The re-review pattern (avoid duplicate comments)</h3>
 <p>Ask Claude Code to create this re-review script:</p>
 <blockquote>
 <p>&quot;Create the file <code>lab-d3-claude-code/re_review.sh</code> with the content below and make it executable.&quot;</p>
@@ -5390,7 +5521,7 @@ Report ONLY:
 Do NOT repeat prior issues that have been fixed.&quot; \
   --output-format json &lt; /dev/null
 </code></pre>
-<h2>Step 5: Understand the CI pipeline config</h2>
+<h3>Step 5: Understand the CI pipeline config</h3>
 <pre><code class="language-yaml"># .github/workflows/claude-review.yml
 # name: Claude Code Review
 # on: [pull_request]
@@ -5418,31 +5549,7 @@ Do NOT repeat prior issues that have been fixed.&quot; \
 <p><strong>Prerequisite:</strong> This lab requires the Claude Code CLI (<code>claude</code> command). Install it first:
 <code>npm install -g @anthropic-ai/claude-code</code> (or see <a href="https://docs.anthropic.com/en/docs/claude-code">https://docs.anthropic.com/en/docs/claude-code</a>).</p>
 <p>If you can&#39;t install it, study the bash scripts and YAML configs -- the exam tests the CONCEPTS (when to use <code>-p</code>, what <code>--json-schema</code> does), not the exact CLI output.</p>
-<h2>Break It - test your understanding</h2>
-<ol>
-<li><strong>Remove the -p flag in CI</strong> — pipeline hangs waiting for interactive input. No human at the keyboard. Build times out.</li>
-<li><strong>Use the same instance for generate + review</strong> — Claude’s reasoning context makes it blind to its own mistakes. It defends its choices instead of finding bugs.</li>
-<li><strong>Skip --json-schema</strong> — output format varies between runs. Your parser breaks when Claude changes its response structure.</li>
-</ol>
-<h2>Exam tips</h2>
-<ul>
-<li><strong>If the exam says</strong> &quot;CI job hangs&quot; → -p flag for non-interactive mode</li>
-<li><strong>If the exam says</strong> &quot;review misses issues the generator should have caught&quot; → independent review instance</li>
-<li><strong>Wrong answer trap:</strong> &quot;CLAUDE_HEADLESS=true&quot; — doesn&#39;t exist</li>
-<li><strong>Wrong answer trap:</strong> &quot;Self-review with extended thinking&quot; — same session context makes self-review blind</li>
-<li><strong>The correct pattern:</strong> Separate generation and review into independent sessions</li>
-</ul>
-<h2>Key takeaways</h2>
-<ul>
-<li><code>-p</code> flag runs Claude Code non-interactively (required for CI)</li>
-<li><code>--output-format json</code> produces machine-parseable findings</li>
-<li><code>--json-schema &lt;file&gt;</code> enforces a specific JSON schema on the output (use with --output-format json)</li>
-<li>CLAUDE.md provides project context (test standards, fixtures, review criteria) to CI</li>
-<li>Include existing test files in context so Claude doesn&#39;t suggest duplicate test scenarios</li>
-<li>Independent review instances: generator and reviewer are separate sessions</li>
-<li>Re-review: pass prior findings to avoid duplicate PR comments</li>
-</ul>
-<h2>Step 6: The --json-schema flag</h2>
+<h3>Step 6: The --json-schema flag</h3>
 <p>The <code>--json-schema</code> flag enforces a specific output schema in CI — guarantees machine-parseable structure:</p>
 <p>First, create a schema file. Ask Claude Code:</p>
 <blockquote>
@@ -5475,6 +5582,32 @@ Return ONLY a JSON array of findings. Empty array if no issues.&quot; \
 <ul>
 <li><code>--output-format json</code> alone = JSON output (best-effort)</li>
 <li><code>--output-format json --json-schema &lt;file&gt;</code> = JSON output validated against schema</li>
+</ul>
+<h2>Run it</h2>
+<p>Run <code>./lab-d3-claude-code/ci_review.sh</code> to see the <code>-p</code> flag and <code>--output-format json</code> in action. If you cannot install the Claude Code CLI, study the bash scripts and YAML configs -- the exam tests the concepts, not the exact CLI output.</p>
+<h2>Check your understanding</h2>
+<ol>
+<li><strong>Remove the -p flag in CI</strong> — pipeline hangs waiting for interactive input. No human at the keyboard. Build times out.</li>
+<li><strong>Use the same instance for generate + review</strong> — Claude’s reasoning context makes it blind to its own mistakes. It defends its choices instead of finding bugs.</li>
+<li><strong>Skip --json-schema</strong> — output format varies between runs. Your parser breaks when Claude changes its response structure.</li>
+</ol>
+<h2>Exam tips</h2>
+<ul>
+<li><strong>If the exam says</strong> &quot;CI job hangs&quot; → -p flag for non-interactive mode</li>
+<li><strong>If the exam says</strong> &quot;review misses issues the generator should have caught&quot; → independent review instance</li>
+<li><strong>Wrong answer trap:</strong> &quot;CLAUDE_HEADLESS=true&quot; — doesn&#39;t exist</li>
+<li><strong>Wrong answer trap:</strong> &quot;Self-review with extended thinking&quot; — same session context makes self-review blind</li>
+<li><strong>The correct pattern:</strong> Separate generation and review into independent sessions</li>
+</ul>
+<h2>Key takeaways</h2>
+<ul>
+<li><code>-p</code> flag runs Claude Code non-interactively (required for CI)</li>
+<li><code>--output-format json</code> produces machine-parseable findings</li>
+<li><code>--json-schema &lt;file&gt;</code> enforces a specific JSON schema on the output (use with --output-format json)</li>
+<li>CLAUDE.md provides project context (test standards, fixtures, review criteria) to CI</li>
+<li>Include existing test files in context so Claude doesn&#39;t suggest duplicate test scenarios</li>
+<li>Independent review instances: generator and reviewer are separate sessions</li>
+<li>Re-review: pass prior findings to avoid duplicate PR comments</li>
 </ul>
 <h2>Quick Check — Module 3</h2>
 <p><strong>Q: Your codebase has test files spread throughout (Button.test.tsx next to Button.tsx). You want all tests to follow the same conventions. What&#39;s the most maintainable approach?</strong></p>
@@ -5539,8 +5672,14 @@ D) Add <code>--batch</code> flag</p>
 </ul>
 <hr>
 <h1>LAB 4.1: EXPLICIT CRITERIA TO REDUCE FALSE POSITIVES</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.1</span> <span class="badge badge-concept">Specific criteria > vague instructions, false positive impact</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.1</span> <span class="badge badge-concept">Specific criteria > vague instructions, false positive impact</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Write specific review criteria that define which issues to report (bugs, security) versus skip (minor style, local patterns) rather than relying on confidence-based filtering</li>
+<li>Identify when to temporarily disable high false-positive categories to restore developer trust while improving prompts for those categories</li>
+<li>Define explicit severity criteria with concrete code examples for each severity level to achieve consistent classification</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What flag makes Claude Code run non-interactively in CI? (Lab 3.6)</li>
@@ -5755,7 +5894,7 @@ The specific prompt will correctly skip them and only flag the real bugs.</p>
 <li><strong>What happens if you keep a high-false-positive category active</strong> (e.g., &quot;comment accuracy&quot;) while it has a 60% FP rate? Do developers trust the other categories? (Answer: no — high FP in one category undermines trust in ALL categories)</li>
 <li><strong>Why doesn&#39;t confidence-based filtering</strong> (&quot;only report high-confidence findings&quot;) work as a replacement for explicit criteria? (Answer: the model is often confidently wrong — confidence alone doesn&#39;t reduce false positives)</li>
 </ol>
-<h2>Interim Trust Restoration Strategy</h2>
+<h3>Interim Trust Restoration Strategy</h3>
 <p><strong>Exam-tested pattern:</strong> What do you do when one review category has an 80% false positive rate?</p>
 <p>The trap: you might think &quot;add confidence scores&quot; or &quot;improve the prompt for that category.&quot; But here&#39;s the problem -- while category X is producing false positives, <strong>developers stop reading ALL findings</strong>, including accurate ones from other categories.</p>
 <p><strong>The correct fix (two-phase):</strong></p>
@@ -5791,9 +5930,16 @@ The specific prompt will correctly skip them and only flag the real bugs.</p>
 </ul>
 <hr>
 <h1>LAB 4.2: FEW-SHOT PROMPTING</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.2</span> <span class="badge badge-concept">Examples for consistency, ambiguous case handling</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.2</span> <span class="badge badge-concept">Examples for consistency, ambiguous case handling</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 4.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Design 2-4 targeted few-shot examples for ambiguous scenarios that show reasoning for why one action was chosen over plausible alternatives</li>
+<li>Implement few-shot examples that demonstrate specific desired output format (location, issue, severity, suggested fix) to achieve consistency</li>
+<li>Write few-shot examples distinguishing acceptable code patterns from genuine issues to reduce false positives while enabling generalization</li>
+<li>Apply few-shot examples to demonstrate correct handling of varied document structures (inline citations vs bibliographies, methodology sections vs embedded details)</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Why doesn&#39;t &quot;be conservative&quot; reduce false positives? (Lab 4.1)</li>
@@ -5936,9 +6082,16 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 4.3: STRUCTURED OUTPUT WITH TOOL USE AND JSON SCHEMAS</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.3</span> <span class="badge badge-concept">tool_use for guaranteed schema compliance, nullable fields, enums</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.3</span> <span class="badge badge-concept">tool_use for guaranteed schema compliance, nullable fields, enums</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 4.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Define extraction tools with JSON schemas as input parameters and extract structured data from the tool_use response</li>
+<li>Force a specific tool with tool_choice or use tool_choice &quot;any&quot; to guarantee structured output when the document type is unknown</li>
+<li>Design schema fields as optional (nullable) when source documents may not contain the information, preventing the model from fabricating values</li>
+<li>Implement enum values like &quot;unclear&quot; for ambiguous cases and &quot;other&quot; + detail fields for extensible categorization</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What do few-shot examples fix that descriptions alone can&#39;t? (Lab 4.2)</li>
@@ -5955,7 +6108,7 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p><strong>Exam connection (Exercise 3):</strong> &quot;Process documents where some fields are absent and verify the
 model returns null rather than fabricating values.&quot;</p>
-<h2>Challenge Mode (optional — try before looking at the solution)</h2>
+<h3>Challenge Mode (optional — try before looking at the solution)</h3>
 <p>Design a <code>tool_use</code> extraction schema for employee records with these requirements:</p>
 <ol>
 <li>Required fields: <code>employee_id</code> (string), <code>name</code> (string), <code>department</code> (enum: engineering, sales, marketing, other)</li>
@@ -6249,9 +6402,16 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 4.4: VALIDATION AND RETRY LOOPS</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.4</span> <span class="badge badge-concept">Retry with specific feedback, when retries won't help</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.4</span> <span class="badge badge-concept">Retry with specific feedback, when retries won't help</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 4.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Implement follow-up requests that include the original document, the failed extraction, and specific validation errors for model self-correction</li>
+<li>Identify when retries will be ineffective (information absent from source) versus when they will succeed (format mismatches, structural output errors)</li>
+<li>Design detected_pattern fields in structured findings to enable analysis of false positive patterns when developers dismiss findings</li>
+<li>Implement self-correction validation flows that extract calculated_total alongside stated_total to flag discrepancies</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What does JSON schema enforce — syntax or semantics? (Lab 4.3)</li>
@@ -6578,7 +6738,7 @@ for data in test_cases:
 <li><strong>When does retrying NOT help?</strong> Consider a document that says &quot;contact billing for pricing.&quot; Will retry 3 produce the missing data? (Answer: no — the data isn&#39;t there. Retries can&#39;t invent new information. Return null.)</li>
 <li><strong>Why is specific error feedback critical in the retry message?</strong> Compare &quot;try again&quot; vs &quot;line items sum to $300 but total_amount is $350. Set conflict_detected=true.&quot; (Answer: specific errors enable targeted correction; vague retries produce random changes)</li>
 </ol>
-<h2>Validation Layers — What Each One Catches</h2>
+<h3>Validation Layers — What Each One Catches</h3>
 <p>The exam tests your understanding of three distinct validation layers:</p>
 <table>
 <thead>
@@ -6629,9 +6789,15 @@ for data in test_cases:
 </ul>
 <hr>
 <h1>LAB 4.5: BATCH PROCESSING WITH MESSAGE BATCHES API</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.5</span> <span class="badge badge-concept">50% cost savings, 24hr window, custom_id, when not to use</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.5</span> <span class="badge badge-concept">50% cost savings, 24hr window, custom_id, when not to use</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 4.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Design API approach selection based on workflow latency requirements: synchronous API for blocking pre-merge checks, batch API for overnight/weekly analysis</li>
+<li>Implement batch failure handling by resubmitting only failed documents (identified by custom_id) with appropriate modifications</li>
+<li>Apply prompt refinement on a sample set before batch-processing large volumes to maximize first-pass success rates</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When do retries help vs when are they futile? (Lab 4.4)</li>
@@ -6885,9 +7051,15 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 4.6: MULTI-INSTANCE AND MULTI-PASS REVIEW</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.6</span> <span class="badge badge-concept">Self-review limits, independent instances, per-file + integration passes</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.6</span> <span class="badge badge-concept">Self-review limits, independent instances, per-file + integration passes</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 4.1
 
+<h2>Learning objectives</h2>
+<ul>
+<li>Design a second independent Claude instance to review generated code without the generator&#39;s reasoning context</li>
+<li>Implement splitting of large multi-file reviews into focused per-file passes for local issues plus separate integration passes for cross-file data flow analysis</li>
+<li>Write verification passes where the model self-reports confidence alongside each finding to enable calibrated review routing</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>When is batch processing appropriate vs inappropriate? (Lab 4.5)</li>
@@ -7201,8 +7373,16 @@ D) Batch both with a timeout fallback</p>
 </ul>
 <hr>
 <h1>LAB 5.1: CONTEXT MANAGEMENT ACROSS LONG INTERACTIONS</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.1</span> <span class="badge badge-concept">Case facts block, tool result trimming, "lost in the middle"</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.1</span> <span class="badge badge-concept">Case facts block, tool result trimming, "lost in the middle"</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> </span></div>
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Extract transactional facts (amounts, dates, order numbers, statuses) into a persistent case facts block included in each prompt, outside summarized history</li>
+<li>Trim verbose tool outputs to only relevant fields before they accumulate in context</li>
+<li>Structure aggregated inputs with key findings summaries at the beginning and explicit section headers to mitigate position effects</li>
+<li>Require subagents to return structured data (key facts, citations, relevance scores) instead of verbose content when downstream agents have limited context budgets</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Why does self-review miss issues that an independent reviewer catches? (Lab 4.6)</li>
@@ -7217,7 +7397,7 @@ D) Batch both with a timeout fallback</p>
 <li><strong>&quot;Lost in the middle&quot;:</strong> model misses findings in the middle of long inputs.</li>
 <li><strong>Case facts block:</strong> persistent structured layer outside summarized history.</li>
 </ul>
-<h2>Challenge Mode (optional — try before looking at the solution)</h2>
+<h3>Challenge Mode (optional — try before looking at the solution)</h3>
 <p>A customer support agent has a 22-field tool result from <code>lookup_order</code>. Design:</p>
 <ol>
 <li>A <strong>case facts block</strong> that extracts only the 5 fields relevant to the current issue</li>
@@ -7433,9 +7613,16 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 5.2: ESCALATION AND AMBIGUITY RESOLUTION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.2</span> <span class="badge badge-concept">Escalation triggers, explicit request honoring, policy gaps</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.2</span> <span class="badge badge-concept">Escalation triggers, explicit request honoring, policy gaps</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> </span></div>
 # Prerequisites: Lab 5.1
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Design explicit escalation criteria with few-shot examples demonstrating when to escalate versus resolve autonomously</li>
+<li>Distinguish between policy gaps, explicit customer requests, and complex-but-within-policy cases to determine correct escalation behavior</li>
+<li>Require the agent to ask for additional identifiers when tool results return multiple matches, rather than selecting based on heuristics</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What is the &quot;case facts block&quot; pattern? (Lab 5.1)</li>
@@ -7673,7 +7860,7 @@ Explicit categorical criteria (customer request, policy gap, no progress) are re
 <li><strong>Why is sentiment analysis an unreliable escalation trigger?</strong> (Answer: frustrated but simple cases get escalated unnecessarily — sentiment doesn&#39;t correlate with case complexity. A customer can be furious about a standard return that the agent can easily process)</li>
 <li><strong>What goes wrong if the agent picks from multiple customer matches using heuristics</strong> (e.g., &quot;most recent account&quot;)? (Answer: agent picks wrong customer — could process a refund to the wrong person. Always ask for an additional identifier to disambiguate)</li>
 </ol>
-<h2>Policy Gap vs Complex Case vs Explicit Request</h2>
+<h3>Policy Gap vs Complex Case vs Explicit Request</h3>
 <p>The exam tests three distinct escalation triggers. Don&#39;t confuse them:</p>
 <table>
 <thead>
@@ -7733,6 +7920,13 @@ Explicit categorical criteria (customer request, policy gap, no progress) are re
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.3</span> <span class="badge badge-concept">Structured error context, partial results, coordinator recovery</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 5.1
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Return structured error context including failure type, what was attempted, partial results, and potential alternatives to enable coordinator recovery</li>
+<li>Distinguish access failures from valid empty results in error reporting so the coordinator can make appropriate retry decisions</li>
+<li>Implement local error recovery within subagents for transient failures, propagating only unresolvable errors with partial results</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Name the three explicit escalation triggers. (Lab 5.2)</li>
@@ -7950,9 +8144,16 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <hr>
 <h1>LAB 5.4: CONTEXT MANAGEMENT IN LARGE CODEBASE EXPLORATION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.4</span> <span class="badge badge-concept">Scratchpad files, subagent delegation, crash recovery</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.4</span> <span class="badge badge-concept">Scratchpad files, subagent delegation, crash recovery</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> </span></div>
 # Prerequisites: Lab 5.1
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Implement scratchpad files to persist key findings across context boundaries and counteract context degradation</li>
+<li>Design subagent delegation patterns that isolate verbose exploration output while the main agent coordinates high-level understanding</li>
+<li>Structure crash recovery using agent state exports (manifests) that the coordinator loads on resume and injects into agent prompts</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What two anti-patterns should you avoid in multi-agent error handling? (Lab 5.3)</li>
@@ -7978,7 +8179,7 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>Notice how Claude Code uses Glob to find files, then Read to inspect key ones, building understanding incrementally.</p>
 <p>In a long session, it would start referencing &quot;typical patterns&quot; instead of specific findings -- that&#39;s context degradation, and the scratchpad pattern in this lab fixes it.</p>
-<h2>Step 1: Practice the scratchpad pattern</h2>
+<h3>Step 1: Practice the scratchpad pattern</h3>
 <p>In Claude Code, start a codebase exploration session:</p>
 <pre><code>&gt; Let&#39;s explore the lab codebase. Create a scratchpad file at
   /tmp/exploration-scratchpad.md to record key findings as we go.
@@ -8004,7 +8205,8 @@ if __name__ == &quot;__main__&quot;:
 <pre><code>&gt; Read /tmp/exploration-scratchpad.md and tell me about the agentic loop pattern
 </code></pre>
 <p><strong>Why this matters:</strong> After 2+ hours of exploration, the model may say &quot;typically agents use X pattern&quot; instead of &quot;the lab files use Y pattern at line Z&quot; -- it&#39;s using generic knowledge instead of specific findings.</p>
-<h2>Step 2: Create a crash recovery manifest</h2>
+<h2>Reference code</h2>
+<h3>Step 2: Create a crash recovery manifest</h3>
 <p>Create <code>lab-d5-context-reliability/crash_recovery.py</code>:</p>
 <pre><code class="language-python">import json
 import os
@@ -8228,7 +8430,7 @@ if __name__ == &quot;__main__&quot;:
     print(f&quot;\n  Benefit: Main agent context consumed ~200 tokens (summary)&quot;)
     print(f&quot;  Without delegation: would have consumed ~10,000 tokens (all file contents)&quot;)
 </code></pre>
-<h2>Step 2b: Run it</h2>
+<h2>Run it</h2>
 <p>Ask Claude Code to create and run this file:</p>
 <pre><code class="language-bash">python lab-d5-context-reliability/crash_recovery.py
 </code></pre>
@@ -8239,13 +8441,13 @@ if __name__ == &quot;__main__&quot;:
 <li>Context degradation symptoms listed (says &quot;typically&quot; instead of specific findings)</li>
 <li>Subagent delegation: subagent reads 6 files in isolated context, returns 200-token summary vs 10,000 tokens without delegation</li>
 </ul>
-<h2>Step 3: Practice /compact in Claude Code</h2>
+<h3>Step 3: Practice /compact in Claude Code</h3>
 <p>After a long exploration session:</p>
 <pre><code>&gt; /compact
 </code></pre>
 <p>Watch Claude summarize the context. Key findings are preserved; verbose tool output is removed.
 Then continue the session with a clean context.</p>
-<h2>Break It — test your understanding</h2>
+<h2>Check your understanding</h2>
 <ol>
 <li><strong>Skip the scratchpad file.</strong> Run a 30-turn exploration session. Does Claude remember findings from turn 5? (Answer: no — context degradation causes it to say &quot;typically&quot; instead of citing specific code from earlier)</li>
 <li><strong>Don&#39;t use the manifest for crash recovery.</strong> Restart mid-exploration. What&#39;s lost? (Answer: everything since last checkpoint — manifest-based recovery is the only way to resume gracefully)</li>
@@ -8268,9 +8470,16 @@ Then continue the session with a clean context.</p>
 </ul>
 <hr>
 <h1>LAB 5.5: HUMAN REVIEW WORKFLOWS AND CONFIDENCE CALIBRATION</h1>
-<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.5</span> <span class="badge badge-concept">Stratified sampling, field-level confidence, accuracy by segment</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.5</span> <span class="badge badge-concept">Stratified sampling, field-level confidence, accuracy by segment</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> </span></div>
 # Prerequisites: Lab 5.1
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement and novel pattern detection</li>
+<li>Analyze accuracy by document type and field to verify consistent performance across all segments before reducing human review</li>
+<li>Design field-level confidence scores calibrated using labeled validation sets for routing review attention</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>What causes context degradation in extended sessions? (Lab 5.4)</li>
@@ -8515,6 +8724,14 @@ if __name__ == &quot;__main__&quot;:
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.6</span> <span class="badge badge-concept">Claim-source mappings, conflicting data, temporal metadata</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: Lab 5.1
 
+<h2>Learning objectives</h2>
+<p>After completing this lab, you will be able to:</p>
+<ul>
+<li>Require subagents to output structured claim-source mappings (source URLs, document names, relevant excerpts) that downstream agents preserve through synthesis</li>
+<li>Structure reports with explicit sections distinguishing well-established findings from contested ones, preserving original source characterizations</li>
+<li>Implement conflict annotation with both sources and methodology differences rather than arbitrarily selecting one value</li>
+<li>Require subagents to include publication or data collection dates in structured outputs to enable correct temporal interpretation</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>Why can aggregate accuracy (e.g., &quot;97% overall&quot;) be misleading? (Lab 5.5)</li>
@@ -8764,7 +8981,7 @@ if __name__ == &quot;__main__&quot;:
 <li>&quot;Temporal Metadata&quot; demonstrating how two battery cost claims ($400/kWh vs $139/kWh) look contradictory without dates but are resolved as a 9-year trend when publication dates are included</li>
 <li>A synthesis prompt structure requiring claim-source preservation and conflict annotation in the output format</li>
 </ul>
-<h2>Reference: Multi-content-type rendering in synthesis</h2>
+<h3>Reference: Multi-content-type rendering in synthesis</h3>
 <p>Different content types need different formatting. The exam tests this specifically:
 &quot;Render financial data as tables, news as prose, technical findings as structured lists.&quot;
 Converting everything to one format loses meaning.</p>
@@ -8909,12 +9126,20 @@ D) Deploy a trained classifier</p>
 <h1>LAB FINAL: THE COMPLETE EXAM SCENARIO</h1>
 <h1>ALL 5 DOMAINS</h1>
 <h1>Build a production-grade customer support agent</h1>
-<div class="lab-meta"><span class="badge badge-time">~45 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+<div class="lab-meta"><span class="badge badge-time">~45 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
 # Prerequisites: All modules
 
 <blockquote>
 <p><strong>Prerequisite:</strong> Complete all labs in Modules 1–5 first.</p>
 </blockquote>
+<h2>Learning objectives</h2>
+<p>By the end of this lab, you will be able to:</p>
+<ul>
+<li>Integrate all 5 domain patterns into a single production-grade agent</li>
+<li>Identify which domain each architectural decision belongs to</li>
+<li>Apply prerequisite gates, hooks, tool scoping, case facts, and escalation in one system</li>
+<li>Trace through a complete agent implementation and explain every design choice</li>
+</ul>
 <h2>Recall</h2>
 <ol>
 <li>How do you preserve claim-source mappings through synthesis? (Lab 5.6)</li>
@@ -8944,10 +9169,10 @@ D) Deploy a trained classifier</p>
 &gt; Domain 4 (escalation criteria), Domain 5 (case facts, trimming).
 </code></pre>
 <p>This is the exam scenario. Every domain comes together in one unified system.</p>
-<h2>The Scenario</h2>
+<h3>The Scenario</h3>
 <p>This is Exam Scenario 1: Customer Support Resolution Agent.
 You apply every concept from every domain in one unified system.</p>
-<h2>What You&#39;ll Build</h2>
+<h3>What You&#39;ll Build</h3>
 <p>A complete customer support agent with:</p>
 <p><strong>Domain 1 -- Agentic Architecture:</strong></p>
 <ul>
@@ -9337,7 +9562,7 @@ if __name__ == &quot;__main__&quot;:
 <li>Scenario 2 (over-limit refund): process_refund BLOCKED at $750 (exceeds $500 policy limit), automatically escalated to human agent with a ticket ID</li>
 <li>Scenario 3 (explicit human request): immediate escalation with no tool investigation, honoring the customer&#39;s request to speak to a manager</li>
 </ul>
-<h2>What to observe in each scenario</h2>
+<h3>What to observe in each scenario</h3>
 <ol>
 <li><p><strong>Standard refund:</strong> <code>get_customer</code> → <code>lookup_order</code> → <code>process_refund</code> → <code>end_turn</code>
 Gate enforced (customer verified before refund), trimmed tool results.</p>
@@ -9379,6 +9604,15 @@ Answer: disambiguation. Without negative examples, similar tools get confused --
 <li>This lab combines ALL domains. On the exam, each scenario question can test ANY domain.</li>
 <li><strong>The universal rule:</strong> Deterministic compliance = programmatic (gates, hooks, schema). Probabilistic guidance = prompts (few-shot, criteria).</li>
 <li><strong>The universal trap:</strong> Using prompts for compliance requirements, or using programmatic enforcement for stylistic preferences.</li>
+</ul>
+<h2>Key takeaways</h2>
+<ul>
+<li>A production agent integrates all 5 domains: agentic loops, tool design, configuration, prompt engineering, and context management</li>
+<li>Prerequisite gates enforce ordering programmatically -- prompt-only enforcement fails at a non-zero rate</li>
+<li>PostToolUse hooks normalize data before the model sees it, preventing inconsistent comparisons</li>
+<li>Case facts blocks preserve exact values that progressive summarization would distort</li>
+<li>Escalation criteria must be explicit and categorical, not sentiment-based</li>
+<li>Tool descriptions need both &quot;when to use&quot; and &quot;when NOT to use&quot; for reliable selection</li>
 </ul>
 <hr>
 <h1>EXAM READINESS CHECKLIST</h1>
