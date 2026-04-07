@@ -1219,7 +1219,7 @@ claude
 <p>This script simulates exactly what happens when Claude runs an agentic loop. It uses the same data structures, stop_reason values, and tool_result format as the real Claude API — so you can study the pattern and run it with just Python, no API key needed.</p>
 <pre><code class="language-python">import json
 
-# ── Fake data (same as a real backend would have) ────────
+# -- Fake data (same as a real backend would have) --------
 CUSTOMERS = {
     &quot;jane@email.com&quot;: {&quot;id&quot;: &quot;CUST-001&quot;, &quot;name&quot;: &quot;Jane Smith&quot;, &quot;tier&quot;: &quot;gold&quot;},
     &quot;bob@email.com&quot;:  {&quot;id&quot;: &quot;CUST-002&quot;, &quot;name&quot;: &quot;Bob Jones&quot;,  &quot;tier&quot;: &quot;silver&quot;}
@@ -1243,7 +1243,7 @@ def execute_tool(name, input_data):
         return json.dumps(o) if o else json.dumps({&quot;error&quot;: &quot;Order not found&quot;})
     return json.dumps({&quot;error&quot;: f&quot;Unknown tool: {name}&quot;})
 
-# ── Tool definitions (these tell Claude what tools are available) ──
+# -- Tool definitions (these tell Claude what tools are available) --
 tools = [
     {
         &quot;name&quot;: &quot;get_customer&quot;,
@@ -1269,7 +1269,7 @@ tools = [
     }
 ]
 
-# ── Simulated Claude responses ───────────────────────────
+# -- Simulated Claude responses ---------------------------
 # In production, these come from client.messages.create().
 # Here we hardcode them to show the exact loop pattern.
 
@@ -1325,7 +1325,7 @@ def simulate_claude_responses(user_message):
             }
         ]
 
-# ── THE AGENTIC LOOP ─────────────────────────────────────
+# -- THE AGENTIC LOOP -------------------------------------
 # This is the core pattern. Everything above is setup.
 # In production, replace simulate_claude_responses() with
 # client.messages.create() — the loop logic stays identical.
@@ -1341,9 +1341,9 @@ def run_agent(user_message):
         iteration += 1
         print(f&quot;--- Loop iteration {iteration} ---&quot;)
 
-        # ┌──────────────────────────────────────┐
-        # │  stop_reason is the ONLY loop signal  │
-        # └──────────────────────────────────────┘
+        # +--------------------------------------+
+        # |  stop_reason is the ONLY loop signal  |
+        # +--------------------------------------+
         print(f&quot;    stop_reason: {response[&#39;stop_reason&#39;]}&quot;)
 
         if response[&quot;stop_reason&quot;] == &quot;end_turn&quot;:
@@ -1383,8 +1383,8 @@ if __name__ == &quot;__main__&quot;:
 
     print(&quot;=&quot;*60)
     print(&quot;KEY EXAM CONCEPTS:&quot;)
-    print(&quot;  - stop_reason &#39;tool_use&#39; → execute tools, loop continues&quot;)
-    print(&quot;  - stop_reason &#39;end_turn&#39; → return response, loop terminates&quot;)
+    print(&quot;  - stop_reason &#39;tool_use&#39; -&gt; execute tools, loop continues&quot;)
+    print(&quot;  - stop_reason &#39;end_turn&#39; -&gt; return response, loop terminates&quot;)
     print(&quot;  - Tool results MUST be appended as role &#39;user&#39;&quot;)
     print(&quot;  - NEVER parse text to detect loop completion&quot;)
     print(&quot;=&quot;*60)
@@ -1493,7 +1493,7 @@ is almost always the coordinator&#39;s task decomposition being too narrow — n
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── SIMULATED SUBAGENT RESPONSES ──────────────────────────
+# -- SIMULATED SUBAGENT RESPONSES --------------------------
 # In production these would be real API calls to specialized agents.
 # We simulate them here to focus on the coordinator pattern.
 # In production, replace these functions with client.messages.create() calls.
@@ -1560,8 +1560,8 @@ def synthesis_subagent(search_results: dict, analysis_results: dict, topic: str)
     })
 
 
-# ── COORDINATOR ──────────────────────────────────────────
-# The coordinator: analyzes query → selects subagents → aggregates results
+# -- COORDINATOR ------------------------------------------
+# The coordinator: analyzes query -&gt; selects subagents -&gt; aggregates results
 
 def coordinator(query: str):
     &quot;&quot;&quot;
@@ -1571,7 +1571,7 @@ def coordinator(query: str):
     1. Analyze query to determine which subagents are needed
     2. Invoke selected subagents (sometimes in parallel)
     3. Pass ALL prior findings explicitly when invoking synthesis
-    4. Evaluate synthesis for gaps → re-delegate if needed
+    4. Evaluate synthesis for gaps -&gt; re-delegate if needed
     &quot;&quot;&quot;
     print(f&quot;\n{&#39;=&#39;*60}&quot;)
     print(f&quot;COORDINATOR: Processing query: &#39;{query}&#39;&quot;)
@@ -1610,8 +1610,8 @@ def coordinator(query: str):
 
     result = json.loads(synthesis)
 
-    # Step 4: Evaluate for gaps → re-delegate if coverage insufficient
-    # THIS IS THE ITERATIVE REFINEMENT LOOP: evaluate → re-delegate → re-synthesize
+    # Step 4: Evaluate for gaps -&gt; re-delegate if coverage insufficient
+    # THIS IS THE ITERATIVE REFINEMENT LOOP: evaluate -&gt; re-delegate -&gt; re-synthesize
     if result[&quot;coverage_gaps&quot;]:
         print(f&quot;\nStep 3: Coverage gaps detected: {result[&#39;coverage_gaps&#39;]}&quot;)
         print(f&quot;  Re-delegating targeted search for gaps...&quot;)
@@ -1742,7 +1742,7 @@ if __name__ == &quot;__main__&quot;:
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── STRUCTURED HANDOFF FORMAT ─────────────────────────────
+# -- STRUCTURED HANDOFF FORMAT -----------------------------
 # When passing context between agents, use structured formats
 # that separate content from metadata (source, date, confidence).
 # In production, replace print-based demos with client.messages.create() calls.
@@ -1810,7 +1810,7 @@ def demonstrate_parallel_spawning():
     ]
 
     All three spawn simultaneously — true parallel execution.
-    NOT: search → wait → analyze → wait → search2
+    NOT: search -&gt; wait -&gt; analyze -&gt; wait -&gt; search2
     &quot;&quot;&quot;)
 
 
@@ -2016,7 +2016,7 @@ prompts where gates are needed.</p>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── Fake data ─────────────────────────────────────────────
+# -- Fake data ---------------------------------------------
 CUSTOMERS = {
     &quot;jane@email.com&quot;: {&quot;id&quot;: &quot;CUST-001&quot;, &quot;name&quot;: &quot;Jane Smith&quot;, &quot;tier&quot;: &quot;gold&quot;},
     &quot;bob@email.com&quot;:  {&quot;id&quot;: &quot;CUST-002&quot;, &quot;name&quot;: &quot;Bob Jones&quot;,  &quot;tier&quot;: &quot;silver&quot;}
@@ -2035,14 +2035,14 @@ def execute_tool(name, input_data):
         c = CUSTOMERS.get(input_data.get(&quot;email&quot;, &quot;&quot;))
         if c:
             verified_customer_id = c[&quot;id&quot;]
-            print(f&quot;    ✓ Customer verified: {verified_customer_id}&quot;)
+            print(f&quot;    [OK] Customer verified: {verified_customer_id}&quot;)
             return json.dumps(c)
         return json.dumps({&quot;error&quot;: &quot;No customer found&quot;})
 
     elif name == &quot;lookup_order&quot;:
-        # ── PROGRAMMATIC GATE ──
+        # -- PROGRAMMATIC GATE --
         if verified_customer_id is None:
-            print(f&quot;    ✗ BLOCKED: get_customer must succeed first&quot;)
+            print(f&quot;    [BLOCKED] BLOCKED: get_customer must succeed first&quot;)
             return json.dumps({
                 &quot;isError&quot;: True,
                 &quot;errorCategory&quot;: &quot;validation&quot;,
@@ -2053,7 +2053,7 @@ def execute_tool(name, input_data):
         return json.dumps(o) if o else json.dumps({&quot;error&quot;: &quot;Order not found&quot;})
 
     elif name == &quot;process_refund&quot;:
-        # ── PROGRAMMATIC GATE ──
+        # -- PROGRAMMATIC GATE --
         if verified_customer_id is None:
             return json.dumps({
                 &quot;isError&quot;: True, &quot;errorCategory&quot;: &quot;validation&quot;,
@@ -2061,9 +2061,9 @@ def execute_tool(name, input_data):
                 &quot;message&quot;: &quot;Customer verification required. Call get_customer first.&quot;
             })
         amount = input_data.get(&quot;amount&quot;, 0)
-        # ── POLICY GATE (PostToolUse hook pattern) ──
+        # -- POLICY GATE (PostToolUse hook pattern) --
         if amount &gt; 500:
-            print(f&quot;    ✗ BLOCKED: ${amount} exceeds $500 policy limit&quot;)
+            print(f&quot;    [BLOCKED] BLOCKED: ${amount} exceeds $500 policy limit&quot;)
             return json.dumps({
                 &quot;isError&quot;: True, &quot;errorCategory&quot;: &quot;business&quot;,
                 &quot;isRetryable&quot;: False,
@@ -2077,7 +2077,7 @@ def execute_tool(name, input_data):
     elif name == &quot;escalate_to_human&quot;:
         summary = input_data.get(&quot;summary&quot;, &quot;&quot;)
         customer_id = input_data.get(&quot;customer_id&quot;, verified_customer_id)
-        print(f&quot;    → ESCALATING to human agent&quot;)
+        print(f&quot;    -&gt; ESCALATING to human agent&quot;)
         print(f&quot;      Customer: {customer_id}&quot;)
         print(f&quot;      Summary: {summary[:100]}&quot;)
         return json.dumps({
@@ -2120,7 +2120,7 @@ tools = [
     }
 ]
 
-# ── Simulated Claude responses ────────────────────────────
+# -- Simulated Claude responses ----------------------------
 # In production, replace simulate_responses() with client.messages.create().
 # The loop logic below stays identical.
 
@@ -2239,7 +2239,7 @@ def simulate_responses(user_message):
         ]
 
 
-# ── THE AGENTIC LOOP (identical to real API usage) ───────
+# -- THE AGENTIC LOOP (identical to real API usage) -------
 # In production, replace simulate_responses() with
 # client.messages.create() — the loop logic stays identical.
 
@@ -2362,7 +2362,7 @@ def handle_multi_concern_request(customer_email: str, concerns: list) -&gt; str:
     # Synthesize unified response
     response_parts = [f&quot;I&#39;ve investigated all {len(concerns)} issues for your account:\n&quot;]
     for i, f in enumerate(findings, 1):
-        response_parts.append(f&quot;{i}. {f[&#39;concern&#39;]}: {f[&#39;finding&#39;]} → {f[&#39;action&#39;]}&quot;)
+        response_parts.append(f&quot;{i}. {f[&#39;concern&#39;]}: {f[&#39;finding&#39;]} -&gt; {f[&#39;action&#39;]}&quot;)
 
     print(f&quot;\nMulti-concern handling for {customer_email}:&quot;)
     print(f&quot;Concerns identified: {len(concerns)}&quot;)
@@ -2455,7 +2455,7 @@ that&#39;s probabilistic — it works 95% of the time. For a production agent, 9
 <pre><code class="language-python">import json
 from datetime import datetime
 
-# ── PostToolUse Hook: Data Normalization ──────────────────
+# -- PostToolUse Hook: Data Normalization ------------------
 # Different MCP tools return dates in different formats.
 # This hook normalizes ALL date formats to ISO 8601
 # before the model sees the results.
@@ -2466,9 +2466,9 @@ def post_tool_use_normalize(tool_name: str, tool_result: dict) -&gt; dict:
 
     Called AFTER a tool executes, BEFORE results go to the model.
     This is where you fix:
-    - Unix timestamps → ISO 8601
-    - Numeric status codes → human-readable strings
-    - Currency cents → formatted dollars
+    - Unix timestamps -&gt; ISO 8601
+    - Numeric status codes -&gt; human-readable strings
+    - Currency cents -&gt; formatted dollars
     - Inconsistent field names across tools
     &quot;&quot;&quot;
 
@@ -2477,25 +2477,25 @@ def post_tool_use_normalize(tool_name: str, tool_result: dict) -&gt; dict:
         raw = tool_result[&quot;created_at&quot;]
         if isinstance(raw, int):  # Unix timestamp
             tool_result[&quot;created_at&quot;] = datetime.fromtimestamp(raw).isoformat()
-            print(f&quot;  [HOOK] Normalized Unix timestamp: {raw} → {tool_result[&#39;created_at&#39;]}&quot;)
+            print(f&quot;  [HOOK] Normalized Unix timestamp: {raw} -&gt; {tool_result[&#39;created_at&#39;]}&quot;)
 
     # Normalize status codes
     STATUS_MAP = {1: &quot;active&quot;, 2: &quot;suspended&quot;, 3: &quot;closed&quot;, 0: &quot;pending&quot;}
     if &quot;status&quot; in tool_result and isinstance(tool_result[&quot;status&quot;], int):
         raw = tool_result[&quot;status&quot;]
         tool_result[&quot;status&quot;] = STATUS_MAP.get(raw, f&quot;unknown({raw})&quot;)
-        print(f&quot;  [HOOK] Normalized status code: {raw} → {tool_result[&#39;status&#39;]}&quot;)
+        print(f&quot;  [HOOK] Normalized status code: {raw} -&gt; {tool_result[&#39;status&#39;]}&quot;)
 
     # Normalize currency (cents to dollars)
     if &quot;amount_cents&quot; in tool_result:
         cents = tool_result.pop(&quot;amount_cents&quot;)
         tool_result[&quot;amount&quot;] = f&quot;${cents / 100:.2f}&quot;
-        print(f&quot;  [HOOK] Normalized currency: {cents} cents → {tool_result[&#39;amount&#39;]}&quot;)
+        print(f&quot;  [HOOK] Normalized currency: {cents} cents -&gt; {tool_result[&#39;amount&#39;]}&quot;)
 
     return tool_result
 
 
-# ── PreToolUse Hook: Policy Enforcement ──────────────────
+# -- PreToolUse Hook: Policy Enforcement ------------------
 # Intercepts OUTGOING tool calls before they execute.
 # Returns None to allow, or an error dict to block.
 
@@ -2503,8 +2503,8 @@ def pre_tool_use_enforce(tool_name: str, tool_input: dict) -&gt; dict | None:
     &quot;&quot;&quot;
     PreToolUse hook: enforce compliance rules on outgoing tool calls.
 
-    Return None → allow the call
-    Return error dict → block the call (model sees the error response)
+    Return None -&gt; allow the call
+    Return error dict -&gt; block the call (model sees the error response)
 
     WHY HOOKS, NOT PROMPTS:
     - Hooks provide guaranteed enforcement (100% compliance)
@@ -2545,7 +2545,7 @@ def pre_tool_use_enforce(tool_name: str, tool_input: dict) -&gt; dict | None:
     return None  # Allow all other calls
 
 
-# ── Demonstration ─────────────────────────────────────────
+# -- Demonstration -----------------------------------------
 
 def simulate_tool_pipeline():
     print(&quot;=== PostToolUse Hook: Data Normalization ===\n&quot;)
@@ -2576,9 +2576,9 @@ def simulate_tool_pipeline():
         print(f&quot;\nTool call: {tool_name}({json.dumps(tool_input)})&quot;)
         block = pre_tool_use_enforce(tool_name, tool_input)
         if block:
-            print(f&quot;  BLOCKED → model sees: {json.dumps(block)[:80]}...&quot;)
+            print(f&quot;  BLOCKED -&gt; model sees: {json.dumps(block)[:80]}...&quot;)
         else:
-            print(f&quot;  ALLOWED → tool executes normally&quot;)
+            print(f&quot;  ALLOWED -&gt; tool executes normally&quot;)
 
     print(&quot;\n=== Key Principle ===&quot;)
     print(&quot;&quot;&quot;
@@ -2607,7 +2607,7 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p><strong>What you should see:</strong></p>
 <ul>
-<li>PostToolUse: dates in 3 formats → all normalized to ISO 8601 (2025-03-15)</li>
+<li>PostToolUse: Unix timestamp, status code, and currency cents all normalized to human-readable formats</li>
 <li>PreToolUse: refund of $50 → ALLOWED. Refund of $750 → BLOCKED with policy error</li>
 <li>Summary showing hooks = deterministic (100%) vs prompts = probabilistic (&lt;100%)</li>
 </ul>
@@ -2708,7 +2708,7 @@ The exam tests your judgment about WHICH strategy fits WHICH situation.</p>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── PATTERN 1: PROMPT CHAINING (fixed sequential pipeline) ──
+# -- PATTERN 1: PROMPT CHAINING (fixed sequential pipeline) --
 # Best for: predictable multi-aspect reviews, known steps
 # Example: Code review -&gt; analyze each file -&gt; cross-file integration pass
 # In production, replace simulate_analysis() with client.messages.create()
@@ -2775,7 +2775,7 @@ def prompt_chaining_code_review(files: dict) -&gt; dict:
     return result
 
 
-# ── PATTERN 2: DYNAMIC ADAPTIVE DECOMPOSITION ──
+# -- PATTERN 2: DYNAMIC ADAPTIVE DECOMPOSITION --
 # Best for: open-ended investigation, unknown structure
 # Example: &quot;Add comprehensive tests to this legacy codebase&quot;
 
@@ -2974,7 +2974,7 @@ summaries beat blind resumption.</p>
 <pre><code class="language-python">import json
 from datetime import datetime
 
-# ── SIMULATED SESSION STATE ────────────────────────────────
+# -- SIMULATED SESSION STATE --------------------------------
 # This represents what Claude Code tracks across sessions
 
 class SessionState:
@@ -3015,7 +3015,7 @@ class SessionState:
         }
 
 
-# ── SCENARIO 1: STALE TOOL RESULTS ────────────────────────
+# -- SCENARIO 1: STALE TOOL RESULTS ------------------------
 # Demonstrates why resuming blindly after code changes is dangerous
 
 def demo_stale_results():
@@ -3036,20 +3036,20 @@ def demo_stale_results():
     print(&quot;  New line 42: &#39;# Authentication refactored — see auth_v2.py&#39;&quot;)
 
     # PROBLEM: if you --resume, Claude still thinks line 42 has SQL injection
-    print(&quot;\n❌ BLIND RESUME: Claude references &#39;the SQL injection on line 42 of auth.py&#39;&quot;)
+    print(&quot;\n[X] BLIND RESUME: Claude references &#39;the SQL injection on line 42 of auth.py&#39;&quot;)
     print(&quot;   But line 42 is now a comment. The bug was fixed AND the file was restructured.&quot;)
     print(&quot;   Claude is working with STALE tool results.&quot;)
 
     # SOLUTION: start fresh with injected summary
     summary = session.get_summary()
-    print(f&quot;\n✓ FRESH START with injected summary:&quot;)
+    print(f&quot;\n[OK] FRESH START with injected summary:&quot;)
     print(f&quot;  &#39;Previous analysis found: {summary[&#39;key_findings&#39;]}&quot;)
     print(f&quot;   Files examined: {summary[&#39;files_examined&#39;]}&quot;)
     print(f&quot;   Code has since been refactored. Re-analyze auth.py for remaining issues.&#39;&quot;)
-    print(f&quot;\n  → Claude re-reads the CURRENT file and gives accurate findings.&quot;)
+    print(f&quot;\n  -&gt; Claude re-reads the CURRENT file and gives accurate findings.&quot;)
 
 
-# ── SCENARIO 2: FORK SESSION ──────────────────────────────
+# -- SCENARIO 2: FORK SESSION ------------------------------
 # Demonstrates why forking prevents cross-contamination
 
 def demo_fork_session():
@@ -3084,12 +3084,12 @@ def demo_fork_session():
     for f in fork_b.findings[2:]:
         print(f&quot;  - {f[&#39;finding&#39;]}&quot;)
 
-    print(&quot;\n✓ KEY: Fork A and Fork B don&#39;t see each other&#39;s findings.&quot;)
+    print(&quot;\n[OK] KEY: Fork A and Fork B don&#39;t see each other&#39;s findings.&quot;)
     print(&quot;  Cache exploration doesn&#39;t pollute the index exploration.&quot;)
     print(&quot;  You can compare results objectively from a shared baseline.&quot;)
 
 
-# ── SCENARIO 3: CONTEXT DEGRADATION ───────────────────────
+# -- SCENARIO 3: CONTEXT DEGRADATION -----------------------
 # Demonstrates why long sessions produce worse results
 
 def demo_context_degradation():
@@ -3097,7 +3097,7 @@ def demo_context_degradation():
 
     session = SessionState(&quot;long-exploration&quot;)
 
-    # Simulate 50 turns of exploration
+    # Simulate 25 turns of exploration (one per file)
     files = [f&quot;module_{i}.py&quot; for i in range(25)]
     for i, f in enumerate(files):
         session.add_finding(f&quot;Found pattern X in {f}&quot;, f, i * 10)
@@ -3107,8 +3107,8 @@ def demo_context_degradation():
     print(f&quot;Estimated token usage: ~{session.turn_count * 500 + len(session.tool_results) * 200} tokens&quot;)
 
     print(&quot;\nSYMPTOM: Ask &#39;What was the first finding?&#39;&quot;)
-    print(&quot;  Turn 50: &#39;Based on the analysis, the codebase typically uses pattern X...&#39;&quot;)
-    print(&quot;  ← WRONG. It said &#39;typically&#39; instead of citing the specific finding from turn 1.&quot;)
+    print(&quot;  Turn 25: &#39;Based on the analysis, the codebase typically uses pattern X...&#39;&quot;)
+    print(&quot;  &lt;- WRONG. It said &#39;typically&#39; instead of citing the specific finding from turn 1.&quot;)
     print(&quot;  This is context degradation — earlier findings are lost in the middle.&quot;)
 
     print(&quot;\nFIXES:&quot;)
@@ -3117,31 +3117,31 @@ def demo_context_degradation():
     print(&quot;  3. Scratchpad files — write findings to disk so they survive context limits&quot;)
 
 
-# ── DECISION GUIDE ─────────────────────────────────────────
+# -- DECISION GUIDE -----------------------------------------
 
 def print_decision_guide():
     print(&quot;\n\n=== Session Strategy Decision Guide ===\n&quot;)
     print(&quot;&quot;&quot;
-    ┌─────────────────────────────────────────────────────────┐
-    │ WHEN TO...                                              │
-    ├─────────────────────────────────────────────────────────┤
-    │ --resume:                                               │
-    │   • Prior context is still valid                        │
-    │   • No code changes since last session                  │
-    │   • Short break, continuing same investigation          │
-    ├─────────────────────────────────────────────────────────┤
-    │ fork_session:                                           │
-    │   • Compare two approaches from same baseline           │
-    │   • Explore divergent solutions in isolation            │
-    │   • A/B test different strategies                       │
-    ├─────────────────────────────────────────────────────────┤
-    │ Start fresh with injected summary:                      │
-    │   • Files changed since last session                    │
-    │   • Tool results are stale (line numbers shifted)       │
-    │   • Session ran too long (context degradation)          │
-    │   • EXAM RULE: This beats --resume when results         │
-    │     might be stale. Always prefer fresh + summary.      │
-    └─────────────────────────────────────────────────────────┘
+    +---------------------------------------------------------+
+    | WHEN TO...                                              |
+    +---------------------------------------------------------+
+    | --resume:                                               |
+    |   • Prior context is still valid                        |
+    |   • No code changes since last session                  |
+    |   • Short break, continuing same investigation          |
+    +---------------------------------------------------------+
+    | fork_session:                                           |
+    |   • Compare two approaches from same baseline           |
+    |   • Explore divergent solutions in isolation            |
+    |   • A/B test different strategies                       |
+    +---------------------------------------------------------+
+    | Start fresh with injected summary:                      |
+    |   • Files changed since last session                    |
+    |   • Tool results are stale (line numbers shifted)       |
+    |   • Session ran too long (context degradation)          |
+    |   • EXAM RULE: This beats --resume when results         |
+    |     might be stale. Always prefer fresh + summary.      |
+    +---------------------------------------------------------+
     &quot;&quot;&quot;)
 
 
@@ -3159,7 +3159,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li>Scenario 1: Shows exactly how stale tool results mislead Claude after code changes</li>
 <li>Scenario 2: Shows two forks with independent findings that don&#39;t cross-contaminate</li>
-<li>Scenario 3: Shows how 50 turns of exploration causes &quot;typically&quot; answers instead of specific citations</li>
+<li>Scenario 3: Shows how 25 turns of exploration causes &quot;typically&quot; answers instead of specific citations</li>
 <li>Decision guide: The exam-ready table of when to use each strategy</li>
 </ul>
 <h3>Practice in Claude Code</h3>
@@ -3280,7 +3280,7 @@ Descriptions are the lowest-effort, highest-leverage fix.</p>
 # No API key needed — this lab uses simulated responses to demonstrate the pattern.
 # In production, replace with client.messages.create()
 
-# ── BAD DESCRIPTIONS: Vague, overlapping ──────────────────
+# -- BAD DESCRIPTIONS: Vague, overlapping ------------------
 bad_tools = [
     {
         &quot;name&quot;: &quot;analyze_content&quot;,
@@ -3298,7 +3298,7 @@ bad_tools = [
     }
 ]
 
-# ── GOOD DESCRIPTIONS: Specific, differentiated ───────────
+# -- GOOD DESCRIPTIONS: Specific, differentiated -----------
 good_tools = [
     {
         &quot;name&quot;: &quot;extract_web_results&quot;,
@@ -3345,11 +3345,13 @@ def simulate_tool_selection(tools_list, test_message):
     msg_lower = test_message.lower()
     for tool in tools_list:
         desc_lower = tool[&quot;description&quot;].lower()
+        # Web content signals -&gt; web extraction tool
         if (&quot;html&quot; in msg_lower or &quot;search&quot; in msg_lower or &quot;web&quot; in msg_lower) \
-                and &quot;web&quot; in desc_lower:
+                and desc_lower.startswith(&quot;extracts structured data from web&quot;):
             return tool[&quot;name&quot;]
-        if (&quot;invoice&quot; in msg_lower or &quot;pdf&quot; in msg_lower) \
-                and &quot;document&quot; in desc_lower:
+        # Document signals -&gt; document extraction tool
+        if (&quot;invoice&quot; in msg_lower or &quot;pdf&quot; in msg_lower or &quot;report&quot; in msg_lower) \
+                and desc_lower.startswith(&quot;extracts structured data from business&quot;):
             return tool[&quot;name&quot;]
     return tools_list[0][&quot;name&quot;]
 
@@ -3375,11 +3377,11 @@ if __name__ == &quot;__main__&quot;:
         bad_selection  = test_tool_selection(bad_tools,  &quot;BAD DESCRIPTIONS&quot;, msg)
         good_selection = test_tool_selection(good_tools, &quot;GOOD DESCRIPTIONS&quot;, msg)
 
-        expected = &quot;extract_web_results&quot; if &quot;html&quot; in msg.lower() or &quot;search&quot; in msg.lower() else &quot;extract_document_data&quot;
+        expected = &quot;extract_web_results&quot; if any(k in msg.lower() for k in [&quot;html&quot;, &quot;search&quot;, &quot;web&quot;]) else &quot;extract_document_data&quot;
         print(f&quot;  Expected: {expected}&quot;)
         print(f&quot;  Bad desc got it right: {bad_selection == expected if bad_selection else &#39;N/A&#39;}&quot;)
         print(f&quot;  Good desc got it right: {good_selection == expected}&quot;)
-        print(f&quot;  {&#39;─&#39;*50}\n&quot;)
+        print(f&quot;  {&#39;-&#39;*50}\n&quot;)
 
     print(&quot;\n=== Tool Splitting Pattern ===&quot;)
 
@@ -3435,8 +3437,8 @@ if __name__ == &quot;__main__&quot;:
         }
     ]
 
-    print(f&quot;  BEFORE: 1 generic tool → &#39;analyze_document&#39; (vague)&quot;)
-    print(f&quot;  AFTER:  3 specific tools →&quot;)
+    print(f&quot;  BEFORE: 1 generic tool -&gt; &#39;analyze_document&#39; (vague)&quot;)
+    print(f&quot;  AFTER:  3 specific tools -&gt;&quot;)
     for t in split_tools:
         print(f&quot;    - {t[&#39;name&#39;]}: {t[&#39;description&#39;][:60]}...&quot;)
     print(f&quot;\n  Each tool has a clear input/output contract.&quot;)
@@ -3667,7 +3669,7 @@ def simulate_claude_interpretation(result: dict) -&gt; str:
 
 def run_error_test(email: str):
     &quot;&quot;&quot;Show how Claude responds to each error type.&quot;&quot;&quot;
-    print(f&quot;\n{&#39;─&#39;*50}&quot;)
+    print(f&quot;\n{&#39;-&#39;*50}&quot;)
     print(f&quot;Testing: {email}&quot;)
 
     # Intercept the tool call to inject our error
@@ -3682,11 +3684,11 @@ def run_error_test(email: str):
 if __name__ == &quot;__main__&quot;:
     print(&quot;=== Error Category Demonstration ===&quot;)
     test_emails = [
-        &quot;timeout@test.com&quot;,    # transient → Claude may suggest retry
-        &quot;bad-email&quot;,           # validation → Claude explains input issue
-        &quot;locked@test.com&quot;,     # business → Claude gives customer-friendly message
-        &quot;restricted@test.com&quot;, # permission → Claude explains can&#39;t access
-        &quot;nobody@test.com&quot;,     # empty result (NOT error) → Claude says not found
+        &quot;timeout@test.com&quot;,    # transient -&gt; Claude may suggest retry
+        &quot;bad-email&quot;,           # validation -&gt; Claude explains input issue
+        &quot;locked@test.com&quot;,     # business -&gt; Claude gives customer-friendly message
+        &quot;restricted@test.com&quot;, # permission -&gt; Claude explains can&#39;t access
+        &quot;nobody@test.com&quot;,     # empty result (NOT error) -&gt; Claude says not found
     ]
     for email in test_emails:
         run_error_test(email)
@@ -3754,8 +3756,8 @@ if __name__ == &quot;__main__&quot;:
     print(&quot;&quot;&quot;
     Key pattern:
     1. Subagent retries LOCALLY for transient errors (don&#39;t burden coordinator)
-    2. Non-retryable errors → propagate IMMEDIATELY with error + partial results
-    3. Exhausted retries → propagate with what was attempted + partial results
+    2. Non-retryable errors -&gt; propagate IMMEDIATELY with error + partial results
+    3. Exhausted retries -&gt; propagate with what was attempted + partial results
     4. Coordinator gets enough context to decide: retry differently, skip, or fail gracefully
     &quot;&quot;&quot;)
 </code></pre>
@@ -3900,11 +3902,11 @@ def demo_scoped_tool_access():
       NOT: web search tools
 
     Synthesis Agent:
-      allowed_tools: [&quot;verify_fact&quot;]  ← scoped cross-role tool
+      allowed_tools: [&quot;verify_fact&quot;]  &lt;- scoped cross-role tool
       NOT: web_search (synthesis doesn&#39;t search independently)
 
     Coordinator Agent:
-      allowed_tools: [&quot;Task&quot;]  ← spawning only
+      allowed_tools: [&quot;Task&quot;]  &lt;- spawning only
       (delegates all actual work to subagents)
 
     RESULT: Each agent makes correct tool selections because
@@ -3949,7 +3951,7 @@ def demo_constrained_tool_replacement():
     print(f&quot;&quot;)
     print(f&quot;  Benefits of constrained replacement:&quot;)
     print(f&quot;  1. Model knows exactly what URLs are valid (approved domains)&quot;)
-    print(f&quot;  2. Description says when NOT to use it → reduces misuse&quot;)
+    print(f&quot;  2. Description says when NOT to use it -&gt; reduces misuse&quot;)
     print(f&quot;  3. Server-side validation rejects bad URLs before they execute&quot;)
     print(f&quot;  4. Synthesis agent can&#39;t accidentally use it for web scraping&quot;)
 
@@ -3957,7 +3959,7 @@ def demo_constrained_tool_replacement():
     print(f&quot;\n  Scoped cross-role tool example:&quot;)
     print(f&quot;  Synthesis Agent gets: [&#39;verify_fact&#39;] — just simple lookups&quot;)
     print(f&quot;  NOT: [&#39;web_search&#39;, &#39;fetch_url&#39;, &#39;verify_fact&#39;] — too many options&quot;)
-    print(f&quot;  Complex verification → route through coordinator to Search Agent&quot;)
+    print(f&quot;  Complex verification -&gt; route through coordinator to Search Agent&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
@@ -3967,9 +3969,9 @@ if __name__ == &quot;__main__&quot;:
 
     print(&quot;\n=== tool_choice Reference ===&quot;)
     print(&quot;&quot;&quot;
-    &quot;auto&quot;                           → model decides: text OR tool
-    &quot;any&quot;                            → model MUST call a tool (any of them)
-    {&quot;type&quot;: &quot;tool&quot;, &quot;name&quot;: &quot;X&quot;}    → model MUST call tool X specifically
+    &quot;auto&quot;                           -&gt; model decides: text OR tool
+    &quot;any&quot;                            -&gt; model MUST call a tool (any of them)
+    {&quot;type&quot;: &quot;tool&quot;, &quot;name&quot;: &quot;X&quot;}    -&gt; model MUST call tool X specifically
 
     When to use each:
     auto:   Normal conversational agents; let model decide
@@ -4173,10 +4175,10 @@ def validate_mcp_config(path, scope_name):
         try:
             config = json.load(f)
         except json.JSONDecodeError as e:
-            print(f&quot;  ✗ Invalid JSON: {e}&quot;)
+            print(f&quot;  [BLOCKED] Invalid JSON: {e}&quot;)
             return False
 
-    print(f&quot;  ✓ Valid JSON&quot;)
+    print(f&quot;  [OK] Valid JSON&quot;)
 
     # Check for mcpServers key
     servers = config.get(&quot;mcpServers&quot;, {})
@@ -4184,7 +4186,7 @@ def validate_mcp_config(path, scope_name):
         print(f&quot;  ⚠ No &#39;mcpServers&#39; found — add server definitions&quot;)
         return False
 
-    print(f&quot;  ✓ Found {len(servers)} server(s): {&#39;, &#39;.join(servers.keys())}&quot;)
+    print(f&quot;  [OK] Found {len(servers)} server(s): {&#39;, &#39;.join(servers.keys())}&quot;)
 
     # Check each server
     for name, server in servers.items():
@@ -4203,7 +4205,7 @@ def validate_mcp_config(path, scope_name):
         if env_vars:
             for var in env_vars:
                 if os.environ.get(var):
-                    print(f&quot;  ✓ Server &#39;{name}&#39;: ${{{var}}} is set in environment&quot;)
+                    print(f&quot;  [OK] Server &#39;{name}&#39;: ${{{var}}} is set in environment&quot;)
                 else:
                     print(f&quot;  ⚠ Server &#39;{name}&#39;: ${{{var}}} is NOT set — export it before starting Claude Code&quot;)
         else:
@@ -4212,9 +4214,9 @@ def validate_mcp_config(path, scope_name):
 
         if issues:
             for issue in issues:
-                print(f&quot;  ✗ Server &#39;{name}&#39;: {issue}&quot;)
+                print(f&quot;  [BLOCKED] Server &#39;{name}&#39;: {issue}&quot;)
         else:
-            print(f&quot;  ✓ Server &#39;{name}&#39;: config looks good&quot;)
+            print(f&quot;  [OK] Server &#39;{name}&#39;: config looks good&quot;)
 
     return True
 
@@ -4233,8 +4235,8 @@ if __name__ == &quot;__main__&quot;:
 
     print(&quot;\n\n=== MCP Scoping Rules ===&quot;)
     print(&quot;&quot;&quot;
-    .mcp.json (project root)     → Shared via git. All teammates get these servers.
-    ~/.claude.json (home dir)    → Personal only. Not in git. Your experiments.
+    .mcp.json (project root)     -&gt; Shared via git. All teammates get these servers.
+    ~/.claude.json (home dir)    -&gt; Personal only. Not in git. Your experiments.
 
     BOTH load at startup. Tools from ALL servers are available simultaneously.
 
@@ -4464,10 +4466,10 @@ def run_quiz():
         answer = input(&quot;   Your answer: &quot;).strip()
 
         if answer.lower() == s[&quot;correct&quot;].lower():
-            print(f&quot;   ✓ Correct! {s[&#39;why&#39;]}&quot;)
+            print(f&quot;   [OK] Correct! {s[&#39;why&#39;]}&quot;)
             score += 1
         else:
-            print(f&quot;   ✗ Wrong. Correct: {s[&#39;correct&#39;]} — {s[&#39;why&#39;]}&quot;)
+            print(f&quot;   [BLOCKED] Wrong. Correct: {s[&#39;correct&#39;]} — {s[&#39;why&#39;]}&quot;)
 
     print(f&quot;\n\nScore: {score}/{len(SCENARIOS)}&quot;)
     if score == len(SCENARIOS):
@@ -4741,16 +4743,16 @@ def check_file(path, label, required_content=None):
         with open(path) as f:
             content = f.read()
         size = len(content)
-        print(f&quot;  ✓ {label}: {path} ({size} chars)&quot;)
+        print(f&quot;  [OK] {label}: {path} ({size} chars)&quot;)
         if required_content:
             for item in required_content:
                 if item in content:
-                    print(f&quot;    ✓ Contains: {item}&quot;)
+                    print(f&quot;    [OK] Contains: {item}&quot;)
                 else:
-                    print(f&quot;    ✗ Missing: {item}&quot;)
+                    print(f&quot;    [BLOCKED] Missing: {item}&quot;)
         return True
     else:
-        print(f&quot;  ✗ {label}: {path} — NOT FOUND (create it first)&quot;)
+        print(f&quot;  [BLOCKED] {label}: {path} — NOT FOUND (create it first)&quot;)
         return False
 
 
@@ -4765,11 +4767,11 @@ def verify_lab_3_1():
     # Rules directory
     rules = glob_module.glob(&quot;.claude/rules/*.md&quot;)
     if rules:
-        print(f&quot;  ✓ .claude/rules/: {len(rules)} rule file(s)&quot;)
+        print(f&quot;  [OK] .claude/rules/: {len(rules)} rule file(s)&quot;)
         for r in rules:
             check_file(r, f&quot;  Rule file&quot;, None)
     else:
-        print(&quot;  ✗ .claude/rules/: No rule files found&quot;)
+        print(&quot;  [BLOCKED] .claude/rules/: No rule files found&quot;)
 
     # User-level
     home = os.path.expanduser(&quot;~&quot;)
@@ -4783,16 +4785,16 @@ def verify_lab_3_2():
     # Commands
     cmds = glob_module.glob(&quot;.claude/commands/*.md&quot;)
     if cmds:
-        print(f&quot;  ✓ .claude/commands/: {len(cmds)} command(s)&quot;)
+        print(f&quot;  [OK] .claude/commands/: {len(cmds)} command(s)&quot;)
         for c in cmds:
             print(f&quot;    - {os.path.basename(c)}&quot;)
     else:
-        print(&quot;  ✗ .claude/commands/: No commands found&quot;)
+        print(&quot;  [BLOCKED] .claude/commands/: No commands found&quot;)
 
     # Skills
     skills = glob_module.glob(&quot;.claude/skills/*.md&quot;)
     if skills:
-        print(f&quot;  ✓ .claude/skills/: {len(skills)} skill(s)&quot;)
+        print(f&quot;  [OK] .claude/skills/: {len(skills)} skill(s)&quot;)
         for s in skills:
             with open(s) as f:
                 content = f.read()
@@ -4806,7 +4808,7 @@ def verify_lab_3_2():
             feat_str = &quot;, &quot;.join(features) if features else &quot;no frontmatter&quot;
             print(f&quot;    - {os.path.basename(s)} [{feat_str}]&quot;)
     else:
-        print(&quot;  ✗ .claude/skills/: No skills found&quot;)
+        print(&quot;  [BLOCKED] .claude/skills/: No skills found&quot;)
 
 
 def verify_lab_3_3():
@@ -4826,10 +4828,10 @@ def verify_lab_3_3():
                 if &quot;paths:&quot; in frontmatter:
                     path_rules += 1
                     patterns = re.findall(r&#39;- &quot;([^&quot;]+)&quot;&#39;, frontmatter)
-                    print(f&quot;  ✓ {os.path.basename(r)}: paths = {patterns}&quot;)
+                    print(f&quot;  [OK] {os.path.basename(r)}: paths = {patterns}&quot;)
 
     if path_rules == 0:
-        print(&quot;  ✗ No path-specific rules found (need YAML frontmatter with &#39;paths:&#39; field)&quot;)
+        print(&quot;  [BLOCKED] No path-specific rules found (need YAML frontmatter with &#39;paths:&#39; field)&quot;)
     else:
         print(f&quot;\n  Total path-specific rules: {path_rules}&quot;)
 
@@ -4840,7 +4842,7 @@ if __name__ == &quot;__main__&quot;:
     verify_lab_3_1()
     verify_lab_3_2()
     verify_lab_3_3()
-    print(&quot;\n✓ Verification complete. Fix any ✗ items above, then run /memory in Claude Code to confirm loading.&quot;)
+    print(&quot;\n[OK] Verification complete. Fix any [BLOCKED] items above, then run /memory in Claude Code to confirm loading.&quot;)
 </code></pre>
 <h2>Run it</h2>
 <p>If Claude Code created the file but did not run it, ask:</p>
@@ -5380,13 +5382,13 @@ def run_quiz():
         answer = input(&quot;   plan or direct? &quot;).strip().lower()
 
         if answer == s[&quot;answer&quot;]:
-            print(f&quot;   ✓ Correct! {s[&#39;why&#39;]}&quot;)
+            print(f&quot;   [OK] Correct! {s[&#39;why&#39;]}&quot;)
             score += 1
         else:
-            print(f&quot;   ✗ Wrong. Answer: {s[&#39;answer&#39;]} — {s[&#39;why&#39;]}&quot;)
+            print(f&quot;   [BLOCKED] Wrong. Answer: {s[&#39;answer&#39;]} — {s[&#39;why&#39;]}&quot;)
 
     print(f&quot;\nScore: {score}/{len(SCENARIOS)}&quot;)
-    print(&quot;\nRule: Known steps + clear scope → direct. Unknown complexity + multiple approaches → plan.&quot;)
+    print(&quot;\nRule: Known steps + clear scope -&gt; direct. Unknown complexity + multiple approaches -&gt; plan.&quot;)
 
 if __name__ == &quot;__main__&quot;:
     run_quiz()
@@ -5483,10 +5485,10 @@ def demo_examples_vs_description():
     Normalize customer names from our CRM export.
 
     Examples:
-    Input:  &quot;SMITH, JOHN&quot;      → Output: &quot;John Smith&quot;
-    Input:  &quot;mary-jane watson&quot; → Output: &quot;Mary-Jane Watson&quot;
-    Input:  &quot;DR. CHEN, ALICE&quot;  → Output: &quot;Dr. Alice Chen&quot;
-    Input:  &quot;O&#39;BRIEN, PATRICK&quot; → Output: &quot;Patrick O&#39;Brien&quot;
+    Input:  &quot;SMITH, JOHN&quot;      -&gt; Output: &quot;John Smith&quot;
+    Input:  &quot;mary-jane watson&quot; -&gt; Output: &quot;Mary-Jane Watson&quot;
+    Input:  &quot;DR. CHEN, ALICE&quot;  -&gt; Output: &quot;Dr. Alice Chen&quot;
+    Input:  &quot;O&#39;BRIEN, PATRICK&quot; -&gt; Output: &quot;Patrick O&#39;Brien&quot;
 
     Apply the same transformation to: $NAMES
     &quot;&quot;&quot;
@@ -5508,7 +5510,7 @@ def demo_examples_vs_description():
 
 def demo_test_driven_iteration():
     &quot;&quot;&quot;
-    Write tests first → share failures → guide model to fix issues.
+    Write tests first -&gt; share failures -&gt; guide model to fix issues.
     More effective than describing the problem in prose.
     &quot;&quot;&quot;
     print(&quot;\n=== Test-Driven Iteration Pattern ===&quot;)
@@ -5532,7 +5534,7 @@ def demo_test_driven_iteration():
     if failures:
         # Step 3: Share specific test failures with Claude
         failure_msg = &quot;\n&quot;.join([
-            f&quot;FAIL: input={t[&#39;input&#39;]!r} → got exception, expected {t[&#39;expected&#39;]!r}&quot;
+            f&quot;FAIL: input={t[&#39;input&#39;]!r} -&gt; got exception, expected {t[&#39;expected&#39;]!r}&quot;
             for t in failures
         ])
 
@@ -5594,11 +5596,11 @@ if __name__ == &quot;__main__&quot;:
 
     print(&quot;\n=== Multi-issue Message Strategy ===&quot;)
     print(&quot;&quot;&quot;
-    Multiple INTERACTING issues → one message with all issues:
+    Multiple INTERACTING issues -&gt; one message with all issues:
     &quot;Fix these three issues together: [issue1], [issue2], [issue3].
      Note: fixing issue1 affects issue2 — handle them as a unit.&quot;
 
-    Multiple INDEPENDENT issues → sequential messages:
+    Multiple INDEPENDENT issues -&gt; sequential messages:
     Message 1: &quot;Fix the null handling in validate_email&quot;
     Message 2: (after fix confirmed) &quot;Now fix the date parsing in normalize_date&quot;
 
@@ -6042,12 +6044,12 @@ def verify_signature(data, sig):
 <h2>Reference code</h2>
 <p>Now the experiment: we&#39;ll test the SAME code samples with two different prompts.
 The vague prompt says &quot;be conservative.&quot; The specific prompt defines EXACTLY what to report.</p>
-<pre><code class="language-python"># ── VAGUE REVIEW PROMPT (produces false positives) ────────
+<pre><code class="language-python"># -- VAGUE REVIEW PROMPT (produces false positives) --------
 vague_system = &quot;&quot;&quot;You are a code reviewer.
 Review the code and flag any issues you find.
 Be conservative — only report high-confidence findings.&quot;&quot;&quot;
 
-# ── SPECIFIC CRITERIA PROMPT (precise) ────────────────────
+# -- SPECIFIC CRITERIA PROMPT (precise) --------------------
 specific_system = &quot;&quot;&quot;You are a code reviewer.
 
 REPORT these issue types:
@@ -6067,7 +6069,7 @@ what the code actually does. An incomplete comment is NOT a flag.
 Return JSON: [{&quot;issue&quot;: &quot;...&quot;, &quot;severity&quot;: &quot;high/medium/low&quot;, &quot;category&quot;: &quot;bug/security/api_misuse&quot;}]
 If no issues found, return: []&quot;&quot;&quot;
 
-# ── SIMULATED RESPONSES ──────────────────────────────────
+# -- SIMULATED RESPONSES ----------------------------------
 # In production, replace with client.messages.create()
 
 SIMULATED_VAGUE_RESPONSES = {
@@ -6155,9 +6157,9 @@ The specific prompt will correctly skip them and only flag the real bugs.</p>
     criteria = build_criteria_with_category_control(DISABLED_CATEGORIES, ENABLED_CATEGORIES)
     print(criteria)
     print(&quot;Why this works:&quot;)
-    print(&quot;  1. Developers stop seeing false positives → trust rebuilds&quot;)
+    print(&quot;  1. Developers stop seeing false positives -&gt; trust rebuilds&quot;)
     print(&quot;  2. You improve the disabled category criteria offline&quot;)
-    print(&quot;  3. Re-enable with better criteria → precision is higher&quot;)
+    print(&quot;  3. Re-enable with better criteria -&gt; precision is higher&quot;)
     print(&quot;  4. Trust is restored instead of eroded by noise&quot;)
 </code></pre>
 <h2>Run it</h2>
@@ -6259,11 +6261,11 @@ for improving escalation calibration.</p>
 
 # In production, replace with client.messages.create()
 
-# ── WITHOUT FEW-SHOT (inconsistent output format) ─────────
+# -- WITHOUT FEW-SHOT (inconsistent output format) ---------
 no_shot_system = &quot;&quot;&quot;You are a code review assistant.
 Review code and report findings with location, issue, severity, and suggested fix.&quot;&quot;&quot;
 
-# ── WITH FEW-SHOT (consistent, actionable format) ──────────
+# -- WITH FEW-SHOT (consistent, actionable format) ----------
 few_shot_system = &quot;&quot;&quot;You are a code review assistant.
 
 Here are examples of the EXACT output format required:
@@ -6289,7 +6291,7 @@ The comment accurately describes the behavior. This is NOT a false positive.
 
 Now review the provided code using this exact format.&quot;&quot;&quot;
 
-# ── SIMULATED RESPONSES ──────────────────────────────────
+# -- SIMULATED RESPONSES ----------------------------------
 # In production, replace with client.messages.create()
 # Shows how NO FEW-SHOT produces inconsistent formats while FEW-SHOT is structured
 
@@ -6343,7 +6345,7 @@ if __name__ == &quot;__main__&quot;:
 
     Few-shot generalizes:
     The model applies the PATTERN to novel cases — it doesn&#39;t just match examples.
-    3 good examples → consistent handling of 100+ novel patterns.
+    3 good examples -&gt; consistent handling of 100+ novel patterns.
     &quot;&quot;&quot;)
 </code></pre>
 <h2>Run it</h2>
@@ -6443,7 +6445,7 @@ model returns null rather than fabricating values.&quot;</p>
 
 # In production, replace with client.messages.create()
 
-# ── EXTRACTION TOOL DEFINITION ────────────────────────────
+# -- EXTRACTION TOOL DEFINITION ----------------------------
 # Tool use + JSON schema = guaranteed schema compliance
 # (Eliminates JSON syntax errors — model MUST conform to schema)
 
@@ -6627,21 +6629,21 @@ if __name__ == &quot;__main__&quot;:
     print(&quot;\n\n=== Key Schema Design Patterns ===&quot;)
     print(&quot;&quot;&quot;
     Nullable fields: &quot;type&quot;: [&quot;string&quot;, &quot;null&quot;]
-    → Use when source document may not contain the information
-    → Prevents model from fabricating values to satisfy required fields
+    -&gt; Use when source document may not contain the information
+    -&gt; Prevents model from fabricating values to satisfy required fields
 
     Enum with &quot;unclear&quot; and &quot;other&quot;:
-    → &quot;unclear&quot;: ambiguous in source document
-    → &quot;other&quot; + detail field: extensible without schema changes
+    -&gt; &quot;unclear&quot;: ambiguous in source document
+    -&gt; &quot;other&quot; + detail field: extensible without schema changes
 
     Conflict detection: calculated_total + conflict_detected boolean
-    → Schema compliance ≠ semantic correctness
-    → Tool use eliminates syntax errors, not logic errors
-    → Add cross-field validation for semantic checks
+    -&gt; Schema compliance ≠ semantic correctness
+    -&gt; Tool use eliminates syntax errors, not logic errors
+    -&gt; Add cross-field validation for semantic checks
 
     tool_choice forced vs any:
-    → forced: specific tool MUST run (single schema)
-    → any: model picks which schema (multiple schemas for different doc types)
+    -&gt; forced: specific tool MUST run (single schema)
+    -&gt; any: model picks which schema (multiple schemas for different doc types)
     &quot;&quot;&quot;)
 
     # === Demo: tool_choice &quot;any&quot; with multiple schemas ===
@@ -6679,8 +6681,8 @@ if __name__ == &quot;__main__&quot;:
 
     print(&quot;&quot;&quot;
     When to use tool_choice &quot;any&quot;:
-    - Unknown document type → let model pick the right extraction schema
-    - Multiple valid output formats → model selects the best match
+    - Unknown document type -&gt; let model pick the right extraction schema
+    - Multiple valid output formats -&gt; model selects the best match
     - Guarantees structured output (won&#39;t return text) but with flexibility
     &quot;&quot;&quot;)
 </code></pre>
@@ -6712,7 +6714,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li>tool_use + JSON schema = guaranteed schema syntax compliance</li>
 <li>Schema compliance does NOT prevent semantic errors (wrong field values)</li>
-<li>Nullable fields: <code>[&quot;type&quot;, &quot;null&quot;]</code> for potentially absent data</li>
+<li>Nullable fields: <code>[&quot;string&quot;, &quot;null&quot;]</code> for potentially absent data</li>
 <li><code>&quot;unclear&quot;</code> enum value for ambiguous cases</li>
 <li><code>&quot;other&quot;</code> + detail field for extensible categorization</li>
 <li>Add cross-field validation for semantic correctness checks</li>
@@ -6801,10 +6803,12 @@ def validate_extraction(data: dict) -&gt; list:
         calc = sum(item.get(&quot;amount&quot;, 0) for item in items)
         stated = data.get(&quot;total_amount&quot;)
         if stated and abs(calc - stated) &gt; 0.01:
-            errors.append(
-                f&quot;Line items sum to ${calc:.2f} but total_amount is ${stated:.2f}. &quot;
-                f&quot;Set calculated_total={calc:.2f} and conflict_detected=true.&quot;
-            )
+            # If there&#39;s a mismatch, the model MUST flag it
+            if not data.get(&quot;conflict_detected&quot;):
+                errors.append(
+                    f&quot;Line items sum to ${calc:.2f} but total_amount is ${stated:.2f}. &quot;
+                    f&quot;Set calculated_total={calc:.2f} and conflict_detected=true.&quot;
+                )
 
     return errors
 </code></pre>
@@ -6919,14 +6923,14 @@ if __name__ == &quot;__main__&quot;:
     print(&quot;\n\n=== When Retries Help vs Don&#39;t Help ===&quot;)
     print(&quot;&quot;&quot;
     Retries WILL help:
-    - Format errors (date in wrong format → specify the correct format)
-    - Arithmetic errors (calculated_total doesn&#39;t match sum → point out the math)
-    - Missing cross-field validation (conflict_detected should be true → explain why)
-    - Structural errors (line items in wrong format → show correct structure)
+    - Format errors (date in wrong format -&gt; specify the correct format)
+    - Arithmetic errors (calculated_total doesn&#39;t match sum -&gt; point out the math)
+    - Missing cross-field validation (conflict_detected should be true -&gt; explain why)
+    - Structural errors (line items in wrong format -&gt; show correct structure)
 
     Retries WON&#39;T help:
     - Information not in the document (&quot;contact billing for pricing&quot;)
-      → The data literally doesn&#39;t exist in the source. Retrying doesn&#39;t add new information.
+      -&gt; The data literally doesn&#39;t exist in the source. Retrying doesn&#39;t add new information.
     - Information in an external document that wasn&#39;t provided
     - Genuinely ambiguous source data
 
@@ -6974,7 +6978,7 @@ review_finding_schema = {
 
 # How to use: when developers dismiss a finding, log it with detected_pattern.
 # After 100 reviews, analyze: which detected_patterns have high dismissal rates?
-# High dismissal rate → that pattern is generating false positives → refine the criteria.
+# High dismissal rate -&gt; that pattern is generating false positives -&gt; refine the criteria.
 
 dismissed_findings = [
     {&quot;detected_pattern&quot;: &quot;== None comparison&quot;,  &quot;dismissed&quot;: True},
@@ -6987,7 +6991,7 @@ dismissed_findings = [
 from collections import Counter, defaultdict
 
 def analyze_dismissal_patterns(findings: list) -&gt; None:
-    &quot;&quot;&quot;Find which patterns have high dismissal rates → false positive candidates.&quot;&quot;&quot;
+    &quot;&quot;&quot;Find which patterns have high dismissal rates -&gt; false positive candidates.&quot;&quot;&quot;
     by_pattern = defaultdict(lambda: {&quot;dismissed&quot;: 0, &quot;total&quot;: 0})
     for f in findings:
         p = f[&quot;detected_pattern&quot;]
@@ -6998,7 +7002,7 @@ def analyze_dismissal_patterns(findings: list) -&gt; None:
     print(&quot;Pattern Dismissal Rates:&quot;)
     for pattern, counts in sorted(by_pattern.items()):
         rate = counts[&quot;dismissed&quot;] / counts[&quot;total&quot;] * 100
-        flag = &quot; ← HIGH FALSE POSITIVE RATE&quot; if rate &gt;= 50 else &quot;&quot;
+        flag = &quot; &lt;- HIGH FALSE POSITIVE RATE&quot; if rate &gt;= 50 else &quot;&quot;
         print(f&quot;  &#39;{pattern}&#39;: {rate:.0f}% dismissed ({counts[&#39;dismissed&#39;]}/{counts[&#39;total&#39;]}){flag}&quot;)
 
 analyze_dismissal_patterns(dismissed_findings)
@@ -7055,7 +7059,7 @@ for data in test_cases:
     result, errors = validate_with_pydantic(data)
     if errors:
         print(f&quot;VALIDATION ERRORS: {errors}&quot;)
-        # → Retry with: original_doc + failed_extraction + specific_errors
+        # -&gt; Retry with: original_doc + failed_extraction + specific_errors
     else:
         print(f&quot;VALID: {result[&#39;invoice_number&#39;]}&quot;)
 </code></pre>
@@ -7171,7 +7175,7 @@ import time
 
 # In production, replace with client.messages.create()
 
-# ── BATCH API BASICS ───────────────────────────────────────
+# -- BATCH API BASICS ---------------------------------------
 # Message Batches API:
 # - 50% cost savings vs synchronous API
 # - Up to 24-hour processing window
@@ -7254,28 +7258,28 @@ def process_batch_results(batch_id: str) -&gt; dict:
     return results, failures
 
 
-# ── DECISION GUIDE ─────────────────────────────────────────
+# -- DECISION GUIDE -----------------------------------------
 
 def batch_decision_guide():
     print(&quot;&quot;&quot;
 === Message Batches API Decision Guide ===
 
 USE BATCH API for:
-✓ Overnight reports (don&#39;t need results until morning)
-✓ Weekly audits (process 1000 documents every Sunday night)
-✓ Nightly test generation (non-blocking, results ready by morning)
-✓ Historical data analysis (50% cost savings on large volumes)
-✓ Bulk document classification (latency-tolerant)
+[OK] Overnight reports (don&#39;t need results until morning)
+[OK] Weekly audits (process 1000 documents every Sunday night)
+[OK] Nightly test generation (non-blocking, results ready by morning)
+[OK] Historical data analysis (50% cost savings on large volumes)
+[OK] Bulk document classification (latency-tolerant)
 
 DO NOT USE BATCH API for:
-✗ Pre-merge CI checks (blocking workflow — developer waiting for result)
-✗ Real-time customer interactions (need immediate response)
-✗ Multi-turn tool calling within single request (not supported)
-✗ Any workflow that blocks on the API result
+[BLOCKED] Pre-merge CI checks (blocking workflow — developer waiting for result)
+[BLOCKED] Real-time customer interactions (need immediate response)
+[BLOCKED] Multi-turn tool calling within single request (not supported)
+[BLOCKED] Any workflow that blocks on the API result
 
 LATENCY SLA MATH:
 If your SLA is 30 hours and batch takes up to 24 hours:
-→ Submit every 4 hours (30 - 24 = 6 hour buffer, submit at 6h intervals for safety)
+-&gt; Submit every 4 hours (30 - 24 = 6 hour buffer, submit at 6h intervals for safety)
 
 FAILURE HANDLING:
 1. Identify failed requests by custom_id
@@ -7305,29 +7309,29 @@ if __name__ == &quot;__main__&quot;:
     print(f&quot;Sample request structure:&quot;)
     print(json.dumps(requests[0], indent=2))
 
-    # ── SIMULATION MODE: See the full workflow without using API credits ──
+    # -- SIMULATION MODE: See the full workflow without using API credits --
     print(&quot;\n=== Simulated Batch Workflow (no API credits needed) ===\n&quot;)
 
     # Simulate submit
     fake_batch_id = &quot;batch_abc123def456&quot;
     print(f&quot;1. submit_batch(sample_docs)&quot;)
-    print(f&quot;   → Batch ID: {fake_batch_id}&quot;)
-    print(f&quot;   → Status: in_progress&quot;)
-    print(f&quot;   → {len(sample_docs)} requests submitted\n&quot;)
+    print(f&quot;   -&gt; Batch ID: {fake_batch_id}&quot;)
+    print(f&quot;   -&gt; Status: in_progress&quot;)
+    print(f&quot;   -&gt; {len(sample_docs)} requests submitted\n&quot;)
 
     # Simulate polling
     print(f&quot;2. poll_batch(&#39;{fake_batch_id}&#39;)&quot;)
     print(f&quot;   Polling... status=in_progress&quot;)
     print(f&quot;   Polling... status=in_progress&quot;)
-    print(f&quot;   Polling... status=ended ✓&quot;)
-    print(f&quot;   → request_counts: succeeded={len(sample_docs)-1}, errored=1, expired=0\n&quot;)
+    print(f&quot;   Polling... status=ended [OK]&quot;)
+    print(f&quot;   -&gt; request_counts: succeeded={len(sample_docs)-1}, errored=1, expired=0\n&quot;)
 
     # Simulate results
     print(f&quot;3. process_batch_results(&#39;{fake_batch_id}&#39;)&quot;)
     for doc in sample_docs[:2]:
-        print(f&quot;   ✓ custom_id=doc-{doc[&#39;id&#39;]}: extracted vendor + total successfully&quot;)
-    print(f&quot;   ✗ custom_id=doc-{sample_docs[2][&#39;id&#39;]}: ERRORED (context limit exceeded)&quot;)
-    print(f&quot;   → Resubmit doc-{sample_docs[2][&#39;id&#39;]} with chunking\n&quot;)
+        print(f&quot;   [OK] custom_id=doc-{doc[&#39;id&#39;]}: extracted vendor + total successfully&quot;)
+    print(f&quot;   [BLOCKED] custom_id=doc-{sample_docs[2][&#39;id&#39;]}: ERRORED (context limit exceeded)&quot;)
+    print(f&quot;   -&gt; Resubmit doc-{sample_docs[2][&#39;id&#39;]} with chunking\n&quot;)
 
     print(&quot;KEY EXAM CONCEPTS demonstrated above:&quot;)
     print(&quot;  - custom_id correlates each result with its source request&quot;)
@@ -7407,7 +7411,7 @@ NOT bigger model, NOT require smaller PRs.</p>
 
 # In production, replace with client.messages.create()
 
-# ── WHY SELF-REVIEW FAILS ──────────────────────────────────
+# -- WHY SELF-REVIEW FAILS ----------------------------------
 # When the same Claude session generates code and then reviews it,
 # the model retains its reasoning context — the decisions that led
 # to the code feel &quot;correct&quot; because it just made them.
@@ -7565,8 +7569,8 @@ if __name__ == &quot;__main__&quot;:
     4. Adjust thresholds until brackets match their claimed accuracy
 
     Multi-instance architecture:
-    Generator → Independent Reviewer → Human (for low-confidence items)
-    NOT: Generator → Self-review → PR (self-review is least effective)
+    Generator -&gt; Independent Reviewer -&gt; Human (for low-confidence items)
+    NOT: Generator -&gt; Self-review -&gt; PR (self-review is least effective)
     &quot;&quot;&quot;)
 </code></pre>
 <h2>Run it</h2>
@@ -7697,7 +7701,7 @@ D) Batch both with a timeout fallback</p>
 <h2>Try it</h2>
 <p>Try this in Claude Code:</p>
 <pre><code>&gt; Imagine a customer support agent that just called a lookup_order tool
-&gt; and got back a response with 22 fields including: id, customer_id, items,
+&gt; and got back a response with 24 fields including: id, customer_id, items,
 &gt; total, status, tracking, warehouse_id, picker_id, packed_at, shipped_at,
 &gt; carrier, carrier_service, weight_lbs, dimensions_inches, insurance_value,
 &gt; signature_required, delivery_eta, delivery_attempts, delivery_instructions,
@@ -7716,7 +7720,7 @@ D) Batch both with a timeout fallback</p>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── PATTERN 1: CASE FACTS BLOCK ───────────────────────────
+# -- PATTERN 1: CASE FACTS BLOCK ---------------------------
 # Problem: Progressive summarization loses exact numbers, dates, amounts.
 # &quot;Customer was refunded&quot; loses the $149.99 amount.
 # Solution: Extract transactional facts into a persistent block
@@ -7743,9 +7747,9 @@ Last Action:       {facts.get(&#39;last_action&#39;, &#39;none&#39;)}
 &quot;&quot;&quot;
 
 
-# ── PATTERN 2: TOOL RESULT TRIMMING ──────────────────────
+# -- PATTERN 2: TOOL RESULT TRIMMING ----------------------
 # Problem: get_customer returns 40+ fields, but we need 5.
-# Each tool call accumulates verbose output → context fills fast.
+# Each tool call accumulates verbose output -&gt; context fills fast.
 # Solution: Trim tool results to only relevant fields before storing.
 
 FULL_ORDER_RESPONSE = {
@@ -7778,11 +7782,11 @@ FULL_ORDER_RESPONSE = {
 RETURN_RELEVANT_FIELDS = {&quot;id&quot;, &quot;status&quot;, &quot;total&quot;, &quot;items&quot;, &quot;delivery_eta&quot;, &quot;tracking&quot;}
 
 def trim_for_return_context(order: dict) -&gt; dict:
-    &quot;&quot;&quot;Keep only return-relevant fields. Reduces 22 fields → 6 fields.&quot;&quot;&quot;
+    &quot;&quot;&quot;Keep only return-relevant fields. Reduces 24 fields -&gt; 6 fields.&quot;&quot;&quot;
     return {k: v for k, v in order.items() if k in RETURN_RELEVANT_FIELDS}
 
 
-# ── PATTERN 3: POSITION EFFECTS ───────────────────────────
+# -- PATTERN 3: POSITION EFFECTS ---------------------------
 # &quot;Lost in the middle&quot;: models reliably process beginning and end of input.
 # Middle sections may be missed in long aggregated inputs.
 # Solution: Place key findings summaries at the BEGINNING.
@@ -7791,7 +7795,7 @@ def build_aggregated_report(findings: list) -&gt; str:
     &quot;&quot;&quot;
     Structure aggregated results to mitigate position effects.
 
-    Pattern: Summary first → then detailed sections with headers.
+    Pattern: Summary first -&gt; then detailed sections with headers.
     &quot;&quot;&quot;
     # Summary at the TOP (most reliable position)
     summary_lines = [f&quot;- {f[&#39;file&#39;]}: {len(f[&#39;issues&#39;])} issues&quot; for f in findings]
@@ -7841,12 +7845,12 @@ def demonstrate_context_patterns():
     ]
     report = build_aggregated_report(sample_findings)
     print(report)
-    print(&quot;\nSummary at top → reliably read. Details below with section headers.&quot;)
+    print(&quot;\nSummary at top -&gt; reliably read. Details below with section headers.&quot;)
 
     print(&quot;\n=== Pattern 4: Context Budget for Multi-Agent Systems ===&quot;)
     print(&quot;&quot;&quot;
     When downstream agents have limited context budgets:
-    → Upstream agents return structured data, NOT verbose reasoning chains
+    -&gt; Upstream agents return structured data, NOT verbose reasoning chains
 
     WRONG (upstream returns):
     &quot;After carefully analyzing the document, I considered several interpretations.
@@ -7871,14 +7875,14 @@ if __name__ == &quot;__main__&quot;:
 <p><strong>What you should see:</strong></p>
 <ul>
 <li>&quot;Pattern 1: Case Facts Block&quot; showing a formatted block with customer ID, email, order IDs, refund amounts, dispute amount, and case status that persists across conversation turns</li>
-<li>&quot;Pattern 2: Tool Result Trimming&quot; showing a full order response (22 fields) reduced to 6 relevant fields, with character savings calculated</li>
+<li>&quot;Pattern 2: Tool Result Trimming&quot; showing a full order response (24 fields) reduced to 6 relevant fields, with character savings calculated</li>
 <li>&quot;Pattern 3: Aggregated Report Structure&quot; showing a KEY FINDINGS SUMMARY at the top followed by detailed per-file sections with severity-tagged issues</li>
 <li>&quot;Pattern 4: Context Budget&quot; explaining why upstream agents should return structured data (not verbose reasoning chains) to downstream agents</li>
 </ul>
 <h2>Check your understanding</h2>
 <ol>
 <li><strong>What happens without a case facts block?</strong> After 15 turns, does the agent remember the exact order total from turn 3? (Answer: no — progressive summarization compresses &quot;$149.99&quot; into &quot;approximately $150&quot;)</li>
-<li><strong>What is the cost of keeping all 22 fields</strong> from the order lookup instead of trimming to 6? (Answer: context fills with irrelevant fields after multiple tool calls, crowding out important conversation history)</li>
+<li><strong>What is the cost of keeping all 24 fields</strong> from the order lookup instead of trimming to 6? (Answer: context fills with irrelevant fields after multiple tool calls, crowding out important conversation history)</li>
 <li><strong>Why does the report structure place the summary at the TOP?</strong> What happens if key findings are in the middle of a long aggregated report? (Answer: &quot;lost in the middle&quot; effect — models reliably process information at the beginning and end of long inputs but may miss findings from middle sections)</li>
 </ol>
 <h2>Exam tips</h2>
@@ -7949,7 +7953,7 @@ if __name__ == &quot;__main__&quot;:
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── ESCALATION CRITERIA WITH FEW-SHOT EXAMPLES ────────────
+# -- ESCALATION CRITERIA WITH FEW-SHOT EXAMPLES ------------
 # Vague escalation criteria produce unreliable behavior.
 # Specific criteria + few-shot examples demonstrate edge cases.
 
@@ -7959,29 +7963,29 @@ Resolve issues autonomously when possible. Use escalate_to_human only when neede
 ESCALATION CRITERIA (with examples):
 
 1. Customer explicitly requests human — ESCALATE IMMEDIATELY
-   Example: &quot;I want to speak to a manager&quot; → escalate NOW
-   Example: &quot;Let me talk to a real person&quot; → escalate NOW
+   Example: &quot;I want to speak to a manager&quot; -&gt; escalate NOW
+   Example: &quot;Let me talk to a real person&quot; -&gt; escalate NOW
    Do NOT: investigate first; do NOT say &quot;let me try to help first&quot;
 
 2. Policy gap — ESCALATE
    Example: Customer asks for competitor price match
-     → Our policy covers own-site adjustments only; policy is silent on competitors
-     → This is a policy GAP, not a policy violation → escalate
+     -&gt; Our policy covers own-site adjustments only; policy is silent on competitors
+     -&gt; This is a policy GAP, not a policy violation -&gt; escalate
    Example: Customer asks for refund on a digital item opened 45 days ago
-     → Policy only covers 30 days → policy GAP for special circumstances → escalate
+     -&gt; Policy only covers 30 days -&gt; policy GAP for special circumstances -&gt; escalate
    Do NOT escalate for: standard returns within policy, normal refunds
 
 3. Unable to make progress — ESCALATE
-   Example: Same issue persists after 3 tool calls → escalate
+   Example: Same issue persists after 3 tool calls -&gt; escalate
    Do NOT escalate for: first attempt, trying one approach
 
 DO NOT ESCALATE for (handle autonomously):
-- Standard returns within 30 days → process the refund
+- Standard returns within 30 days -&gt; process the refund
 - Frustrated customer where issue is within your capability
-  → Acknowledge frustration, offer resolution, escalate ONLY if they repeat request
+  -&gt; Acknowledge frustration, offer resolution, escalate ONLY if they repeat request
 
 AMBIGUITY: Multiple customer matches
-- If lookup returns multiple accounts for same name → ask for additional identifier
+- If lookup returns multiple accounts for same name -&gt; ask for additional identifier
   (email, order number, phone)
   Do NOT select based on heuristics (most recent, closest match)&quot;&quot;&quot;
 
@@ -8035,7 +8039,7 @@ def execute_tool(name, input_data):
             c = CUSTOMERS.get(email)
             return json.dumps(c) if c else json.dumps({&quot;isError&quot;: False, &quot;results&quot;: None,
                                                         &quot;message&quot;: &quot;No customer found&quot;})
-        # Name-based lookup → may return multiple matches
+        # Name-based lookup -&gt; may return multiple matches
         cname = input_data.get(&quot;name&quot;, &quot;&quot;)
         matches = CUSTOMERS_BY_NAME.get(cname, [])
         if len(matches) &gt; 1:
@@ -8047,13 +8051,13 @@ def execute_tool(name, input_data):
             return json.dumps(matches[0])
         return json.dumps({&quot;isError&quot;: False, &quot;results&quot;: None, &quot;message&quot;: &quot;No customer found&quot;})
     if name == &quot;escalate_to_human&quot;:
-        print(f&quot;\n  → ESCALATED: reason={input_data.get(&#39;reason&#39;)}&quot;)
+        print(f&quot;\n  -&gt; ESCALATED: reason={input_data.get(&#39;reason&#39;)}&quot;)
         print(f&quot;    Summary: {input_data.get(&#39;summary&#39;, &#39;&#39;)[:80]}&quot;)
         return json.dumps({&quot;escalated&quot;: True, &quot;ticket_id&quot;: &quot;TKT-1234&quot;})
     return json.dumps({&quot;error&quot;: f&quot;Unknown: {name}&quot;})
 
 
-# ── SIMULATED RESPONSES ───────────────────────────────────
+# -- SIMULATED RESPONSES -----------------------------------
 # In production, replace with client.messages.create()
 # Each scenario shows the expected agent behavior.
 
@@ -8168,9 +8172,9 @@ if __name__ == &quot;__main__&quot;:
     - No progress (measurable — N tool calls with no resolution)
 
     The frustration nuance:
-    Frustrated + issue within capability → offer resolution
-    Frustrated + repeats human request → THEN escalate
-    Not: frustration alone → immediate escalation
+    Frustrated + issue within capability -&gt; offer resolution
+    Frustrated + repeats human request -&gt; THEN escalate
+    Not: frustration alone -&gt; immediate escalation
     &quot;&quot;&quot;)
 </code></pre>
 <h2>Run it</h2>
@@ -8287,7 +8291,7 @@ Explicit categorical criteria (customer request, policy gap, no progress) are re
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-# ── ANTI-PATTERNS vs CORRECT PATTERNS ────────────────────
+# -- ANTI-PATTERNS vs CORRECT PATTERNS --------------------
 
 def demonstrate_error_patterns():
     &quot;&quot;&quot;Show anti-patterns vs correct error propagation.&quot;&quot;&quot;
@@ -8309,7 +8313,7 @@ def demonstrate_error_patterns():
 
     print(&quot;=== Anti-Pattern 2: Workflow Termination ===\n&quot;)
     print(&quot;&quot;&quot;
-    WRONG: Subagent raises exception → coordinator catches → aborts entire workflow
+    WRONG: Subagent raises exception -&gt; coordinator catches -&gt; aborts entire workflow
     Problem: One source failure shouldn&#39;t abort a multi-source research task.
     &quot;&quot;&quot;)
 
@@ -8345,15 +8349,15 @@ def demonstrate_error_patterns():
     print(&quot;&quot;&quot;
     Access failure (success: False):
       Service didn&#39;t respond, timed out, threw exception
-      → Coordinator: decide whether to retry, use backup source, or proceed without
+      -&gt; Coordinator: decide whether to retry, use backup source, or proceed without
 
     Valid empty result (success: True, results: []):
       Search executed successfully; genuinely no matches
-      → Coordinator: this topic has no data at this source (not a failure)
+      -&gt; Coordinator: this topic has no data at this source (not a failure)
 
     This distinction enables intelligent recovery:
-    Access failure → retry or use backup
-    Empty result   → note gap in coverage, continue with other sources
+    Access failure -&gt; retry or use backup
+    Empty result   -&gt; note gap in coverage, continue with other sources
     &quot;&quot;&quot;)
 
 
@@ -8546,7 +8550,7 @@ import os
 from pathlib import Path
 import tempfile
 
-# ── SCRATCHPAD PATTERN ───────────────────────────────────
+# -- SCRATCHPAD PATTERN -----------------------------------
 # In long sessions, write key findings to a file as you go.
 # When context degrades, read the scratchpad to restore knowledge.
 
@@ -8569,7 +8573,7 @@ def demonstrate_scratchpad():
     for turn, finding in findings:
         scratchpad_content += f&quot;## {turn}\n{finding}\n\n&quot;
         print(f&quot;  [{turn}] Found: {finding[:60]}...&quot;)
-        print(f&quot;  [{turn}] → Written to scratchpad&quot;)
+        print(f&quot;  [{turn}] -&gt; Written to scratchpad&quot;)
 
     SCRATCHPAD_PATH.write_text(scratchpad_content)
     print(f&quot;\n  Scratchpad saved: {SCRATCHPAD_PATH}&quot;)
@@ -8583,11 +8587,11 @@ def demonstrate_scratchpad():
     restored = SCRATCHPAD_PATH.read_text()
     lines = [l for l in restored.split(&quot;\n&quot;) if l.startswith(&quot;Found&quot;) or l.startswith(&quot;Coordinator&quot;) or l.startswith(&quot;Error&quot;) or l.startswith(&quot;Session&quot;) or l.startswith(&quot;Human&quot;)]
     for line in lines[:3]:
-        print(f&quot;    → {line}&quot;)
-    print(f&quot;  ✓ Specific findings restored from scratchpad (not &#39;typical patterns&#39;)&quot;)
+        print(f&quot;    -&gt; {line}&quot;)
+    print(f&quot;  [OK] Specific findings restored from scratchpad (not &#39;typical patterns&#39;)&quot;)
 
 
-# ── MANIFEST-BASED CRASH RECOVERY ────────────────────────
+# -- MANIFEST-BASED CRASH RECOVERY ------------------------
 # Each agent exports its state to a known location.
 # On resume, coordinator loads the manifest and injects state into agent prompts.
 
@@ -8696,7 +8700,7 @@ if __name__ == &quot;__main__&quot;:
     - Model contradicts its own earlier findings
 
     Solutions:
-    1. Scratchpad files: write key findings → reference later
+    1. Scratchpad files: write key findings -&gt; reference later
     2. /compact: summarize context when full of verbose tool outputs
     3. Subagent delegation: spawn subagent for deep exploration,
        get summary back, keep main context clean
@@ -8706,8 +8710,8 @@ if __name__ == &quot;__main__&quot;:
     Subagent delegation pattern:
     &quot;Spawn a subagent to find all test files and count test cases per module.
      Return only a summary — I don&#39;t need the raw file contents.&quot;
-    → Verbose exploration happens in isolated context
-    → Main session only receives the summary
+    -&gt; Verbose exploration happens in isolated context
+    -&gt; Main session only receives the summary
     &quot;&quot;&quot;)
 
     # === Subagent Delegation Pattern (executable) ===
@@ -8720,12 +8724,12 @@ if __name__ == &quot;__main__&quot;:
         &quot;&quot;&quot;
         # Simulate verbose exploration (would be 20+ file reads in reality)
         verbose_output = [
-            &quot;Read lab-d1-agentic-arch/basic_loop.py → found agentic loop with stop_reason&quot;,
-            &quot;Read lab-d1-agentic-arch/multi_agent.py → found coordinator pattern&quot;,
-            &quot;Read lab-d2-tool-design/structured_errors.py → found 4 error categories&quot;,
-            &quot;Read lab-d3-claude-code/refinement_demo.py → found interview pattern&quot;,
-            &quot;Read lab-d4-prompt-eng/structured_output.py → found tool_use + JSON schema&quot;,
-            &quot;Read lab-d5-context-reliability/human_review.py → found stratified sampling&quot;,
+            &quot;Read lab-d1-agentic-arch/basic_loop.py -&gt; found agentic loop with stop_reason&quot;,
+            &quot;Read lab-d1-agentic-arch/multi_agent.py -&gt; found coordinator pattern&quot;,
+            &quot;Read lab-d2-tool-design/structured_errors.py -&gt; found 4 error categories&quot;,
+            &quot;Read lab-d3-claude-code/refinement_demo.py -&gt; found interview pattern&quot;,
+            &quot;Read lab-d4-prompt-eng/structured_output.py -&gt; found tool_use + JSON schema&quot;,
+            &quot;Read lab-d5-context-reliability/human_review.py -&gt; found stratified sampling&quot;,
         ]
         print(f&quot;  [Subagent] Exploring: {task}&quot;)
         print(f&quot;  [Subagent] Read {len(verbose_output)} files (verbose output isolated)&quot;)
@@ -8819,17 +8823,17 @@ Then continue the session with a clean context.</p>
 <li>How do scratchpad files fix context degradation? (Lab 5.4)</li>
 </ol>
 <h2>Overview</h2>
-<p>Your extraction pipeline reports 97% accuracy. You automate it. Then a client complains: handwritten invoices are extracted at 62% accuracy.</p>
-<p><strong>The 97% aggregate masked the segment failure.</strong> The fix: validate accuracy by document type AND field before automating.</p>
+<p>Your extraction pipeline reports 96% accuracy. You automate it. Then a client complains: handwritten invoices are extracted at 62% accuracy.</p>
+<p><strong>The 96% aggregate masked the segment failure.</strong> The fix: validate accuracy by document type AND field before automating.</p>
 <p><strong>Exam connection (Exercise 3):</strong> &quot;Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement.&quot;</p>
 <h2>Try it</h2>
 <p>Try this in Claude Code:</p>
-<pre><code>&gt; My extraction pipeline reports 97% accuracy overall. Here is the breakdown:
+<pre><code>&gt; My extraction pipeline reports 96% accuracy overall. Here is the breakdown:
 &gt; - Digital PDF invoices (800 docs): 99% accuracy
 &gt; - Scanned paper invoices (150 docs): 91% accuracy
 &gt; - Handwritten invoices (50 docs): 62% accuracy
 &gt;
-&gt; My manager wants to automate all extractions since &quot;97% is good enough.&quot;
+&gt; My manager wants to automate all extractions since &quot;96% is good enough.&quot;
 &gt; Why is this dangerous? What would happen to the handwritten invoices?
 &gt;
 &gt; Design a review routing system with these confidence thresholds:
@@ -8842,17 +8846,17 @@ Then continue the session with a clean context.</p>
 </code></pre>
 <p>This demonstrates two key lessons:</p>
 <ul>
-<li><strong>Aggregate accuracy masks segment failures</strong> -- 97% overall can hide 62% in one segment</li>
+<li><strong>Aggregate accuracy masks segment failures</strong> -- 96% overall can hide 62% in one segment</li>
 <li><strong>Confidence scores must be calibrated</strong> before trusting them for routing decisions</li>
 </ul>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 import random
 
-# ── THE PROBLEM: AGGREGATE METRICS MASK SEGMENT FAILURES ──
-# &quot;97% overall accuracy&quot; sounds great.
-# But: 100% on simple invoices, 60% on handwritten invoices
-# → Automating based on aggregate metric would cause 40% errors on handwritten docs
+# -- THE PROBLEM: AGGREGATE METRICS MASK SEGMENT FAILURES --
+# &quot;96% overall accuracy&quot; sounds great.
+# But: 99% on simple invoices, 62% on handwritten invoices
+# -&gt; Automating based on aggregate metric would cause 38% errors on handwritten docs
 
 def demonstrate_segment_analysis():
     &quot;&quot;&quot;Show why aggregate accuracy masks segment issues.&quot;&quot;&quot;
@@ -8868,10 +8872,10 @@ def demonstrate_segment_analysis():
     total = sum(s[&quot;doc_count&quot;] for s in accuracy_data)
     weighted_avg = sum(s[&quot;accuracy&quot;] * s[&quot;doc_count&quot;] for s in accuracy_data) / total
 
-    print(f&quot;Aggregate accuracy: {weighted_avg:.1%}  ← looks great!&quot;)
+    print(f&quot;Aggregate accuracy: {weighted_avg:.1%}  &lt;- looks great!&quot;)
     print(f&quot;\nBut by segment:&quot;)
     for s in accuracy_data:
-        flag = &quot; ← PROBLEM&quot; if s[&quot;accuracy&quot;] &lt; 0.85 else &quot;&quot;
+        flag = &quot; &lt;- PROBLEM&quot; if s[&quot;accuracy&quot;] &lt; 0.85 else &quot;&quot;
         print(f&quot;  {s[&#39;segment&#39;]:35s}: {s[&#39;accuracy&#39;]:.0%}{flag}&quot;)
 
     print(f&quot;\nConclusion: Automating &#39;high-confidence&#39; extractions would fail&quot;)
@@ -8879,7 +8883,7 @@ def demonstrate_segment_analysis():
     print(f&quot;Must validate accuracy by segment BEFORE reducing human review.&quot;)
 
 
-# ── SIMULATED EXTRACTION RESPONSES ────────────────────────
+# -- SIMULATED EXTRACTION RESPONSES ------------------------
 # In production, replace with client.messages.create()
 # using tool_choice to force structured extraction output.
 
@@ -9013,7 +9017,7 @@ if __name__ == &quot;__main__&quot;:
                   f&quot;total={result.get(&#39;total_confidence&#39;):.2f} &quot;
                   f&quot;date={result.get(&#39;date_confidence&#39;):.2f}&quot;)
             print(f&quot;  Ambiguous: {result.get(&#39;ambiguous_source&#39;)}&quot;)
-            print(f&quot;  → Route: {route}&quot;)
+            print(f&quot;  -&gt; Route: {route}&quot;)
 
     # Simulate batch of extractions for sampling demo
     fake_extractions = [{&quot;total_confidence&quot;: random.uniform(0.5, 1.0)} for _ in range(200)]
@@ -9023,11 +9027,11 @@ if __name__ == &quot;__main__&quot;:
     print(&quot;&quot;&quot;
     Routing pipeline:
 
-    Extraction → Confidence scores → Route decision:
-      ambiguous_source=true              → human_review (always)
-      min_confidence ≥ 0.90              → auto_approve
-      min_confidence 0.70-0.89           → spot_check (sample review)
-      min_confidence &lt; 0.70              → human_review
+    Extraction -&gt; Confidence scores -&gt; Route decision:
+      ambiguous_source=true              -&gt; human_review (always)
+      min_confidence ≥ 0.90              -&gt; auto_approve
+      min_confidence 0.70-0.89           -&gt; spot_check (sample review)
+      min_confidence &lt; 0.70              -&gt; human_review
 
     Calibration process:
     1. Extract 500 labeled documents (known correct answers)
@@ -9038,7 +9042,7 @@ if __name__ == &quot;__main__&quot;:
     Ongoing monitoring:
     - Sample 5% of auto-approved extractions monthly
     - Measure error rate in sampled set
-    - If error rate rises → lower auto-approve threshold → route more to review
+    - If error rate rises -&gt; lower auto-approve threshold -&gt; route more to review
     &quot;&quot;&quot;)
 </code></pre>
 <h2>Run it</h2>
@@ -9047,20 +9051,20 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p><strong>What you should see:</strong></p>
 <ul>
-<li>&quot;Aggregate vs Segment Accuracy&quot; showing 96.5% overall accuracy that masks a 62% accuracy problem on handwritten invoices (flagged as PROBLEM)</li>
+<li>&quot;Aggregate vs Segment Accuracy&quot; showing 96% overall accuracy that masks a 62% accuracy problem on handwritten invoices (flagged as PROBLEM)</li>
 <li>&quot;Field-Level Confidence Extraction&quot; processing 3 test invoices: a clean invoice (high confidence, auto-approved), a vague invoice (lower confidence, spot-check or human review), and a contradictory invoice (ambiguous_source=true, routed to human review)</li>
 <li>&quot;Stratified Sampling&quot; showing how 5% of high-confidence extractions are sampled for human verification to catch novel error patterns</li>
 <li>A &quot;Review Routing Architecture&quot; summary with the full routing pipeline and calibration process</li>
 </ul>
 <h2>Check your understanding</h2>
 <ol>
-<li><strong>What happens if you trust the 97% aggregate accuracy</strong> and automate everything? (Answer: 38% error rate on handwritten invoices — clients get wrong data, you don&#39;t notice until complaints pile up. Aggregate metrics mask segment failures.)</li>
+<li><strong>What happens if you trust the 96% aggregate accuracy</strong> and automate everything? (Answer: 38% error rate on handwritten invoices — clients get wrong data, you don&#39;t notice until complaints pile up. Aggregate metrics mask segment failures.)</li>
 <li><strong>Why is stratified sampling of high-confidence extractions necessary?</strong> What if a new document format appears that the model hasn&#39;t seen? (Answer: novel error patterns go undetected without sampling. Stratified sampling catches accuracy drift before it becomes a crisis.)</li>
 <li><strong>Why can&#39;t you trust raw model confidence scores</strong> for routing thresholds? (Answer: uncalibrated scores may be overconfident — a model reporting &quot;90% confidence&quot; may only be correct 70% of the time. Calibrate with labeled validation sets before trusting thresholds.)</li>
 </ol>
 <h2>Exam tips</h2>
 <ul>
-<li><strong>If the exam says</strong> &quot;97% accuracy overall&quot; → check accuracy BY SEGMENT, not just aggregate</li>
+<li><strong>If the exam says</strong> &quot;96% accuracy overall&quot; → check accuracy BY SEGMENT, not just aggregate</li>
 <li><strong>Wrong answer trap:</strong> &quot;Automate all high-confidence extractions&quot; — aggregate masks poor segments</li>
 <li><strong>Wrong answer trap:</strong> &quot;Lower the confidence threshold to catch more errors&quot; — threshold tuning without segment analysis still misses entire document types that fail systematically</li>
 <li><strong>The correct pattern:</strong> Stratified sampling by document type and field. Validate each segment independently before automating.</li>
@@ -9088,7 +9092,7 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <h2>Recall</h2>
 <ol>
-<li>Why can aggregate accuracy (e.g., &quot;97% overall&quot;) be misleading? (Lab 5.5)</li>
+<li>Why can aggregate accuracy (e.g., &quot;96% overall&quot;) be misleading? (Lab 5.5)</li>
 <li>What is stratified random sampling used for? (Lab 5.5)</li>
 </ol>
 <h2>Overview</h2>
@@ -9104,7 +9108,7 @@ if __name__ == &quot;__main__&quot;:
 <pre><code class="language-python">import json
 from datetime import datetime
 
-# ── PROVENANCE THROUGH SYNTHESIS PIPELINE ────────────────
+# -- PROVENANCE THROUGH SYNTHESIS PIPELINE ----------------
 # Problem: summarization compresses findings without preserving claim-source mappings
 # Solution: require structured claim-source format from all subagents
 
@@ -9388,16 +9392,16 @@ All findings include original claim-source mappings. See appendix for full citat
     Why type-appropriate rendering matters:
 
     Financial data as prose:
-    → &quot;Revenue was $54,000 in 2022 and fell to $47,200 in 2023, a 13% decrease&quot;
-    ✗ Hard to compare multiple metrics | Can&#39;t see trends at a glance
+    -&gt; &quot;Revenue was $54,000 in 2022 and fell to $47,200 in 2023, a 13% decrease&quot;
+    [BLOCKED] Hard to compare multiple metrics | Can&#39;t see trends at a glance
 
     News as bullet points:
-    → &quot;• Global EV adoption accelerated | • Policy incentives drove growth | • Sentiment shifted&quot;
-    ✗ Loses narrative causality | &quot;driven by&quot; and &quot;coinciding with&quot; relationships disappear
+    -&gt; &quot;• Global EV adoption accelerated | • Policy incentives drove growth | • Sentiment shifted&quot;
+    [BLOCKED] Loses narrative causality | &quot;driven by&quot; and &quot;coinciding with&quot; relationships disappear
 
     Technical findings as paragraph:
-    → &quot;LFP is gaining share. Solid state will be ready 2027-2028. Toyota and Samsung...&quot;
-    ✗ Hard to scan | Important items buried in prose
+    -&gt; &quot;LFP is gaining share. Solid state will be ready 2027-2028. Toyota and Samsung...&quot;
+    [BLOCKED] Hard to scan | Important items buried in prose
 
     EXAM RULE: The synthesis agent should specify content type in structured output
     so the report generator renders each section correctly.
@@ -9555,9 +9559,9 @@ You apply every concept from every domain in one unified system.</p>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
 
-
+# ============================================
 # DOMAIN 1: Data layer (fake backend)
-
+# ============================================
 
 CUSTOMERS = {
     &quot;jane@email.com&quot;: {&quot;id&quot;: &quot;CUST-001&quot;, &quot;name&quot;: &quot;Jane Smith&quot;, &quot;tier&quot;: &quot;gold&quot;,
@@ -9585,9 +9589,9 @@ ORDERS = {
                 &quot;warehouse_id&quot;: &quot;WH-003&quot;, &quot;picker_id&quot;: None}
 }
 
-
+# ============================================
 # DOMAIN 1: PostToolUse Hook — Data Normalization
-
+# ============================================
 
 STATUS_MAP = {1: &quot;active&quot;, 2: &quot;suspended&quot;, 3: &quot;closed&quot;}
 
@@ -9601,9 +9605,9 @@ def post_tool_use_normalize(tool_name: str, result: dict) -&gt; dict:
         result[&quot;status&quot;] = STATUS_MAP.get(result[&quot;status&quot;], &quot;unknown&quot;)
     return result
 
-
+# ============================================
 # DOMAIN 5: Tool Result Trimming
-
+# ============================================
 
 CUSTOMER_RELEVANT_FIELDS = {&quot;id&quot;, &quot;name&quot;, &quot;email&quot;, &quot;tier&quot;, &quot;status&quot;}
 ORDER_RELEVANT_FIELDS     = {&quot;id&quot;, &quot;status&quot;, &quot;total&quot;, &quot;items&quot;, &quot;tracking&quot;, &quot;delivery_eta&quot;}
@@ -9614,16 +9618,16 @@ def trim_customer(c: dict) -&gt; dict:
 def trim_order(o: dict) -&gt; dict:
     return {k: v for k, v in o.items() if k in ORDER_RELEVANT_FIELDS}
 
-
+# ============================================
 # DOMAIN 1: Prerequisite Gate State
-
+# ============================================
 
 verified_customer_id = None
 case_facts = {}  # Domain 5: persistent case facts
 
-
+# ============================================
 # DOMAIN 2: Tool Execution with Structured Errors
-
+# ============================================
 
 def execute_tool(name, input_data):
     global verified_customer_id, case_facts
@@ -9645,7 +9649,7 @@ def execute_tool(name, input_data):
             # Domain 5: Trim to relevant fields
             c_trimmed = trim_customer(c)
             verified_customer_id = c_trimmed[&quot;id&quot;]
-            print(f&quot;    ✓ Customer verified: {verified_customer_id}&quot;)
+            print(f&quot;    [OK] Customer verified: {verified_customer_id}&quot;)
             # Domain 5: Update case facts
             case_facts.update({&quot;customer_id&quot;: verified_customer_id,
                                 &quot;email&quot;: email, &quot;tier&quot;: c_trimmed[&quot;tier&quot;]})
@@ -9691,7 +9695,7 @@ def execute_tool(name, input_data):
 
         # Domain 1: Policy gate (PreToolUse hook pattern)
         if amount &gt; 500:
-            print(f&quot;    ✗ BLOCKED: ${amount} &gt; $500 policy limit&quot;)
+            print(f&quot;    [BLOCKED] BLOCKED: ${amount} &gt; $500 policy limit&quot;)
             return json.dumps({
                 &quot;isError&quot;: True, &quot;errorCategory&quot;: &quot;business&quot;,
                 &quot;isRetryable&quot;: False,
@@ -9700,7 +9704,7 @@ def execute_tool(name, input_data):
                 &quot;redirect&quot;: &quot;escalate_to_human&quot;
             })
 
-        print(f&quot;    ✓ Refund processed: ${amount} for {order_id}&quot;)
+        print(f&quot;    [OK] Refund processed: ${amount} for {order_id}&quot;)
         case_facts.setdefault(&quot;refund_amounts&quot;, [])
         case_facts[&quot;refund_amounts&quot;].append(amount)
         return json.dumps({&quot;success&quot;: True, &quot;refund_amount&quot;: amount,
@@ -9709,7 +9713,7 @@ def execute_tool(name, input_data):
     elif name == &quot;escalate_to_human&quot;:
         summary = input_data.get(&quot;summary&quot;, &quot;&quot;)
         reason  = input_data.get(&quot;reason&quot;, &quot;unspecified&quot;)
-        print(f&quot;\n    → ESCALATING: reason={reason}&quot;)
+        print(f&quot;\n    -&gt; ESCALATING: reason={reason}&quot;)
         print(f&quot;      Customer: {input_data.get(&#39;customer_id&#39;, verified_customer_id)}&quot;)
         print(f&quot;      Summary: {summary[:120]}&quot;)
         return json.dumps({&quot;escalated&quot;: True, &quot;ticket_id&quot;: &quot;TKT-9999&quot;,
@@ -9718,9 +9722,9 @@ def execute_tool(name, input_data):
     return json.dumps({&quot;error&quot;: f&quot;Unknown tool: {name}&quot;})
 
 
-
+# ============================================
 # DOMAIN 2: Tool Definitions (well-described)
-
+# ============================================
 
 tools = [
     {
@@ -9792,38 +9796,38 @@ tools = [
     }
 ]
 
-
+# ============================================
 # DOMAINS 4+5: System prompt with explicit criteria, few-shot escalation
-
+# ============================================
 
 SYSTEM_PROMPT = &quot;&quot;&quot;You are a customer support agent.
 Resolve issues autonomously when possible. Aim for first-contact resolution.
 
 ESCALATION CRITERIA — EXAMPLES:
 Escalate IMMEDIATELY (no investigation):
-  &quot;I want to speak to a manager&quot; → escalate_to_human(reason=&quot;explicit_customer_request&quot;)
-  &quot;Let me talk to a real person&quot; → escalate_to_human(reason=&quot;explicit_customer_request&quot;)
+  &quot;I want to speak to a manager&quot; -&gt; escalate_to_human(reason=&quot;explicit_customer_request&quot;)
+  &quot;Let me talk to a real person&quot; -&gt; escalate_to_human(reason=&quot;explicit_customer_request&quot;)
 
 Escalate for POLICY GAP:
-  Customer asks for competitor price match → policy only covers own-site → escalate
-  Refund &gt; $500 → process_refund will redirect automatically
+  Customer asks for competitor price match -&gt; policy only covers own-site -&gt; escalate
+  Refund &gt; $500 -&gt; process_refund will redirect automatically
 
 Escalate for NO PROGRESS:
-  Same issue after full investigation → escalate_to_human(reason=&quot;no_progress&quot;)
+  Same issue after full investigation -&gt; escalate_to_human(reason=&quot;no_progress&quot;)
 
 DO NOT ESCALATE — handle autonomously:
-  Standard return within 30 days → look up order → process refund
+  Standard return within 30 days -&gt; look up order -&gt; process refund
   Frustrated customer, issue within capability:
-    → Acknowledge frustration, offer resolution
-    → Escalate ONLY if they repeat the human request
+    -&gt; Acknowledge frustration, offer resolution
+    -&gt; Escalate ONLY if they repeat the human request
 
 CONTEXT: Always verify customer identity FIRST with get_customer.
 &quot;&quot;&quot;
 
-
+# ============================================
 # SIMULATED AGENT SCENARIOS
 # In production, replace with client.messages.create()
-
+# ============================================
 
 SIMULATED_SCENARIOS = {
     &quot;standard_refund&quot;: {
@@ -9906,9 +9910,9 @@ SIMULATED_SCENARIOS = {
     },
 }
 
-
+# ============================================
 # The Agent Loop (simulated)
-
+# ============================================
 
 def run_support_agent(scenario_key: str, user_message: str):
     global verified_customer_id, case_facts
@@ -9946,9 +9950,9 @@ def run_support_agent(scenario_key: str, user_message: str):
     return sim[&quot;final_text&quot;]
 
 
-
+# ============================================
 # Test Scenarios (maps to all 6 exam scenarios)
-
+# ============================================
 
 if __name__ == &quot;__main__&quot;:
     print(&quot;\n=== Scenario 1: Standard refund (Domains 1, 2) ===&quot;)
@@ -10961,14 +10965,14 @@ D) Split into 10 batches of 1,000 contracts each and submit them in parallel.</p
 <p><strong>Correct: B.</strong> With a 24-hour batch processing window and a 30-hour SLA, you need buffer time for handling failures. Submitting 6 hours before the deadline allows 24 hours for batch processing plus 6 hours for resubmitting failed documents (identified by custom_id) with appropriate modifications. <strong>Why not A:</strong> Submitting exactly 30 hours before leaves zero buffer — if any documents fail, you can&#39;t resubmit within the deadline since a second batch could take another 24 hours. <strong>Why not C:</strong> Synchronous processing of 10,000 contracts is prohibitively expensive (no 50% batch discount) and time-consuming. <strong>Why not D:</strong> Splitting into smaller batches doesn&#39;t reduce total processing time (each still has up to 24-hour window) and adds complexity without benefit.</p>
 </details>
 
-<p><strong>Q57 (Task 5.5).</strong> Your extraction system achieves 97% overall accuracy on your test set. Management wants to fully automate all extractions without human review. Before agreeing, what validation should you perform?</p>
-<p>A) Run the system on a larger test set to confirm the 97% holds.
+<p><strong>Q57 (Task 5.5).</strong> Your extraction system achieves 96% overall accuracy on your test set. Management wants to fully automate all extractions without human review. Before agreeing, what validation should you perform?</p>
+<p>A) Run the system on a larger test set to confirm the 96% holds.
 B) Analyze accuracy by document type and field to verify consistent performance across all segments — aggregate accuracy may mask poor performance on specific document types or fields that could cause systematic downstream errors.
 C) Compare accuracy against a competitor&#39;s system to validate the benchmark.
 D) Increase the confidence threshold to 99% to further reduce errors.</p>
 <details><summary>Show Answer</summary>
 
-<p><strong>Correct: B.</strong> Aggregate accuracy metrics can mask poor performance on specific document types or fields. A system that&#39;s 99% accurate on standard invoices but 60% accurate on handwritten receipts has a 97% aggregate if most documents are standard invoices — but the handwritten receipt errors could cause significant downstream problems. Field-level and document-type analysis reveals these hidden weaknesses. <strong>Why not A:</strong> A larger test set may confirm the aggregate number without revealing per-segment performance gaps. <strong>Why not C:</strong> Competitor comparison is irrelevant to whether the system is accurate enough for full automation — you need to validate your own system&#39;s performance across all segments. <strong>Why not D:</strong> Increasing the threshold filters out more extractions for human review but doesn&#39;t address the question of whether the high-confidence extractions are actually accurate across all document types.</p>
+<p><strong>Correct: B.</strong> Aggregate accuracy metrics can mask poor performance on specific document types or fields. A system that&#39;s 99% accurate on standard invoices but 62% accurate on handwritten receipts has a 96% aggregate if most documents are standard invoices — but the handwritten receipt errors could cause significant downstream problems. Field-level and document-type analysis reveals these hidden weaknesses. <strong>Why not A:</strong> A larger test set may confirm the aggregate number without revealing per-segment performance gaps. <strong>Why not C:</strong> Competitor comparison is irrelevant to whether the system is accurate enough for full automation — you need to validate your own system&#39;s performance across all segments. <strong>Why not D:</strong> Increasing the threshold filters out more extractions for human review but doesn&#39;t address the question of whether the high-confidence extractions are actually accurate across all document types.</p>
 </details>
 
 <p><strong>Q58 (Task 5.5).</strong> Your extraction system has been running at high accuracy for three months. You&#39;ve reduced human review from 100% to only reviewing extractions where the model reports low confidence. A product manager suggests eliminating human review entirely since the system hasn&#39;t had significant errors recently. What is the right approach?</p>
