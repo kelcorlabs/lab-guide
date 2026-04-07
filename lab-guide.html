@@ -276,21 +276,16 @@
       border-left-color: var(--text);
     }
 
-    .nav-lab.visited .nav-dot { background: var(--text-muted); }
-
     .nav-dot {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
-      border: 1.5px solid var(--text-light);
-      background: transparent;
+      background: var(--text-light);
       flex-shrink: 0;
-      transition: background 0.2s;
     }
 
     .nav-lab.active .nav-dot {
       background: var(--text);
-      border-color: var(--text);
     }
 
     .nav-hidden { display: none; }
@@ -975,10 +970,7 @@
       <h2>Claude Certified Architect</h2>
       <p>Foundations — Hands-on Lab Guide</p>
     </div>
-    <div class="sidebar-progress" id="sidebarProgress">
-      <div class="sidebar-progress-label"><span>Progress</span><span id="progressText">0%</span></div>
-      <div class="sidebar-progress-bar"><div class="sidebar-progress-fill" id="progressFill"></div></div>
-    </div>
+    <div id="sidebarProgress" style="display:none"><div id="progressFill"></div><span id="progressText"></span></div>
     <div class="search-box">
       <input type="search" id="searchInput" placeholder="Search... (Ctrl+K)" aria-label="Search labs">
     </div>
@@ -993,6 +985,95 @@
 <p class="subtitle">Covers all 30 task statements across 5 domains</p>
 # Powered by Claude Code
 
+<hr>
+<h1>COURSE OVERVIEW</h1>
+<p>This hands-on guide covers all 30 task statements tested on the Claude Certified Architect – Foundations exam. It&#39;s organized into 5 modules matching the exam domains, a final integrated scenario, and a 72-question practice exam.</p>
+<h2>Learning path</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Domain</th>
+<th>Weight</th>
+<th>Labs</th>
+<th>Time</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1. Agentic Architecture &amp; Orchestration</td>
+<td>Domain 1</td>
+<td>27%</td>
+<td>Labs 1.1–1.7</td>
+<td>~2 hrs</td>
+</tr>
+<tr>
+<td>2. Tool Design &amp; MCP Integration</td>
+<td>Domain 2</td>
+<td>18%</td>
+<td>Labs 2.1–2.5</td>
+<td>~1.5 hrs</td>
+</tr>
+<tr>
+<td>3. Claude Code Configuration &amp; Workflows</td>
+<td>Domain 3</td>
+<td>20%</td>
+<td>Labs 3.1–3.6</td>
+<td>~1.5 hrs</td>
+</tr>
+<tr>
+<td>4. Prompt Engineering &amp; Structured Output</td>
+<td>Domain 4</td>
+<td>20%</td>
+<td>Labs 4.1–4.6</td>
+<td>~1.5 hrs</td>
+</tr>
+<tr>
+<td>5. Context Management &amp; Reliability</td>
+<td>Domain 5</td>
+<td>15%</td>
+<td>Labs 5.1–5.6</td>
+<td>~1.5 hrs</td>
+</tr>
+<tr>
+<td>Final Scenario</td>
+<td>All domains</td>
+<td>—</td>
+<td>1 lab</td>
+<td>~45 min</td>
+</tr>
+<tr>
+<td>Practice Exam</td>
+<td>All domains</td>
+<td>—</td>
+<td>72 questions</td>
+<td>~2 hrs</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td></td>
+<td><strong>31 labs + exam</strong></td>
+<td><strong>~10 hrs</strong></td>
+</tr>
+</tbody></table>
+<h2>How each lab works</h2>
+<p>Every lab follows the same structure so you always know where you are:</p>
+<ol>
+<li><strong>Recall</strong> — quick questions from prior labs to activate what you already learned</li>
+<li><strong>Overview</strong> — the problem this concept solves and why it matters for the exam</li>
+<li><strong>Try it</strong> — a hands-on Claude Code prompt to see the concept in action</li>
+<li><strong>Reference code</strong> — a complete implementation to study (this is what the exam tests)</li>
+<li><strong>Run it</strong> — instructions to create and run the code via Claude Code</li>
+<li><strong>Check your understanding</strong> — exercises that test comprehension</li>
+<li><strong>Exam tips</strong> — how this concept appears on the exam and what wrong answers look like</li>
+<li><strong>Key takeaways</strong> — the essential patterns to remember</li>
+</ol>
+<h2>Prerequisites</h2>
+<ul>
+<li>A Claude Pro, Max, or Team subscription (for Claude Code)</li>
+<li>Basic Python familiarity (for reading reference code)</li>
+<li>Labs are sequential within each module — start at Lab X.1 and work through</li>
+</ul>
 <hr>
 <h1>SETUP — Do This First</h1>
 <h2>Step 1: Install Claude Code</h2>
@@ -1020,17 +1101,9 @@ mkdir -p lab-d4-prompt-eng
 mkdir -p lab-d5-context-reliability
 mkdir -p lab-final-scenario
 </code></pre>
-<h2>How This Course Works</h2>
-<p>Each lab follows a consistent pattern:</p>
-<ol>
-<li><strong>Why This Matters</strong> — context for the exam concept</li>
-<li><strong>See It In Action</strong> — an interactive Claude Code demonstration of the concept</li>
-<li><strong>Reference Implementation</strong> — production code to study (this is what the exam tests)</li>
-<li><strong>Try It</strong> — ask Claude Code to create and run the code for you</li>
-<li><strong>Code Analysis</strong> — comprehension questions to test your understanding</li>
-<li><strong>Checkpoint</strong> — verify you&#39;ve grasped the key patterns</li>
-</ol>
-<p>You follow along step by step in Claude Code. When a lab has reference code, you can ask Claude Code to create the file and run it — Claude Code handles dependencies and API access automatically.</p>
+<h2>How labs work</h2>
+<p>See the Course Overview above for the full structure. In short: each lab follows a consistent 8-section pattern from Recall through Key takeaways.</p>
+<p>When a lab has reference code, ask Claude Code to create and run it — Claude Code handles dependencies and API access automatically.</p>
 <h2>Troubleshooting — Common Issues</h2>
 <ol>
 <li><p><strong>Claude Code not connecting</strong>: Run <code>claude /doctor</code> to diagnose. Check that your subscription is active.</p>
@@ -1074,6 +1147,13 @@ mkdir -p lab-final-scenario
 <h1>LAB 1.1: BUILD A REAL AGENTIC LOOP</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.1</span> <span class="badge badge-concept">stop_reason lifecycle, tool results, anti-patterns</span> <span class="badge badge-time">~30 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
 
+<h2>Recall</h2>
+<p>Before starting, review these key terms from Module 1 above:</p>
+<ul>
+<li><strong>agentic loop</strong> — the while-loop that keeps running until Claude says it&#39;s done</li>
+<li><strong>stop_reason</strong> — Claude&#39;s signal: <code>&quot;tool_use&quot;</code> means keep going, <code>&quot;end_turn&quot;</code> means done</li>
+<li><strong>tool_result</strong> — your response sending tool output back to Claude as <code>role: &quot;user&quot;</code></li>
+</ul>
 <h2>Overview</h2>
 <p>Every agent you&#39;ll ever build — customer support, code review, research — runs on the same core loop.</p>
 <p>If you get this wrong, your agent either hangs forever, exits too early, or loses tool results.</p>
@@ -1255,6 +1335,7 @@ Trace through the code: iteration 1 calls <code>get_customer</code>, iteration 2
 <hr>
 <h1>LAB 1.2: MULTI-AGENT COORDINATOR</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.2</span> <span class="badge badge-concept">Hub-and-spoke, isolated context, dynamic subagent selection</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 1.1
 
 <h2>Recall</h2>
 <ol>
@@ -1271,7 +1352,6 @@ That &quot;someone&quot; is the <strong>coordinator</strong> — a central agent
 routes context between them.</p>
 <p><strong>Exam connection (Sample Q7):</strong> When a multi-agent report misses entire topics, the root cause
 is almost always the coordinator&#39;s task decomposition being too narrow — not a subagent failure.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li>The hub-and-spoke pattern: coordinator talks to all subagents, subagents never talk to each other</li>
 <li>Why context is isolated by default (and why that&#39;s a feature, not a bug)</li>
@@ -1488,6 +1568,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 1.3: SUBAGENT CONTEXT PASSING AND SPAWNING</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.3</span> <span class="badge badge-concept">AgentDefinition, structured handoffs, parallel spawning</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 1.2
 
 <h2>Recall</h2>
 <ol>
@@ -1498,7 +1579,6 @@ if __name__ == &quot;__main__&quot;:
 <p><strong>The problem:</strong> Your coordinator delegates research to 3 subagents. They each return raw text blobs. When the synthesis agent combines them, it can&#39;t tell which claim came from which source. The final report says &quot;revenue grew 14%&quot; with no attribution — useless for verification.</p>
 <p><strong>The fix:</strong> Define a <strong>structured handoff format</strong> that every subagent must use. Each finding includes the claim, evidence, source, and date. Now the synthesis agent can merge findings AND preserve where each fact came from.</p>
 <p><strong>Exam connection (Sample Q8):</strong> When a subagent fails, the coordinator needs structured error context (failure type, partial results, alternatives) — not just &quot;error occurred.&quot; Same principle: structure enables intelligent downstream decisions.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Structured handoff format:</strong> customer_id, root_cause, recommended_action — so downstream agents can act on findings without guessing</li>
 <li><strong>Parallel subagent spawning:</strong> The coordinator emits multiple Task calls in one response — subagents run concurrently, cutting latency</li>
@@ -1764,6 +1844,7 @@ Subagents can&#39;t share context between forks — each fork is isolated.</p>
 <hr>
 <h1>LAB 1.4: PREREQUISITE GATES AND HANDOFF PATTERNS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.4</span> <span class="badge badge-concept">Programmatic enforcement vs prompt guidance</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 1.3
 
 <h2>Recall</h2>
 <ol>
@@ -1782,7 +1863,6 @@ until <code>get_customer</code> has returned a verified customer ID. The model l
 <p><strong>Exam connection (Sample Q1):</strong> This is the exam&#39;s signature question. Programmatic enforcement
 beats prompt-based enforcement when compliance matters. Every wrong answer on this topic uses
 prompts where gates are needed.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Prerequisite gates:</strong> Code that blocks tool B until tool A has completed</li>
 <li><strong>Why prompts fail:</strong> Non-zero failure rate on required sequences</li>
@@ -2061,6 +2141,7 @@ The agent should:
 <hr>
 <h1>LAB 1.5: AGENT SDK HOOKS FOR TOOL INTERCEPTION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.5</span> <span class="badge badge-concept">PostToolUse hooks, normalization, compliance enforcement</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
+# Prerequisites: Lab 1.4
 
 <h2>Recall</h2>
 <ol>
@@ -2075,7 +2156,6 @@ that&#39;s probabilistic — it works 95% of the time. For a production agent, 9
 <p><strong>The solution: hooks.</strong> A <strong>PostToolUse hook</strong> intercepts every tool result and normalizes dates to ISO 8601 format <em>before Claude sees them</em>. Claude never encounters inconsistent dates.</p>
 <p>A <strong>PreToolUse hook</strong> intercepts tool calls <em>before they execute</em> — you can block policy-violating operations (e.g., refunds over $500) with 100% reliability.</p>
 <p><strong>The key insight (exam pattern):</strong> Hooks provide <strong>deterministic guarantees</strong>. Prompts provide <strong>probabilistic guidance</strong>. When compliance matters, use hooks.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>PostToolUse hooks:</strong> Transform tool results after execution but before the model processes them (normalization, filtering, enrichment)</li>
 <li><strong>PreToolUse hooks:</strong> Intercept and block tool calls before execution (policy enforcement, threshold checks)</li>
@@ -2268,6 +2348,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 1.6: TASK DECOMPOSITION STRATEGIES</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.6</span> <span class="badge badge-concept">Prompt chaining vs dynamic decomposition</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 1.1
 
 <h2>Recall</h2>
 <ol>
@@ -2286,7 +2367,6 @@ incomplete results because the agent didn&#39;t decompose thoroughly enough.</p>
 <p><strong>Exam connection (Sample Q5):</strong> &quot;Restructure a monolith into microservices&quot; → plan mode
 (adaptive decomposition). &quot;Fix an off-by-one error&quot; → direct execution (fixed steps).
 The exam tests your judgment about WHICH strategy fits WHICH situation.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Prompt chaining:</strong> Fixed sequential pipeline — each step always runs regardless of input. Best for predictable multi-aspect reviews.</li>
 <li><strong>Dynamic decomposition:</strong> Agent analyzes the input first, then decides what subtasks to create. Best for complex, unpredictable problems.</li>
@@ -2502,6 +2582,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 1.7: SESSION STATE, RESUMPTION, AND FORKING</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 1 — Task Statement 1.7</span> <span class="badge badge-concept">--resume, fork_session, stale tool results</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code (no API key needed)</span></div>
+# Prerequisites: Lab 1.1
 
 <h2>Recall</h2>
 <ol>
@@ -2520,13 +2601,11 @@ if __name__ == &quot;__main__&quot;:
 <p><strong>Exam connection:</strong> The exam tests whether you know when to resume vs fork vs start fresh.</p>
 <p>The rule: if tool results might be stale (files changed, APIs returned different data), start fresh with a structured summary of what you found — don&#39;t blindly resume.</p>
 <h2>Try it</h2>
-<p>Start a Claude Code session and explore your lab workspace:</p>
-<pre><code>claude --resume my-first-session
+<p>Start a named session in Claude Code:</p>
+<pre><code class="language-bash">claude --resume my-test-session
 </code></pre>
-<p>Ask Claude about a file in your workspace. Then close the session, reopen with <code>--resume my-first-session</code>, and ask a follow-up about the same file. Notice how context persists.</p>
-<p>Now try this: modify a file that Claude analyzed, then resume. Ask about the changed file — does Claude reference the old version or the new one?</p>
-<p>This is the stale context problem that Lab 1.7 teaches you to handle.</p>
-<h2>What You&#39;ll Learn</h2>
+<p>Explore a file in your workspace, then exit. Reopen with <code>--resume my-test-session</code> and ask about the same file. Notice how context persists.</p>
+<p>Now modify that file and resume again. Ask Claude about the file — does it reference the old version? That&#39;s the stale context problem.</p>
 <ul>
 <li><strong>Named sessions:</strong> Continue work across sessions with <code>--resume</code></li>
 <li><strong>fork_session:</strong> Branch from a shared baseline for parallel exploration</li>
@@ -2859,7 +2938,6 @@ You don&#39;t need routing classifiers or few-shot examples. You just need bette
 <p><strong>Exam connection (Sample Q2):</strong> &quot;What&#39;s the most effective first step to improve tool selection
 reliability?&quot; → Expand tool descriptions. Not routing layers, not consolidation, not examples.
 Descriptions are the lowest-effort, highest-leverage fix.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li>Why minimal descriptions (&quot;Retrieves X&quot;) cause tool confusion</li>
 <li>The 5-part description template: purpose, input format, output format, when-to-use, when-NOT-to-use</li>
@@ -3102,6 +3180,7 @@ for w in warnings:
 <hr>
 <h1>LAB 2.2: STRUCTURED ERROR RESPONSES</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.2</span> <span class="badge badge-concept">Error categories, isRetryable, access failure vs empty result</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 2.1
 
 <h2>Recall</h2>
 <ol>
@@ -3114,7 +3193,6 @@ Should it retry? Is the data gone? Was the input wrong? A generic error message 
 the agent either retries blindly or gives up. The fix: structured error responses with categories
 (transient/validation/business/permission) and <code>isRetryable</code> flags that tell the agent exactly
 what went wrong and what to do next.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>4 error categories</strong> (transient, validation, business, permission) with isRetryable flags</li>
 <li><strong>The critical distinction:</strong> isError:true (access failure) vs isError:false with null results (valid empty)</li>
@@ -3379,6 +3457,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 2.3: TOOL CHOICE AND TOOL DISTRIBUTION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.3</span> <span class="badge badge-concept">tool_choice options, scoped tool access, constrained tool replacement</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 2.1
 
 <h2>Recall</h2>
 <ol>
@@ -3388,7 +3467,6 @@ if __name__ == &quot;__main__&quot;:
 <h2>Overview</h2>
 <p>Your extraction pipeline needs guaranteed structured output — but <code>tool_choice=&#39;auto&#39;</code> sometimes returns text instead of calling the tool. Your parser crashes.</p>
 <p>The fix: <code>tool_choice=&#39;any&#39;</code> forces a tool call, and forced selection (<code>{&quot;type&quot;: &quot;tool&quot;, &quot;name&quot;: &quot;X&quot;}</code>) guarantees a SPECIFIC tool runs. No more hoping the model cooperates — you control when tools are mandatory.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>tool_choice options:</strong> &quot;auto&quot; (model decides), &quot;any&quot; (must call a tool), forced (must call specific tool)</li>
 <li><strong>Scoped tool access:</strong> Why giving agents 18 tools degrades reliability — scope to 4-5 per role</li>
@@ -3602,6 +3680,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 2.4: MCP SERVER CONFIGURATION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.4</span> <span class="badge badge-concept">Project vs user scope, environment variables, resources</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code (no API key needed)</span></div>
+# Prerequisites: Lab 2.1
 
 <h2>Recall</h2>
 <ol>
@@ -3618,7 +3697,6 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p>Both support <code>${ENV_VAR}</code> expansion for credentials — the config file says <em>which</em> env var to read, not the actual secret. Secrets stay in each developer&#39;s environment, never in git.</p>
 <p><strong>Exam connection:</strong> The exam tests whether you know which scope to use for team-shared tools (project) vs personal tools (user), and that <code>${ENV_VAR}</code> is the credential pattern.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li>How to configure MCP servers in <code>.mcp.json</code> (project) and <code>~/.claude.json</code> (user)</li>
 <li>Why <code>${ENV_VAR}</code> expansion matters for team security</li>
@@ -3853,7 +3931,8 @@ if __name__ == &quot;__main__&quot;:
 <h2>Exam tips</h2>
 <ul>
 <li><strong>If the exam says</strong> &quot;teammate doesn&#39;t see my Claude instructions&quot; → check if instructions are in ~/.claude/ (personal) vs project-level</li>
-<li><strong>Wrong answer trap:</strong> &quot;The MCP server isn&#39;t configured&quot; — this is a CLAUDE.md hierarchy issue</li>
+<li><strong>Wrong answer trap:</strong> &quot;The MCP server isn&#39;t configured&quot; — this is a CLAUDE.md hierarchy issue, not an MCP issue</li>
+<li><strong>Wrong answer trap:</strong> &quot;Commit ~/.claude.json to git&quot; — user-scoped config is personal and may contain credentials via ${ENV_VAR}</li>
 <li><strong>The correct pattern:</strong> .mcp.json (project, shared) vs ~/.claude.json (personal, not shared). Use ${ENV_VAR} for secrets.</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -3868,6 +3947,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 2.5: BUILT-IN TOOLS — READ, WRITE, GREP, GLOB, BASH</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 2 — Task Statement 2.5</span> <span class="badge badge-concept">Right tool for each operation</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 2.1
 
 <h2>Recall</h2>
 <ol>
@@ -4158,7 +4238,6 @@ It works, but:</p>
 <p><strong>Exam connection (Sample Q6):</strong> &quot;Test files spread throughout the codebase need the same
 conventions&quot; → <code>.claude/rules/</code> with <code>paths: [&quot;**/*.test.*&quot;]</code>. NOT directory-level CLAUDE.md
 (can&#39;t cover files scattered across dirs).</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li>The 3-level hierarchy and what belongs at each level (personal vs team vs directory)</li>
 <li><code>@import</code> for modular configuration that doesn&#39;t hit context limits</li>
@@ -4171,6 +4250,7 @@ conventions&quot; → <code>.claude/rules/</code> with <code>paths: [&quot;**/*.
 </code></pre>
 <p>You&#39;ll see which CLAUDE.md files and rules are active. Right now it may be empty or minimal.</p>
 <p>By the end of this lab, you&#39;ll have a full hierarchy -- user-level, project-level, and path-specific rules -- and /memory will show all of them.</p>
+<p><strong>Now try it:</strong> Run <code>/memory</code> in Claude Code to see what&#39;s currently loaded. Note which files appear. After creating the CLAUDE.md hierarchy in this lab, run <code>/memory</code> again to see the difference.</p>
 <h2>Step 1: Create the full CLAUDE.md hierarchy</h2>
 <p>Ask Claude Code to create the project-level CLAUDE.md and directory structure:</p>
 <blockquote>
@@ -4416,6 +4496,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li><strong>If the exam says</strong> &quot;new teammate doesn&#39;t get conventions&quot; → check if rules are in ~/.claude/ (personal) vs project-level (shared)</li>
 <li><strong>Wrong answer trap:</strong> &quot;Add rules to each directory&#39;s CLAUDE.md&quot; — doesn&#39;t scale for cross-directory patterns</li>
+<li><strong>Wrong answer trap:</strong> &quot;Copy the user-level CLAUDE.md to each teammate&#39;s machine&quot; — manual, error-prone, and drifts over time</li>
 <li><strong>The correct pattern:</strong> Project-level CLAUDE.md + .claude/rules/ with glob patterns for shared conventions</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -4429,7 +4510,11 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 3.2: CUSTOM SLASH COMMANDS AND SKILLS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.2</span> <span class="badge badge-concept">Project vs user commands, skills with frontmatter, context:fork</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 3.1
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete Lab 3.1 first (CLAUDE.md hierarchy).</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>What are the three levels of the CLAUDE.md hierarchy? (Lab 3.1)</li>
@@ -4450,7 +4535,6 @@ context (output doesn&#39;t pollute your session), <code>allowed-tools</code> re
 </ul>
 <p><strong>Exam connection (Sample Q4):</strong> &quot;Where should you create a shared <code>/review</code> command?&quot;
 → <code>.claude/commands/</code> (project-scoped, version-controlled). NOT <code>~/.claude/commands/</code> (personal).</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Commands vs Skills:</strong> When to use each, and why skills have capabilities commands don&#39;t</li>
 <li><strong><code>context: fork</code>:</strong> Run in isolation so output doesn&#39;t pollute your main session</li>
@@ -4610,7 +4694,11 @@ Skills: On-demand invocation for specific workflows
 <hr>
 <h1>LAB 3.3: PATH-SPECIFIC RULES</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.3</span> <span class="badge badge-concept">YAML frontmatter paths, glob patterns, conditional loading</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 3.1
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.2 first.</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>What does context:fork do in a skill&#39;s frontmatter? (Lab 3.2)</li>
@@ -4620,7 +4708,6 @@ Skills: On-demand invocation for specific workflows
 <p>Your test files are scattered across 12 directories. You put test conventions in a directory-level CLAUDE.md -- but now you need 12 copies. When conventions change, you update one and forget the others.</p>
 <p><strong>Path-specific rules</strong> with glob patterns (<code>paths: [**/*.test.*]</code>) apply automatically regardless of directory.</p>
 <p><strong>Exam connection (Sample Q6):</strong> Test files spread throughout the codebase → .claude/rules/ with glob patterns. NOT directory-level CLAUDE.md.</p>
-<h2>What You&#39;ll Learn</h2>
 <p>Path-specific rules load ONLY when editing matching files.
 Better than directory-level CLAUDE.md when conventions apply to files spread across dirs.</p>
 <h2>Try it</h2>
@@ -4714,6 +4801,7 @@ Then open a regular source file and ask the same — those rules should NOT appe
 <ul>
 <li><strong>If the exam says</strong> &quot;conventions for files spread across directories&quot; → .claude/rules/ with glob patterns</li>
 <li><strong>Wrong answer trap:</strong> &quot;Put a CLAUDE.md in each directory&quot; — doesn&#39;t handle files spread throughout the codebase</li>
+<li><strong>Wrong answer trap:</strong> &quot;Add all conventions to the project-level CLAUDE.md&quot; — loads unnecessary rules for every file, wasting tokens</li>
 <li><strong>The correct pattern:</strong> paths: [&quot;**/*.test.tsx&quot;] in YAML frontmatter loads rules for matching files regardless of location</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -4727,7 +4815,11 @@ Then open a regular source file and ask the same — those rules should NOT appe
 <hr>
 <h1>LAB 3.4: PLAN MODE VS DIRECT EXECUTION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.4</span> <span class="badge badge-concept">When to plan first, when to act directly, Explore subagent</span> <span class="badge badge-time">~15 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 3.1
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.3 first.</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>When are path-specific rules better than directory-level CLAUDE.md? (Lab 3.3)</li>
@@ -4758,7 +4850,6 @@ for a one-line fix. Total waste of time.</p>
 </code></pre>
 <p>Notice the difference: direct execution acts immediately. Plan mode explores first, considers approaches, then presents a plan for your approval before making changes.</p>
 <p>The decision of which to use is an exam-tested concept.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Plan mode:</strong> Explore and design before committing — prevents costly rework on complex tasks</li>
 <li><strong>Direct execution:</strong> Act immediately on clear, well-scoped changes</li>
@@ -4939,7 +5030,11 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 3.5: ITERATIVE REFINEMENT TECHNIQUES</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.5</span> <span class="badge badge-concept">Examples > descriptions, test-driven iteration, interview pattern</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Claude Code or API key</span></div>
+# Prerequisites: Lab 3.1
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete Lab 3.4 first (plan mode).</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>When should you use plan mode vs direct execution? (Lab 3.4)</li>
@@ -4948,7 +5043,6 @@ if __name__ == &quot;__main__&quot;:
 <h2>Overview</h2>
 <p>You tell Claude &quot;handle edge cases gracefully.&quot; It produces code that crashes on null input. You say &quot;be more robust.&quot; It adds try/except everywhere.</p>
 <p><strong>The problem:</strong> prose instructions are ambiguous. <strong>The fix:</strong> show concrete input/output examples -- Claude replicates the pattern exactly.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Examples beat prose:</strong> When prose instructions produce inconsistent results, examples fix it.</li>
 <li><strong>Test-driven iteration:</strong> Write tests first, share failures to guide improvement.</li>
@@ -5148,6 +5242,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li><strong>If the exam says</strong> &quot;output format is inconsistent across runs&quot; → add 2-3 concrete input/output examples</li>
 <li><strong>Wrong answer trap:</strong> &quot;Write more detailed prose instructions&quot; — prose is interpreted inconsistently</li>
+<li><strong>Wrong answer trap:</strong> &quot;Use temperature 0 for deterministic output&quot; — temperature affects randomness, not format compliance</li>
 <li><strong>The correct pattern:</strong> Examples beat descriptions for format consistency and ambiguous case handling</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -5160,7 +5255,11 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 3.6: CI/CD INTEGRATION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 3 — Task Statement 3.6</span> <span class="badge badge-concept">-p flag, --output-format json, independent review instances</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 3.1
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete Labs 3.1–3.5 first.</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>What are the three iterative refinement techniques? (Lab 3.5)</li>
@@ -5182,7 +5281,6 @@ when Claude changes its formatting.</p>
 </ul>
 <p><strong>Exam connection (Sample Q10):</strong> &quot;Pipeline hangs&quot; → <code>-p</code> flag. This is directly tested.</p>
 <p><strong>(Sample Q11):</strong> &quot;Reduce costs&quot; → Batch API for overnight reports, synchronous for blocking checks.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong><code>-p</code> flag:</strong> Non-interactive mode for CI/CD — the #1 pipeline integration fix</li>
 <li><strong><code>--output-format json</code> + <code>--json-schema</code>:</strong> Machine-parseable, schema-validated output</li>
@@ -5454,7 +5552,6 @@ D) Add <code>--batch</code> flag</p>
 <p><strong>The fix:</strong> explicit categorical criteria (&quot;flag SQL injection and hardcoded secrets; skip style issues and naming conventions&quot;).</p>
 <p><strong>Exam connection (Sample Q3):</strong> Explicit escalation criteria + few-shot examples is the correct
 first step for improving calibration — not sentiment analysis, not confidence scores.</p>
-<h2>What You&#39;ll Learn</h2>
 <p>&quot;Be conservative&quot; doesn&#39;t reduce false positives. Specific categorical criteria does.
 High false positive rates undermine trust in accurate categories.</p>
 <h2>Try it</h2>
@@ -5695,6 +5792,7 @@ The specific prompt will correctly skip them and only flag the real bugs.</p>
 <hr>
 <h1>LAB 4.2: FEW-SHOT PROMPTING</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.2</span> <span class="badge badge-concept">Examples for consistency, ambiguous case handling</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 4.1
 
 <h2>Recall</h2>
 <ol>
@@ -5825,6 +5923,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li><strong>If the exam says</strong> &quot;inconsistent output format&quot; or &quot;wrong handling of ambiguous cases&quot; → few-shot examples</li>
 <li><strong>Wrong answer trap:</strong> &quot;More detailed instructions&quot; — prose is interpreted differently each run</li>
+<li><strong>Wrong answer trap:</strong> &quot;Add a JSON schema&quot; — schema enforces structure but doesn&#39;t teach ambiguous case reasoning</li>
 <li><strong>The correct pattern:</strong> 2-4 targeted examples including an ambiguous case with reasoning</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -5838,6 +5937,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 4.3: STRUCTURED OUTPUT WITH TOOL USE AND JSON SCHEMAS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.3</span> <span class="badge badge-concept">tool_use for guaranteed schema compliance, nullable fields, enums</span> <span class="badge badge-time">~25 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 4.1
 
 <h2>Recall</h2>
 <ol>
@@ -6150,6 +6250,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 4.4: VALIDATION AND RETRY LOOPS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.4</span> <span class="badge badge-concept">Retry with specific feedback, when retries won't help</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 4.1
 
 <h2>Recall</h2>
 <ol>
@@ -6513,6 +6614,7 @@ for data in test_cases:
 <ul>
 <li><strong>If the exam says</strong> &quot;extraction fails, retry doesn&#39;t help&quot; → information is absent from the source document</li>
 <li><strong>Wrong answer trap:</strong> &quot;Retry with a different prompt&quot; — can&#39;t extract what isn&#39;t there</li>
+<li><strong>Wrong answer trap:</strong> &quot;Use a more capable model&quot; — no model can extract data that doesn&#39;t exist in the source</li>
 <li><strong>The correct pattern:</strong> Retries fix format/structural errors. They can&#39;t fix missing information. Return null.</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -6528,6 +6630,7 @@ for data in test_cases:
 <hr>
 <h1>LAB 4.5: BATCH PROCESSING WITH MESSAGE BATCHES API</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.5</span> <span class="badge badge-concept">50% cost savings, 24hr window, custom_id, when not to use</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 4.1
 
 <h2>Recall</h2>
 <ol>
@@ -6783,6 +6886,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 4.6: MULTI-INSTANCE AND MULTI-PASS REVIEW</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 4 — Task Statement 4.6</span> <span class="badge badge-concept">Self-review limits, independent instances, per-file + integration passes</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 4.1
 
 <h2>Recall</h2>
 <ol>
@@ -7108,7 +7212,6 @@ D) Batch both with a timeout fallback</p>
 <p>After 15 turns, your agent says &quot;your order was approximately $150&quot; when the real total from turn 3 was $149.99. Progressive summarization compressed the exact value.</p>
 <p><strong>The fix:</strong> extract transactional facts into a persistent case facts block -- exact amounts, dates, order IDs -- outside the summarized history.</p>
 <p><strong>Exam connection:</strong> Case facts blocks and tool result trimming are core Domain 5 concepts. The exam tests whether you know that progressive summarization loses precision.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Long conversations</strong> accumulate verbose tool results that consume tokens disproportionately.</li>
 <li><strong>&quot;Lost in the middle&quot;:</strong> model misses findings in the middle of long inputs.</li>
@@ -7331,6 +7434,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 5.2: ESCALATION AND AMBIGUITY RESOLUTION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.2</span> <span class="badge badge-concept">Escalation triggers, explicit request honoring, policy gaps</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 5.1
 
 <h2>Recall</h2>
 <ol>
@@ -7627,6 +7731,7 @@ Explicit categorical criteria (customer request, policy gap, no progress) are re
 <hr>
 <h1>LAB 5.3: ERROR PROPAGATION IN MULTI-AGENT SYSTEMS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.3</span> <span class="badge badge-concept">Structured error context, partial results, coordinator recovery</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Intermediate">Intermediate</span><span class="badge badge-time"></span></div>
+# Prerequisites: Lab 5.1
 
 <h2>Recall</h2>
 <ol>
@@ -7846,6 +7951,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 5.4: CONTEXT MANAGEMENT IN LARGE CODEBASE EXPLORATION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.4</span> <span class="badge badge-concept">Scratchpad files, subagent delegation, crash recovery</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Guided">Guided</span><span class="badge badge-time"> | Claude Code</span></div>
+# Prerequisites: Lab 5.1
 
 <h2>Recall</h2>
 <ol>
@@ -7861,7 +7967,6 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Crash recovery manifests</strong> for resilient resume</li>
 </ul>
 <p><strong>Exam connection:</strong> The exam tests scratchpad files for persistence, subagent delegation for isolation, and manifest-based recovery for crash resilience.</p>
-<h2>What You&#39;ll Learn</h2>
 <ul>
 <li><strong>Extended sessions</strong> cause context degradation -- model references &quot;typical patterns&quot; not specific code.</li>
 <li><strong>Scratchpad files</strong> persist findings across context boundaries.</li>
@@ -8149,7 +8254,8 @@ Then continue the session with a clean context.</p>
 <h2>Exam tips</h2>
 <ul>
 <li><strong>If the exam says</strong> &quot;agent says &#39;typically uses X&#39; instead of naming specific code&quot; → context degradation</li>
-<li><strong>Wrong answer trap:</strong> &quot;Increase context window&quot; — doesn&#39;t fix progressive summarization</li>
+<li><strong>Wrong answer trap:</strong> &quot;Increase context window&quot; — delays but doesn&#39;t prevent progressive summarization</li>
+<li><strong>Wrong answer trap:</strong> &quot;Re-read all prior tool results&quot; — duplicates verbose output in context, accelerating degradation</li>
 <li><strong>The correct pattern:</strong> Scratchpad files persist findings. Subagent delegation isolates verbose output. /compact reduces context usage.</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -8163,6 +8269,7 @@ Then continue the session with a clean context.</p>
 <hr>
 <h1>LAB 5.5: HUMAN REVIEW WORKFLOWS AND CONFIDENCE CALIBRATION</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.5</span> <span class="badge badge-concept">Stratified sampling, field-level confidence, accuracy by segment</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: Lab 5.1
 
 <h2>Recall</h2>
 <ol>
@@ -8392,6 +8499,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li><strong>If the exam says</strong> &quot;97% accuracy overall&quot; → check accuracy BY SEGMENT, not just aggregate</li>
 <li><strong>Wrong answer trap:</strong> &quot;Automate all high-confidence extractions&quot; — aggregate masks poor segments</li>
+<li><strong>Wrong answer trap:</strong> &quot;Lower the confidence threshold to catch more errors&quot; — threshold tuning without segment analysis still misses entire document types that fail systematically</li>
 <li><strong>The correct pattern:</strong> Stratified sampling by document type and field. Validate each segment independently before automating.</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -8405,6 +8513,7 @@ if __name__ == &quot;__main__&quot;:
 <hr>
 <h1>LAB 5.6: INFORMATION PROVENANCE AND MULTI-SOURCE SYNTHESIS</h1>
 <div class="lab-meta"><span class="badge badge-domain">Domain 5 — Task Statement 5.6</span> <span class="badge badge-concept">Claim-source mappings, conflicting data, temporal metadata</span> <span class="badge badge-time">~20 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"></span></div>
+# Prerequisites: Lab 5.1
 
 <h2>Recall</h2>
 <ol>
@@ -8759,6 +8868,7 @@ demonstrate_content_type_rendering()
 <ul>
 <li><strong>If the exam says</strong> &quot;report cites statistics without sources&quot; → claim-source mappings lost during synthesis</li>
 <li><strong>Wrong answer trap:</strong> &quot;Give synthesis agent access to original sources&quot; — re-verification is expensive and misses the root cause</li>
+<li><strong>Wrong answer trap:</strong> &quot;Add footnotes in post-processing&quot; — post-hoc attribution is unreliable when provenance wasn&#39;t tracked during collection</li>
 <li><strong>The correct pattern:</strong> Require structured claim-source mappings from subagents, preserved through synthesis</li>
 </ul>
 <h2>Key takeaways</h2>
@@ -8800,7 +8910,11 @@ D) Deploy a trained classifier</p>
 <h1>ALL 5 DOMAINS</h1>
 <h1>Build a production-grade customer support agent</h1>
 <div class="lab-meta"><span class="badge badge-time">~45 minutes</span><span class="badge badge-diff-Advanced">Advanced</span><span class="badge badge-time"> | Requires: Claude Code</span></div>
+# Prerequisites: All modules
 
+<blockquote>
+<p><strong>Prerequisite:</strong> Complete all labs in Modules 1–5 first.</p>
+</blockquote>
 <h2>Recall</h2>
 <ol>
 <li>How do you preserve claim-source mappings through synthesis? (Lab 5.6)</li>
@@ -9513,22 +9627,109 @@ C) Add more few-shot examples for the comment accuracy category.
 D) Switch to a more capable model for better accuracy.</p>
 <p><strong>Correct: B.</strong> Disabling the high-FP category immediately restores trust in the remaining accurate categories. Developers start reading findings again. Then iterate on the problematic category&#39;s criteria before re-enabling. Confidence scores (A) don&#39;t help when the model is confidently wrong. <strong>Why not A:</strong> Confidence scores are unreliable when the model is confidently wrong — a high-confidence false positive still passes the filter and erodes developer trust. <strong>Why not C:</strong> Adding few-shot examples may gradually improve the category but doesn&#39;t address the immediate trust crisis — developers are already ignoring all findings while you iterate. <strong>Why not D:</strong> Switching models is expensive and slow, and there&#39;s no guarantee a different model will perform better on this specific category without also improving the criteria. (Lab 4.1)</p>
 <hr>
-<h1>PRACTICE EXAM — FULL 60-QUESTION ASSESSMENT</h1>
+<h1>GLOSSARY</h1>
+<p>Key terms used throughout this guide, organized by domain.</p>
+<h2>Domain 1: Agentic Architecture</h2>
+<ul>
+<li><strong>Agentic loop</strong>: A while-loop that continues until <code>stop_reason == &quot;end_turn&quot;</code>. Each iteration: send request → check stop_reason → execute tools or return response.</li>
+<li><strong>stop_reason</strong>: Claude&#39;s signal for loop control. <code>&quot;tool_use&quot;</code> = run these tools. <code>&quot;end_turn&quot;</code> = done.</li>
+<li><strong>tool_use</strong>: A content block containing a tool call (name + input). Your code must execute it.</li>
+<li><strong>tool_result</strong>: The tool&#39;s output sent back as <code>role: &quot;user&quot;</code> with <code>type: &quot;tool_result&quot;</code>.</li>
+<li><strong>Hub-and-spoke</strong>: Architecture where one coordinator manages all subagent communication.</li>
+<li><strong>Coordinator</strong>: Central agent that decomposes tasks, delegates to subagents, aggregates results.</li>
+<li><strong>Subagent</strong>: Specialized agent with isolated context. Does not inherit coordinator&#39;s history.</li>
+<li><strong>Task tool</strong>: Agent SDK mechanism for spawning subagents. Coordinator needs <code>&quot;Task&quot;</code> in <code>allowedTools</code>.</li>
+<li><strong>AgentDefinition</strong>: Config for a subagent: name, description, system_prompt, allowed_tools.</li>
+<li><strong>Prerequisite gate</strong>: Code that blocks a tool call until a prior step completes.</li>
+<li><strong>PostToolUse hook</strong>: Intercepts tool results AFTER execution for normalization or enrichment.</li>
+<li><strong>PreToolUse hook</strong>: Intercepts tool calls BEFORE execution for policy enforcement or blocking.</li>
+<li><strong>Prompt chaining</strong>: Fixed sequential pipeline — steps are predetermined.</li>
+<li><strong>Dynamic decomposition</strong>: Adaptive pipeline — next steps depend on prior discoveries.</li>
+<li><strong>fork_session</strong>: Creates independent exploration branches from a shared analysis baseline.</li>
+<li><strong>--resume</strong>: CLI flag to continue a named session from where you left off.</li>
+</ul>
+<h2>Domain 2: Tool Design &amp; MCP</h2>
+<ul>
+<li><strong>MCP (Model Context Protocol)</strong>: Standard protocol for connecting Claude to external tools and data sources.</li>
+<li><strong>MCP server</strong>: A service that exposes tools and resources to Claude via MCP.</li>
+<li><strong>MCP resource</strong>: Read-only content catalog (e.g., API docs, database schema) that reduces exploratory tool calls.</li>
+<li><strong>MCP tool</strong>: An action the agent can execute (e.g., search, create, update).</li>
+<li><strong>.mcp.json</strong>: Project-scoped MCP config. Shared via version control.</li>
+<li><strong>~/.claude.json</strong>: User-scoped MCP config. Personal, not shared.</li>
+<li><strong>isError flag</strong>: MCP pattern for communicating tool failures back to the agent.</li>
+<li><strong>tool_choice</strong>: API parameter controlling tool selection. Options: <code>&quot;auto&quot;</code>, <code>&quot;any&quot;</code>, forced <code>{&quot;type&quot;: &quot;tool&quot;, &quot;name&quot;: &quot;X&quot;}</code>.</li>
+<li><strong>Grep</strong>: Built-in tool for searching file CONTENTS (patterns, function names, error messages).</li>
+<li><strong>Glob</strong>: Built-in tool for searching file PATHS (name patterns like <code>**/*.test.tsx</code>).</li>
+<li><strong>Edit</strong>: Built-in tool for targeted file modifications using unique text matching.</li>
+</ul>
+<h2>Domain 3: Claude Code Configuration</h2>
+<ul>
+<li><strong>CLAUDE.md</strong>: Configuration file providing project context and instructions to Claude Code.</li>
+<li><strong>User-level CLAUDE.md</strong>: <code>~/.claude/CLAUDE.md</code> — personal settings, not shared via git.</li>
+<li><strong>Project-level CLAUDE.md</strong>: <code>CLAUDE.md</code> at project root — team standards, shared via git.</li>
+<li><strong>@import</strong>: Syntax for including external files in CLAUDE.md to keep it modular.</li>
+<li><strong>.claude/rules/</strong>: Directory for topic-specific rule files with YAML frontmatter path scoping.</li>
+<li><strong>.claude/commands/</strong>: Directory for project-scoped custom slash commands.</li>
+<li><strong>.claude/skills/</strong>: Directory for skills with SKILL.md frontmatter (context:fork, allowed-tools).</li>
+<li><strong>context:fork</strong>: Skill frontmatter that runs the skill in an isolated sub-agent context.</li>
+<li><strong>allowed-tools</strong>: Skill frontmatter that restricts which tools the skill can use.</li>
+<li><strong>Plan mode</strong>: Mode for complex tasks — explores first, presents plan for approval before acting.</li>
+<li><strong>Direct execution</strong>: Mode for simple tasks — acts immediately without planning.</li>
+<li><strong>Explore subagent</strong>: Isolates verbose discovery output to keep the main context clean.</li>
+<li><strong>/memory</strong>: Command to verify which CLAUDE.md files and rules are loaded.</li>
+<li><strong>/compact</strong>: Command to reduce context usage during extended sessions.</li>
+<li><strong>-p flag</strong>: Runs Claude Code in non-interactive mode for CI/CD pipelines.</li>
+<li><strong>--output-format json</strong>: Produces machine-parseable structured output.</li>
+<li><strong>--json-schema</strong>: Enforces output matches a specific JSON schema.</li>
+</ul>
+<h2>Domain 4: Prompt Engineering &amp; Structured Output</h2>
+<ul>
+<li><strong>Explicit criteria</strong>: Specific categorical rules (what to report vs skip) replacing vague instructions.</li>
+<li><strong>Few-shot examples</strong>: 2-4 concrete input/output examples demonstrating expected behavior.</li>
+<li><strong>tool_use with JSON schema</strong>: Using tool calls to guarantee schema-compliant structured output.</li>
+<li><strong>Nullable fields</strong>: Schema fields typed as <code>[&quot;string&quot;, &quot;null&quot;]</code> to prevent fabrication of missing data.</li>
+<li><strong>Enum with &quot;other&quot;</strong>: Schema pattern using enum values plus an &quot;other&quot; + detail string for extensibility.</li>
+<li><strong>Validation-retry loop</strong>: Re-sending failed extractions with specific error feedback for self-correction.</li>
+<li><strong>detected_pattern field</strong>: Tracks which code constructs trigger findings for false positive analysis.</li>
+<li><strong>Message Batches API</strong>: Batch processing with 50% cost savings, up to 24-hour window, no latency SLA.</li>
+<li><strong>custom_id</strong>: Field for correlating batch request/response pairs.</li>
+<li><strong>Independent review instance</strong>: Separate Claude session reviewing code without the generator&#39;s reasoning context.</li>
+<li><strong>Multi-pass review</strong>: Per-file local analysis + cross-file integration pass to avoid attention dilution.</li>
+</ul>
+<h2>Domain 5: Context Management &amp; Reliability</h2>
+<ul>
+<li><strong>Case facts block</strong>: Persistent structured layer with exact values (amounts, dates, IDs) included in every prompt.</li>
+<li><strong>Tool result trimming</strong>: Reducing verbose tool output to only relevant fields before context accumulation.</li>
+<li><strong>Lost in the middle</strong>: Models miss information in middle sections of long inputs. Place summaries first.</li>
+<li><strong>Progressive summarization</strong>: Context compression that loses exact values — the reason case facts blocks exist.</li>
+<li><strong>Escalation triggers</strong>: Explicit criteria for when to escalate: customer request, policy gap, no progress.</li>
+<li><strong>Policy gap</strong>: Situation where policy is silent — agent has no authority, must escalate.</li>
+<li><strong>Structured error context</strong>: Error response including failure_type, attempted_query, partial_results, is_retryable.</li>
+<li><strong>Access failure vs empty result</strong>: Access failure (service down, needs retry) vs valid empty (query succeeded, no matches).</li>
+<li><strong>Scratchpad file</strong>: File where findings are written during exploration to survive context degradation.</li>
+<li><strong>Crash recovery manifest</strong>: Structured state export enabling graceful resume after failures.</li>
+<li><strong>Stratified sampling</strong>: Measuring error rates by document type and field segment, not just aggregate accuracy.</li>
+<li><strong>Field-level confidence</strong>: Per-field confidence scores for routing: auto (0.9+), spot-check (0.7-0.9), human (&lt;0.7).</li>
+<li><strong>Claim-source mapping</strong>: Structured format preserving which source each claim came from through synthesis.</li>
+<li><strong>Temporal metadata</strong>: Publication/collection dates preventing false contradictions between sources.</li>
+</ul>
+<hr>
+<h1>PRACTICE EXAM — FULL ASSESSMENT</h1>
 <p>This practice exam simulates the real certification exam. It uses 4 of the 6 possible scenarios, with questions distributed proportionally to domain weights.</p>
 <p><strong>Instructions:</strong></p>
 <ul>
-<li>Answer all 60 questions — there is no penalty for guessing</li>
+<li>Answer all questions — there is no penalty for guessing</li>
 <li>Click &quot;Show Answer&quot; after each question to check your work</li>
-<li>Passing score: 720/1000 (scaled) — aim for 43+ correct out of 60</li>
+<li>Passing score: 720/1000 (scaled)</li>
 <li>Track your score by domain to identify weak areas</li>
 </ul>
-<p><strong>Domain Distribution:</strong></p>
+<p><strong>Domain Distribution (proportional to exam weights):</strong></p>
 <ul>
-<li>Domain 1: Agentic Architecture &amp; Orchestration — 16 questions (27%)</li>
-<li>Domain 2: Tool Design &amp; MCP Integration — 11 questions (18%)</li>
-<li>Domain 3: Claude Code Configuration &amp; Workflows — 12 questions (20%)</li>
-<li>Domain 4: Prompt Engineering &amp; Structured Output — 12 questions (20%)</li>
-<li>Domain 5: Context Management &amp; Reliability — 9 questions (15%)</li>
+<li>Domain 1: Agentic Architecture &amp; Orchestration (27%)</li>
+<li>Domain 2: Tool Design &amp; MCP Integration (18%)</li>
+<li>Domain 3: Claude Code Configuration &amp; Workflows (20%)</li>
+<li>Domain 4: Prompt Engineering &amp; Structured Output (20%)</li>
+<li>Domain 5: Context Management &amp; Reliability (15%)</li>
 </ul>
 <hr>
 <h1>SCENARIO 1: CUSTOMER SUPPORT RESOLUTION AGENT</h1>
@@ -10460,7 +10661,7 @@ If compliance is required, it must be programmatic. If guidance is sufficient, u
         const heroEl = document.createElement('div');
         heroEl.innerHTML = '<div class="course-stats">' +
           '<span><span class="stat-num">31</span> labs</span>' +
-          '<span><span class="stat-num">60</span> practice questions</span>' +
+          '<span><span class="stat-num">72</span> practice questions</span>' +
           '<span><span class="stat-num">5</span> domains</span>' +
           '<span>\u2713 Exam-aligned</span>' +
           '</div>';
@@ -10477,16 +10678,7 @@ If compliance is required, it must be programmatic. If guidance is sufficient, u
       }
     }
 
-    // Track visited sections
-    const visited = new Set();
     const allNavLinks = Array.from(navList.querySelectorAll('a[href^="#"]'));
-
-    function updateProgress() {
-      const total = allNavLinks.length;
-      const pct = total > 0 ? Math.round((visited.size / total) * 100) : 0;
-      document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressText').textContent = pct + '%';
-    }
 
     // Build ordered list of section IDs for prev/next
     const sectionOrder = sections.map(s => s.dataset.sectionId);
@@ -10498,12 +10690,6 @@ If compliance is required, it must be programmatic. If guidance is sufficient, u
       if (target) {
         target.style.display = '';
         window.scrollTo({ top: 0 });
-
-        // Mark visited
-        visited.add(sectionId);
-        const link = navList.querySelector('a[href="#' + CSS.escape(sectionId) + '"]');
-        if (link) link.classList.add('visited');
-        updateProgress();
 
         // Remove old nav bar
         const oldNav = target.querySelector('.lesson-nav');
