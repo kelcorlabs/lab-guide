@@ -541,14 +541,12 @@ The reference code below shows this same pattern built programmatically with the
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ── SIMULATED SUBAGENT RESPONSES ──────────────────────────
 # In production these would be real API calls to specialized agents.
 # We simulate them here to focus on the coordinator pattern.
+# In production, replace these functions with client.messages.create() calls.
 
 def search_subagent(query: str) -> dict:
     """Simulates a web search subagent."""
@@ -706,10 +704,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
-```
-Create the file lab-d1-agentic-arch/multi_agent.py with the code above and run it
+```bash
+python lab-d1-agentic-arch/multi_agent.py
 ```
 
 **What you should see:**
@@ -823,14 +819,12 @@ This is the structured handoff pattern — each phase's output becomes the next 
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ── STRUCTURED HANDOFF FORMAT ─────────────────────────────
 # When passing context between agents, use structured formats
 # that separate content from metadata (source, date, confidence).
+# In production, replace print-based demos with client.messages.create() calls.
 
 def build_research_handoff(search_findings: list, analysis_findings: list) -> str:
     """
@@ -1012,10 +1006,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
-```
-Create the file lab-d1-agentic-arch/context_passing.py with the code above and run it
+```bash
+python lab-d1-agentic-arch/context_passing.py
 ```
 
 **What you should see:**
@@ -1135,11 +1127,9 @@ Notice how Claude Code checks a prerequisite (clean working directory) before ta
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
-
+# ── Fake data ─────────────────────────────────────────────
 CUSTOMERS = {
     "jane@email.com": {"id": "CUST-001", "name": "Jane Smith", "tier": "gold"},
     "bob@email.com":  {"id": "CUST-002", "name": "Bob Jones",  "tier": "silver"}
@@ -1243,54 +1233,199 @@ tools = [
     }
 ]
 
+# ── Simulated Claude responses ────────────────────────────
+# In production, replace simulate_responses() with client.messages.create().
+# The loop logic below stays identical.
+
+def simulate_responses(user_message):
+    """
+    Returns a list of simulated API responses for each scenario.
+    Each response has stop_reason and content — identical to real API.
+    """
+    if "jane@email.com" in user_message and "$50" in user_message:
+        # Test 1: Normal refund — verify -> lookup -> refund (all pass)
+        return [
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Let me verify your account first."},
+                    {"type": "tool_use", "id": "call_001",
+                     "name": "get_customer", "input": {"email": "jane@email.com"}}
+                ]
+            },
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Account verified. Let me look up that order."},
+                    {"type": "tool_use", "id": "call_002",
+                     "name": "lookup_order", "input": {"order_id": "ORD-555"}}
+                ]
+            },
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Found the order. Processing your refund now."},
+                    {"type": "tool_use", "id": "call_003",
+                     "name": "process_refund", "input": {"order_id": "ORD-555", "amount": 50}}
+                ]
+            },
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "text", "text": "Done! Your $50 refund for order ORD-555 has been processed. "
+                     "It should appear on your statement within 3-5 business days."}
+                ]
+            }
+        ]
+
+    elif "jane@email.com" in user_message and "$750" in user_message:
+        # Test 2: High-value refund — verify -> lookup -> refund BLOCKED -> escalate
+        return [
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Let me verify your account first."},
+                    {"type": "tool_use", "id": "call_010",
+                     "name": "get_customer", "input": {"email": "jane@email.com"}}
+                ]
+            },
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Account verified. Looking up the order."},
+                    {"type": "tool_use", "id": "call_011",
+                     "name": "lookup_order", "input": {"order_id": "ORD-555"}}
+                ]
+            },
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Processing your refund request."},
+                    {"type": "tool_use", "id": "call_012",
+                     "name": "process_refund", "input": {"order_id": "ORD-555", "amount": 750}}
+                ]
+            },
+            {
+                # After the gate blocks the $750 refund, Claude escalates
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "This refund exceeds our auto-approval limit. Let me escalate."},
+                    {"type": "tool_use", "id": "call_013",
+                     "name": "escalate_to_human", "input": {
+                         "customer_id": "CUST-001",
+                         "summary": "Customer requests $750 refund for ORD-555. Exceeds $500 limit.",
+                         "root_cause": "Refund amount exceeds policy threshold",
+                         "recommended_action": "Manager review for approval"
+                     }}
+                ]
+            },
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "text", "text": "Your refund of $750 requires manager approval. "
+                     "I've escalated your case (ticket TKT-9999). You'll hear back within 24 hours."}
+                ]
+            }
+        ]
+
+    else:
+        # Test 3: Immediate escalation — no investigation needed
+        return [
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "I understand you'd like to speak with a manager."},
+                    {"type": "tool_use", "id": "call_020",
+                     "name": "escalate_to_human", "input": {
+                         "summary": "Customer explicitly requested to speak with a manager.",
+                         "recommended_action": "Connect with human agent immediately"
+                     }}
+                ]
+            },
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "text", "text": "I've transferred you to a human agent (ticket TKT-9999). "
+                     "They'll be with you shortly."}
+                ]
+            }
+        ]
+
+
+# ── THE AGENTIC LOOP (identical to real API usage) ───────
+# In production, replace simulate_responses() with
+# client.messages.create() — the loop logic stays identical.
+
 def run_agent(user_message):
     global verified_customer_id
     verified_customer_id = None  # Reset gate for each session
     print(f"\n{'='*60}\nUSER: {user_message}\n{'='*60}\n")
-    messages = [{"role": "user", "content": user_message}]
-    system = """You are a customer support agent.
-ESCALATE when: customer explicitly requests human, policy gap, can't make progress, refund > $500.
-Always verify customer identity with get_customer before any other operations."""
 
-    while True:
-        response = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=1024,
-            system=system, tools=tools, messages=messages
-        )
-        print(f"    stop_reason: {response.stop_reason}")
-        if response.stop_reason == "end_turn":
-            text = "".join(b.text for b in response.content if hasattr(b, "text"))
+    messages = [{"role": "user", "content": user_message}]
+    responses = simulate_responses(user_message)
+    iteration = 0
+
+    for response in responses:
+        iteration += 1
+        print(f"--- Loop iteration {iteration} ---")
+
+        # Gates are enforced in execute_tool(), not in the loop
+        # The loop pattern is unchanged from real API usage
+        print(f"    stop_reason: {response['stop_reason']}")
+
+        if response["stop_reason"] == "end_turn":
+            text = " ".join(b["text"] for b in response["content"] if b.get("type") == "text")
             print(f"\nRESPONSE: {text}\n")
             return
-        elif response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            results = []
-            for b in response.content:
-                if b.type == "tool_use":
-                    print(f"    Tool: {b.name}({json.dumps(b.input)})")
-                    results.append({"type": "tool_result", "tool_use_id": b.id,
-                                    "content": execute_tool(b.name, b.input)})
-            messages.append({"role": "user", "content": results})
-        else:
-            break
+
+        elif response["stop_reason"] == "tool_use":
+            messages.append({"role": "assistant", "content": response["content"]})
+
+            tool_results = []
+            for block in response["content"]:
+                if block.get("type") == "tool_use":
+                    print(f"    Tool: {block['name']}({json.dumps(block['input'])})")
+                    result = execute_tool(block["name"], block["input"])
+                    print(f"    Result: {result[:80]}...")
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block["id"],
+                        "content": result
+                    })
+
+            messages.append({"role": "user", "content": tool_results})
+
 
 if __name__ == "__main__":
+    # Test 1: Normal refund — all gates pass
     run_agent("I'm jane@email.com, I want a $50 refund for order ORD-555")
+
+    # Test 2: High-value refund — $500 policy gate blocks, triggers escalation
     run_agent("I'm jane@email.com, I want a $750 refund for order ORD-555")
+
+    # Test 3: Immediate escalation — customer requests human agent
     run_agent("I want to speak to a manager right now")
+
+    print("="*60)
+    print("KEY EXAM CONCEPTS:")
+    print("  - Programmatic gates block tools until prerequisites complete")
+    print("  - Gates are in execute_tool(), NOT in the loop logic")
+    print("  - Policy violations return isError + errorCategory")
+    print("  - Escalation includes structured handoff (customer_id, summary, root_cause)")
+    print("  - Prompt-only enforcement is probabilistic — gates are deterministic")
+    print("="*60)
 ```
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
-```
-Create the file lab-d1-agentic-arch/prerequisite_gate.py with the code above and run it
+```bash
+python lab-d1-agentic-arch/prerequisite_gate.py
 ```
 
 **What you should see:**
-- Test 1: get_customer ✓ → lookup_order ✓ → process_refund($50) ✓
-- Test 2: get_customer ✓ → lookup_order ✓ → process_refund($750) ✗ → escalate_to_human
+- Test 1: get_customer -> lookup_order -> process_refund($50) -- all gates pass
+- Test 2: get_customer -> lookup_order -> process_refund($750) BLOCKED -> escalate_to_human
 - Test 3: escalate_to_human immediately (no investigation)
 
 **Why prompt-only enforcement fails:**
@@ -1305,9 +1440,9 @@ The exam tests: "Decomposing multi-concern customer requests into distinct items
 then investigating each in parallel using shared context before synthesizing a resolution."
 
 ```python
-import anthropic, json
+import json
 
-client = anthropic.Anthropic()
+# In production, replace simulated logic with client.messages.create() calls.
 
 def handle_multi_concern_request(customer_email: str, concerns: list) -> str:
     """
@@ -1738,18 +1873,45 @@ This is dynamic decomposition: each step generates the next steps based on findi
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ── PATTERN 1: PROMPT CHAINING (fixed sequential pipeline) ──
 # Best for: predictable multi-aspect reviews, known steps
-# Example: Code review → analyze each file → cross-file integration pass
+# Example: Code review -> analyze each file -> cross-file integration pass
+# In production, replace simulate_analysis() with client.messages.create()
+
+def simulate_per_file_analysis(filename, file_content):
+    """Simulates what Claude would return for a per-file code review."""
+    findings = {
+        "auth.py": {
+            "findings": [
+                {"line": 1, "issue": "Hardcoded secret comparison — use hashed token storage", "severity": "high"},
+                {"line": 1, "issue": "No token expiration check", "severity": "medium"}
+            ]
+        },
+        "api.py": {
+            "findings": [
+                {"line": 2, "issue": "No error handling if verify_token raises", "severity": "medium"},
+                {"line": 2, "issue": "req.token accessed without None check", "severity": "low"}
+            ]
+        }
+    }
+    return json.dumps(findings.get(filename, {"findings": []}))
+
+
+def simulate_cross_file_analysis(per_file_findings):
+    """Simulates what Claude would return for cross-file integration review."""
+    return json.dumps({
+        "integration_issues": [
+            {"files": ["auth.py", "api.py"], "issue": "api.py imports verify_token but doesn't handle its failure modes", "severity": "high"},
+            {"files": ["auth.py"], "issue": "Secret '123' is hardcoded — should use environment variable", "severity": "high"}
+        ]
+    })
+
 
 def prompt_chaining_code_review(files: dict) -> dict:
     """
-    Fixed pipeline: per-file analysis → cross-file integration pass.
+    Fixed pipeline: per-file analysis -> cross-file integration pass.
 
     WHY SPLIT: "Lost in the middle" effect — reviewing 10 files in one
     prompt causes attention dilution. Dedicated passes per file are better.
@@ -1759,52 +1921,25 @@ def prompt_chaining_code_review(files: dict) -> dict:
     per_file_findings = {}
 
     # Step 1: Per-file local analysis
+    # In production: each iteration calls client.messages.create()
     for filename, content in files.items():
         print(f"\n  Step 1: Analyzing {filename}...")
 
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=512,
-            messages=[{
-                "role": "user",
-                "content": f"""Analyze this file for local issues only (bugs, security, logic errors).
-Do NOT comment on cross-file integration issues.
-File: {filename}
-Content: {content}
-
-Return JSON: {{"findings": [{{"line": N, "issue": "...", "severity": "high/medium/low"}}]}}"""
-            }]
-        )
-
-        text = response.content[0].text
-        # Parse findings (simplified)
-        per_file_findings[filename] = {"raw": text[:100]}
+        result = simulate_per_file_analysis(filename, content)
+        per_file_findings[filename] = json.loads(result)
         print(f"    Found local issues in {filename}")
 
     # Step 2: Cross-file integration pass
+    # In production: one more client.messages.create() call with all findings
     print(f"\n  Step 2: Cross-file integration pass...")
 
-    all_findings_summary = json.dumps(per_file_findings, indent=2)
-
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        messages=[{
-            "role": "user",
-            "content": f"""Review these per-file findings for cross-file integration issues:
-- Data flow inconsistencies between files
-- Interface contract violations
-- Circular dependencies
-
-Per-file findings:
-{all_findings_summary}
-
-Return JSON: {{"integration_issues": [{{"files": [...], "issue": "...", "severity": "..."}}]}}"""
-        }]
-    )
-
+    integration_result = simulate_cross_file_analysis(per_file_findings)
     print(f"    Cross-file analysis complete")
-    return {"per_file": per_file_findings, "integration": response.content[0].text[:100]}
+
+    result = {"per_file": per_file_findings, "integration": json.loads(integration_result)}
+    print(f"\n  FULL REVIEW RESULTS:")
+    print(json.dumps(result, indent=2))
+    return result
 
 
 # ── PATTERN 2: DYNAMIC ADAPTIVE DECOMPOSITION ──
@@ -1815,51 +1950,63 @@ def dynamic_decomposition_demo():
     """
     Dynamic decomposition: each step generates the next steps.
 
-    Phase 1: Map structure → discover what's there
-    Phase 2: Identify high-impact areas → based on Phase 1 findings
-    Phase 3: Create prioritized plan → based on Phase 2 findings
+    Phase 1: Map structure -> discover what's there
+    Phase 2: Identify high-impact areas -> based on Phase 1 findings
+    Phase 3: Create prioritized plan -> based on Phase 2 findings
 
     The plan adapts based on what's discovered at each step.
     """
     print("\n=== DYNAMIC DECOMPOSITION: Legacy Test Coverage ===")
 
     # Phase 1: Structure mapping
+    # In production: client.messages.create() to analyze codebase
     print("\n  Phase 1: Map codebase structure...")
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        messages=[{
-            "role": "user",
-            "content": """I have a legacy Python codebase.
-Plan Phase 1 of adding comprehensive tests: structure mapping.
-What questions should I answer first, before deciding what to test?
-Return 3-5 specific investigation questions as JSON array."""
-        }]
-    )
-    print(f"  Phase 1 questions: {response.content[0].text[:150]}...")
+    phase1_questions = [
+        "What are the main modules/directories and their file counts?",
+        "Which modules have entry points (main functions, API endpoints)?",
+        "What is the dependency graph between modules?",
+        "Which modules have existing test coverage?",
+        "Which modules have the most recent bug-fix commits?"
+    ]
+    print(f"  Phase 1 investigation questions:")
+    for q in phase1_questions:
+        print(f"    - {q}")
 
-    # Phase 2 would be based on Phase 1 answers
-    print("\n  Phase 2: Would investigate based on Phase 1 findings...")
-    print("  (Each phase generates the tasks for the next phase)")
+    # Phase 2: High-impact identification (based on Phase 1 answers)
+    # In production: another client.messages.create() with Phase 1 results
+    print("\n  Phase 2: Identify high-impact areas...")
+    high_impact = [
+        {"module": "payments/", "reason": "Most callers (12 imports), zero tests, processes real money"},
+        {"module": "auth/", "reason": "System boundary, hardcoded secrets found in Phase 1"},
+        {"module": "api/handlers/", "reason": "3 bug fixes in last month, no error handling tests"}
+    ]
+    print(f"  High-impact areas identified:")
+    for area in high_impact:
+        print(f"    - {area['module']}: {area['reason']}")
+
+    # Phase 3: Prioritized plan (adapts as dependencies discovered)
+    print("\n  Phase 3: Create prioritized test plan...")
+    print("  Plan adapts: after testing payments/, discovered it depends on")
+    print("  an untested currency conversion module -> re-prioritize that next")
 
     print("""
     COMPARISON:
 
     Prompt Chaining (fixed):
-    ✓ Predictable execution
-    ✓ Easy to test and validate
-    ✓ Good for code reviews, document processing
-    ✗ Brittle if steps don't apply to all inputs
+    + Predictable execution
+    + Easy to test and validate
+    + Good for code reviews, document processing
+    - Brittle if steps don't apply to all inputs
 
     Dynamic Decomposition:
-    ✓ Adapts to what's discovered
-    ✓ Good for open-ended investigation
-    ✓ Handles unknown structure
-    ✗ Harder to predict and test
-    ✗ Can diverge in unexpected directions
+    + Adapts to what's discovered
+    + Good for open-ended investigation
+    + Handles unknown structure
+    - Harder to predict and test
+    - Can diverge in unexpected directions
 
-    EXAM RULE: Predictable multi-aspect reviews → chaining.
-               Open-ended investigation → dynamic decomposition.
+    EXAM RULE: Predictable multi-aspect reviews -> chaining.
+               Open-ended investigation -> dynamic decomposition.
     """)
 
 if __name__ == "__main__":
@@ -1874,10 +2021,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
-```
-Create the file lab-d1-agentic-arch/task_decomposition.py with the code above and run it
+```bash
+python lab-d1-agentic-arch/task_decomposition.py
 ```
 
 **What you should see:**
@@ -2328,10 +2473,10 @@ Notice how Claude Code itself demonstrates the problem: vague, overlapping descr
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# No API key needed — this lab uses simulated responses to demonstrate the pattern.
+# In production, replace with client.messages.create()
 
 # ── BAD DESCRIPTIONS: Vague, overlapping ──────────────────
 bad_tools = [
@@ -2383,23 +2528,36 @@ good_tools = [
     }
 ]
 
+def simulate_tool_selection(tools_list, test_message):
+    """
+    Simulate Claude's tool selection based on description specificity.
+    With vague descriptions, the model picks semi-randomly.
+    With specific descriptions, it matches on input signals.
+    In production, replace with client.messages.create()
+    """
+    # BAD descriptions: both say "Analyzes ... and returns results" — no signal
+    if all("Analyzes" in t["description"] for t in tools_list):
+        return tools_list[0]["name"]  # Unreliable: always picks first tool
+
+    # GOOD descriptions: match on keywords in the message vs description
+    msg_lower = test_message.lower()
+    for tool in tools_list:
+        desc_lower = tool["description"].lower()
+        if ("html" in msg_lower or "search" in msg_lower or "web" in msg_lower) \
+                and "web" in desc_lower:
+            return tool["name"]
+        if ("invoice" in msg_lower or "pdf" in msg_lower) \
+                and "document" in desc_lower:
+            return tool["name"]
+    return tools_list[0]["name"]
+
 def test_tool_selection(tools_list, tools_name, test_message):
     """Test which tool Claude selects for a given input."""
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=256,
-        tools=tools_list,
-        tool_choice="any",
-        messages=[{"role": "user", "content": test_message}]
-    )
-
-    selected = None
-    for block in response.content:
-        if block.type == "tool_use":
-            selected = block.name
+    # In production, replace with client.messages.create()
+    selected = simulate_tool_selection(tools_list, test_message)
 
     print(f"  [{tools_name}] Message: '{test_message[:50]}...'")
-    print(f"  → Selected: {selected}\n")
+    print(f"  -> Selected: {selected}\n")
     return selected
 
 if __name__ == "__main__":
@@ -2485,13 +2643,13 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Ask Claude Code to create and run this file (no API key needed):
 
 > "Create the file `lab-d2-tool-design/tool_descriptions.py` with the code above and run it."
 
 **What you should see:**
-- For each of 3 test messages, both BAD and GOOD description tool selections are printed, showing which tool Claude picked
-- BAD descriptions produce inconsistent or wrong selections (e.g., both queries route to the same vague tool), while GOOD descriptions correctly route web content to `extract_web_results` and documents to `extract_document_data`
+- For each of 3 test messages, both BAD and GOOD description tool selections are printed, showing which tool was selected
+- BAD descriptions produce inconsistent or wrong selections (e.g., all queries route to the same vague tool), while GOOD descriptions correctly route web content to `extract_web_results` and documents to `extract_document_data`
 - A "Tool Splitting Pattern" section showing how 1 generic `analyze_document` tool becomes 3 specific tools (`extract_data_points`, `summarize_content`, `verify_claim_against_source`), each with a clear contract
 
 ### The keyword-sensitive system prompt problem
@@ -2619,10 +2777,10 @@ Write your helper functions, then compare to the reference below.
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# No API key needed — this lab uses simulated responses to demonstrate the pattern.
+# In production, replace with client.messages.create()
 
 def make_transient_error(operation: str) -> dict:
     """Timeout/unavailability — the service might work if you try again."""
@@ -2704,6 +2862,25 @@ tools = [{
                      "required": ["email"]}
 }]
 
+def simulate_claude_interpretation(result: dict) -> str:
+    """
+    Simulate how Claude would interpret each structured error type.
+    In production, replace with client.messages.create()
+    """
+    if not result.get("isError") and result.get("results") is None:
+        return f"No customer found. {result.get('message', '')}"
+    cat = result.get("errorCategory", "")
+    if cat == "transient":
+        return f"The lookup timed out. Since this is a temporary issue, I can retry. {result.get('suggestion', '')}"
+    if cat == "validation":
+        return f"The input was invalid: {result.get('message')}. {result.get('fix_hint', '')}"
+    if cat == "business":
+        return result.get("customer_friendly_message", result.get("message", ""))
+    if cat == "permission":
+        return f"I don't have access to that resource. {result.get('message')}. This needs escalation."
+    # Success case
+    return f"Found customer: {result.get('name', 'Unknown')} (ID: {result.get('id', 'N/A')})"
+
 def run_error_test(email: str):
     """Show how Claude responds to each error type."""
     print(f"\n{'─'*50}")
@@ -2713,21 +2890,9 @@ def run_error_test(email: str):
     result = simulate_tool_call(email)
     print(f"Tool returns: {json.dumps(result)[:100]}")
 
-    # Now show Claude's interpretation
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=256,
-        messages=[
-            {"role": "user", "content": f"Look up customer {email}"},
-            {"role": "assistant", "content": [{"type": "tool_use", "id": "tu_001",
-                                               "name": "get_customer",
-                                               "input": {"email": email}}]},
-            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_001",
-                                          "content": json.dumps(result)}]}
-        ]
-    )
-
-    text = "".join(b.text for b in response.content if hasattr(b, "text"))
+    # Simulate Claude's interpretation of the structured error
+    # In production, replace with client.messages.create()
+    text = simulate_claude_interpretation(result)
     print(f"Claude says: {text[:150]}")
 
 if __name__ == "__main__":
@@ -2813,16 +2978,16 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Ask Claude Code to create and run this file (no API key needed):
 
 > "Create the file `lab-d2-tool-design/structured_errors.py` with the code above and run it."
 
 **What you should see:**
-- `timeout@test.com`: Claude suggests retrying or waiting (transient error)
-- `bad-email`: Claude explains the input was invalid (validation error)
-- `locked@test.com`: Claude gives a customer-friendly message (business error)
-- `restricted@test.com`: Claude explains it can't access the resource (permission error)
-- `nobody@test.com`: Claude says "no customer found" — NOT "an error occurred" (valid empty result)
+- `timeout@test.com`: Simulated Claude suggests retrying or waiting (transient error)
+- `bad-email`: Simulated Claude explains the input was invalid (validation error)
+- `locked@test.com`: Simulated Claude gives a customer-friendly message (business error)
+- `restricted@test.com`: Simulated Claude explains it can't access the resource (permission error)
+- `nobody@test.com`: Simulated Claude says "no customer found" — NOT "an error occurred" (valid empty result)
 
 **Exam connection (Sample Q8):** When a subagent times out, return structured error context — not generic "search unavailable."
 
@@ -2899,10 +3064,10 @@ Observe how Claude Code explains its own tool selection process. This directly i
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# No API key needed — this lab uses simulated responses to demonstrate the pattern.
+# In production, replace with client.messages.create()
 
 extraction_tools = [
     {
@@ -2924,39 +3089,25 @@ extraction_tools = [
 doc = "INVOICE #998 from Widget Co, dated June 1 2024. Items: Widget A $100, Widget B $200. Total: $300."
 
 def demo_tool_choice():
+    # In production, replace with client.messages.create()
+
     print("=== tool_choice: auto ===")
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=256,
-        tools=extraction_tools,
-        tool_choice={"type": "auto"},  # May return text OR call a tool
-        messages=[{"role": "user", "content": f"What do you think about this doc? {doc}"}]
-    )
-    print(f"stop_reason: {r.stop_reason}")
-    for b in r.content:
-        if b.type == "tool_use": print(f"Tool called: {b.name}")
-        if hasattr(b, "text"): print(f"Text returned: {b.text[:80]}")
+    # With "auto", Claude may return text OR call a tool — it decides
+    # Simulated: for an opinion question ("What do you think..."), Claude returns text
+    print(f"stop_reason: end_turn")
+    print(f"Text returned: This appears to be an invoice from Widget Co dated June 1 2024 for $300 total.")
 
     print("\n=== tool_choice: any ===")
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=256,
-        tools=extraction_tools,
-        tool_choice="any",  # MUST call a tool, can choose which
-        messages=[{"role": "user", "content": f"Process this document: {doc}"}]
-    )
-    print(f"stop_reason: {r.stop_reason}")
-    for b in r.content:
-        if b.type == "tool_use": print(f"Tool called: {b.name}")
+    # With "any", Claude MUST call a tool — guaranteed structured output
+    # Simulated: Claude is forced to pick a tool, chooses extract_metadata
+    print(f"stop_reason: tool_use")
+    print(f"Tool called: extract_metadata")
 
     print("\n=== tool_choice: forced (extract_metadata first) ===")
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=256,
-        tools=extraction_tools,
-        tool_choice={"type": "tool", "name": "extract_metadata"},  # MUST call this specific tool
-        messages=[{"role": "user", "content": f"Extract everything from: {doc}"}]
-    )
-    print(f"stop_reason: {r.stop_reason}")
-    for b in r.content:
-        if b.type == "tool_use": print(f"Tool called: {b.name} (forced)")
+    # With forced selection, Claude MUST call the specific named tool
+    # Simulated: Claude calls the exact tool specified
+    print(f"stop_reason: tool_use")
+    print(f"Tool called: extract_metadata (forced)")
 
 def demo_scoped_tool_access():
     print("\n\n=== Scoped Tool Access ===")
@@ -3057,14 +3208,14 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Ask Claude Code to create and run this file (no API key needed):
 
 > "Create the file `lab-d2-tool-design/tool_choice.py` with the code above and run it."
 
 **What you should see:**
-- `tool_choice: "auto"` → Claude may return text OR call a tool (stop_reason varies)
-- `tool_choice: "any"` → Claude ALWAYS calls a tool (stop_reason always = tool_use)
-- `tool_choice: forced` → Claude calls the SPECIFIC named tool (extract_metadata)
+- `tool_choice: "auto"` → Simulated: stop_reason = end_turn (text response, no tool call)
+- `tool_choice: "any"` → Simulated: stop_reason = tool_use (forced to call a tool)
+- `tool_choice: forced` → Simulated: stop_reason = tool_use, calls the SPECIFIC named tool (extract_metadata)
 - Scoped access printout shows 4 agent roles, each with 3-4 tools max
 - Constrained replacement shows fetch_url (generic) → load_document (scoped to approved domains)
 
@@ -4751,10 +4902,10 @@ Notice how the vague prompt produces inconsistent formatting, while the examples
 `lab-d3-claude-code/refinement_demo.py`:
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# No API key needed — this lab uses simulated responses to demonstrate the pattern.
+# In production, replace with client.messages.create()
 
 def demo_examples_vs_description():
     """
@@ -4783,21 +4934,17 @@ def demo_examples_vs_description():
 
     test_names = ["JONES, BOB", "dr. LISA PARK", "MCDONALD, RONALD"]
 
+    # Simulated: vague prompt produces INCONSISTENT results across runs
+    # In production, replace with client.messages.create()
     print("=== Vague instruction ===")
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=256,
-        messages=[{"role": "user",
-                   "content": vague_prompt.replace("$NAMES", str(test_names))}]
-    )
-    print(r.content[0].text[:200])
+    print("Here are the normalized names:\n- Jones, Bob\n- Dr. Lisa Park\n- McDonald, Ronald")
+    print("  ^ Notice: inconsistent formatting (comma kept? title case varies?)")
 
+    # Simulated: examples-based prompt produces CONSISTENT results matching the pattern
+    # In production, replace with client.messages.create()
     print("\n=== Examples-based instruction ===")
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=256,
-        messages=[{"role": "user",
-                   "content": examples_prompt.replace("$NAMES", str(test_names))}]
-    )
-    print(r.content[0].text[:200])
+    print('Applying the demonstrated pattern:\n- "JONES, BOB" -> "Bob Jones"\n- "dr. LISA PARK" -> "Dr. Lisa Park"\n- "MCDONALD, RONALD" -> "Ronald McDonald"')
+    print("  ^ Notice: consistent with the examples (Last, First -> First Last; titles preserved)")
 
 
 def demo_test_driven_iteration():
@@ -4831,20 +4978,20 @@ def demo_test_driven_iteration():
         ])
 
         print("Sharing test failures with Claude...")
-        r = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=512,
-            messages=[{
-                "role": "user",
-                "content": f"""My date normalization function has failing tests:
+        print(f"\n{failure_msg}\n")
 
-{failure_msg}
-
-The function currently does: return datetime.strptime(date_str, '%Y-%m-%d').strftime('%b %d, %Y')
-
-Fix the function to handle these cases. Return just the fixed Python function."""
-            }]
-        )
-        print(r.content[0].text[:300])
+        # Simulated: Claude returns a fixed function that handles null/empty
+        # In production, replace with client.messages.create()
+        print("Claude's fix:")
+        print("""def normalize_date(date_str):
+    if date_str is None or date_str.strip() == "":
+        return None
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(date_str, fmt).strftime('%b %d, %Y')
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognized date format: {date_str}")""")
 
 
 def demo_interview_pattern():
@@ -4854,17 +5001,20 @@ def demo_interview_pattern():
     """
     print("\n=== Interview Pattern ===")
 
-    r = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=512,
-        messages=[{
-            "role": "user",
-            "content": """I want you to implement a caching layer for my customer API calls.
-Before you start implementing, ask me 3-5 questions about requirements and constraints
-that will significantly affect the design. Do not implement anything yet."""
-        }]
-    )
+    # Simulated: Claude asks clarifying questions before implementing
+    # In production, replace with client.messages.create()
     print("Claude's questions:")
-    print(r.content[0].text[:400])
+    print("""Before implementing the caching layer, I have a few questions:
+
+1. **Cache invalidation**: Should the cache use TTL-based expiration, event-driven
+   invalidation (e.g., webhook on customer update), or manual invalidation?
+2. **Failure mode**: If the cache is unavailable, should the system fall through
+   to the API directly, or return an error?
+3. **Consistency**: Is it acceptable to serve stale data for a short period, or
+   do you need strong consistency guarantees?
+4. **Scale**: Is this a single-process in-memory cache, or do you need a
+   distributed cache (e.g., Redis) shared across multiple instances?
+5. **Scope**: Should all API calls be cached, or only specific endpoints?""")
 
     print("""
     Why the interview pattern matters:
@@ -4900,14 +5050,14 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Ask Claude Code to create and run this file (no API key needed):
 
 > "Create the file `lab-d3-claude-code/refinement_demo.py` with the code above and run it."
 
 **What you should see:**
-- "Vague instruction" output shows inconsistent name formatting, then "Examples-based instruction" output shows names consistently transformed (e.g., "JONES, BOB" becomes "Bob Jones")
-- A "Test-Driven Iteration Pattern" section where specific test failures (null input, empty string) are shared with Claude, and Claude returns a fixed Python function that handles those edge cases
-- An "Interview Pattern" section where Claude asks 3-5 clarifying questions about caching requirements (TTL, failure modes, consistency, scale) before implementing anything
+- "Vague instruction" output shows inconsistent name formatting (simulated), then "Examples-based instruction" output shows names consistently transformed (e.g., "JONES, BOB" becomes "Bob Jones")
+- A "Test-Driven Iteration Pattern" section where specific test failures (null input, empty string) are printed, followed by a simulated fixed Python function that handles those edge cases
+- An "Interview Pattern" section where simulated Claude asks 3-5 clarifying questions about caching requirements (TTL, failure modes, consistency, scale) before implementing anything
 - A "Multi-issue Message Strategy" summary explaining when to combine interacting issues vs send independent issues sequentially
 
 ## Check your understanding
@@ -5337,10 +5487,9 @@ First, we'll create code samples that are a mix of real issues and false-positiv
 The key: only 2 of 4 samples have real issues. A good prompt should flag those 2 and skip the rest.
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 # Test code samples — mix of real issues and false-positive-prone patterns
 CODE_SAMPLES = [
@@ -5419,24 +5568,34 @@ what the code actually does. An incomplete comment is NOT a flag.
 Return JSON: [{"issue": "...", "severity": "high/medium/low", "category": "bug/security/api_misuse"}]
 If no issues found, return: []"""
 
+# ── SIMULATED RESPONSES ──────────────────────────────────
+# In production, replace with client.messages.create()
+
+SIMULATED_VAGUE_RESPONSES = {
+    "sample1": [{"issue": "SQL injection via f-string", "severity": "high", "category": "security"}],
+    "sample2": [{"issue": "TODO comment indicates incomplete code", "severity": "low", "category": "style"},
+                {"issue": "Comment 'multiply by 2' is trivial", "severity": "low", "category": "style"}],
+    "sample3": [{"issue": "Docstring says 'local cache' but function uses cache.get() which may be remote",
+                 "severity": "low", "category": "documentation"}],
+    "sample4": [{"issue": "Comment could be more specific about what 'valid' means",
+                 "severity": "low", "category": "documentation"}],
+}
+
+SIMULATED_SPECIFIC_RESPONSES = {
+    "sample1": [{"issue": "SQL injection: user input interpolated into query via f-string",
+                 "severity": "high", "category": "security"}],
+    "sample2": [],  # Correctly skipped — TODO comment, style only
+    "sample3": [],  # Correctly skipped — docstring is accurate
+    "sample4": [],  # Correctly skipped — comment is accurate
+}
+
 def review_code(system_prompt, code_sample):
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        system=system_prompt,
-        messages=[{"role": "user",
-                   "content": f"Review this code:\n```python{code_sample['code']}```"}]
-    )
-    text = response.content[0].text.strip()
-    # Try to parse JSON from response
-    try:
-        start = text.find("[")
-        end = text.rfind("]") + 1
-        if start >= 0 and end > start:
-            return json.loads(text[start:end])
-    except:
-        pass
-    return text[:100]
+    # In production, replace with client.messages.create()
+    sample_id = code_sample["id"]
+    if system_prompt == vague_system:
+        return SIMULATED_VAGUE_RESPONSES.get(sample_id, [])
+    else:
+        return SIMULATED_SPECIFIC_RESPONSES.get(sample_id, [])
 ```
 
 ## Reference code
@@ -5509,10 +5668,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/explicit_criteria.py with the code above and run it.
+python lab-d4-prompt-eng/explicit_criteria.py
 ```
 
 **What you should see:**
@@ -5628,10 +5785,9 @@ Compare the consistency. The few-shot version produces structured, predictable o
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 # ── WITHOUT FEW-SHOT (inconsistent output format) ─────────
 no_shot_system = """You are a code review assistant.
@@ -5663,15 +5819,31 @@ The comment accurately describes the behavior. This is NOT a false positive.
 
 Now review the provided code using this exact format."""
 
-def review_code(system, code, label):
-    response = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=512,
-        system=system,
-        messages=[{"role": "user",
-                   "content": f"Review:\n```python\n{code}\n```"}]
-    )
+# ── SIMULATED RESPONSES ──────────────────────────────────
+# In production, replace with client.messages.create()
+# Shows how NO FEW-SHOT produces inconsistent formats while FEW-SHOT is structured
+
+SIMULATED_NO_SHOT = {
+    "login": "Security Issue: The login function uses string formatting in the SQL query which is vulnerable to SQL injection attacks. The user parameter is directly interpolated. Severity: HIGH. Fix: use parameterized queries.",
+    "or_pattern": "Potential issue: Using 'or' for default values can have unexpected behavior with falsy values like 0 or empty string. Consider using 'if value is None' instead.",
+    "get_count": "- The comment says 'active users' but the function returns len(items) which could be any items\n- Missing type hints\n- No docstring",
+}
+
+SIMULATED_FEW_SHOT = {
+    "login": '{"file": "auth.py", "line": 1, "severity": "high", "issue": "SQL injection: user input interpolated directly into query via f-string", "suggestion": "Use parameterized query: db.query(\'SELECT * FROM users WHERE user=?\', (user,))"}',
+    "or_pattern": '[]  (No issues — valid Python pattern, comment is accurate)',
+    "get_count": '{"file": "utils.py", "line": 1, "severity": "low", "issue": "Comment says \'active users\' but function returns len(items) — items may not be users", "suggestion": "Update comment to match actual behavior: \'# Returns number of items\'"}',
+}
+
+TEST_CASE_KEYS = ["login", "or_pattern", "get_count"]
+
+def review_code(system, code, label, key):
+    # In production, replace with client.messages.create()
     print(f"\n[{label}]")
-    print(response.content[0].text[:300])
+    if system == no_shot_system:
+        print(SIMULATED_NO_SHOT[key])
+    else:
+        print(SIMULATED_FEW_SHOT[key])
 
 if __name__ == "__main__":
     test_cases = [
@@ -5680,10 +5852,10 @@ if __name__ == "__main__":
         'def get_count(): return len(items)  # Returns number of active users',
     ]
 
-    for code in test_cases:
+    for code, key in zip(test_cases, TEST_CASE_KEYS):
         print(f"\nCode: {code[:70]}...")
-        review_code(no_shot_system, code, "NO FEW-SHOT (inconsistent)")
-        review_code(few_shot_system, code, "FEW-SHOT (consistent)")
+        review_code(no_shot_system, code, "NO FEW-SHOT (inconsistent)", key)
+        review_code(few_shot_system, code, "FEW-SHOT (consistent)", key)
 
     print("\n\n=== Few-Shot Design Principles ===")
     print("""
@@ -5707,16 +5879,14 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/few_shot.py with the code above and run it.
+python lab-d4-prompt-eng/few_shot.py
 ```
 
 **What you should see:**
 - For each of 3 code snippets (SQL injection, `or` pattern, misleading comment), both NO FEW-SHOT and FEW-SHOT reviews are printed side by side
-- The NO FEW-SHOT reviews produce inconsistent formats and may over-flag safe code, while the FEW-SHOT reviews use the exact `[severity] description (evidence)` format from the examples
-- The few-shot reviewer correctly returns empty findings for the safe `or` pattern (Example 3 calibration), while the no-shot reviewer may flag it unnecessarily
+- The NO FEW-SHOT reviews produce inconsistent formats (prose, bullets, varying structure), while the FEW-SHOT reviews use the exact JSON format from the examples
+- The few-shot reviewer correctly returns empty findings for the safe `or` pattern (Example 3 calibration), while the no-shot reviewer flags it unnecessarily
 - A "Few-Shot Design Principles" summary explaining why 2-4 targeted examples beat verbose instructions
 
 ## Check your understanding
@@ -5819,10 +5989,9 @@ Notice how Claude handles the incomplete invoice. Without nullable fields in a s
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 # ── EXTRACTION TOOL DEFINITION ────────────────────────────
 # Tool use + JSON schema = guaranteed schema compliance
@@ -5888,31 +6057,57 @@ extraction_tool = {
 
 def extract_invoice(document_text: str) -> dict:
     """Extract invoice data using tool_use for guaranteed schema compliance."""
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        tools=[extraction_tool],
-        # Forced tool selection: MUST call extract_invoice
-        tool_choice={"type": "tool", "name": "extract_invoice"},
-        messages=[{
-            "role": "user",
-            "content": (
-                "Extract all invoice data from this document.\n"
-                "Format rules:\n"
-                "- Dates: ISO format (YYYY-MM-DD)\n"
-                "- Amounts: numbers without currency symbols\n"
-                "- Missing fields: null (never fabricate values)\n"
-                "- Calculate sum of line items for conflict detection\n\n"
-                f"Document:\n{document_text}"
-            )
-        }]
-    )
+    # In production, replace with client.messages.create() using:
+    #   tools=[extraction_tool],
+    #   tool_choice={"type": "tool", "name": "extract_invoice"}
+    # The tool_use response block.input will conform to the schema above.
 
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "extract_invoice":
-            return block.input
-
-    return None
+    # Simulated tool_use responses for each test document
+    if "INV-2024-042" in document_text:
+        return {
+            "invoice_number": "INV-2024-042",
+            "vendor_name": "Acme Supply Co.",
+            "invoice_date": "2024-03-15",
+            "total_amount": 484.99,
+            "line_items": [
+                {"description": "Office Supplies", "amount": 250.00},
+                {"description": "Printer Paper", "amount": 89.99},
+                {"description": "Ink Cartridges", "amount": 145.00}
+            ],
+            "payment_status": "unpaid",
+            "payment_status_detail": None,
+            "calculated_total": 484.99,
+            "conflict_detected": False
+        }
+    elif "INV-2024-099" in document_text:
+        return {
+            "invoice_number": "INV-2024-099",
+            "vendor_name": "Widget Corp",
+            "invoice_date": None,
+            "total_amount": 500.00,
+            "line_items": [
+                {"description": "Widget A", "amount": 100.00},
+                {"description": "Widget B", "amount": 200.00},
+                {"description": "Widget C", "amount": 150.00}
+            ],
+            "payment_status": "unclear",
+            "payment_status_detail": None,
+            "calculated_total": 450.00,
+            "conflict_detected": True
+        }
+    else:
+        # Incomplete invoice — nullable fields return null
+        return {
+            "invoice_number": "UNKNOWN",
+            "vendor_name": "Unknown Supplier",
+            "invoice_date": None,
+            "total_amount": None,
+            "line_items": [],
+            "payment_status": "unclear",
+            "payment_status_detail": None,
+            "calculated_total": None,
+            "conflict_detected": False
+        }
 
 # Test documents
 GOOD_INVOICE = """
@@ -6021,19 +6216,16 @@ if __name__ == "__main__":
     # Use tool_choice "any" — model picks the right schema
     unknown_doc = "INVOICE #INV-2024-042\nVendor: Acme Supply\nItems: Paper $50\nTOTAL: $50.00"
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        tools=[extraction_tool, receipt_tool],  # Two schemas available
-        tool_choice="any",  # Model MUST call a tool, picks which one
-        messages=[{"role": "user", "content": f"Extract data from this document:\n\n{unknown_doc}"}]
-    )
-
-    for block in response.content:
-        if block.type == "tool_use":
-            print(f"  Model chose: {block.name}")
-            print(f"  (Correctly selected invoice schema over receipt schema)")
-            print(f"  Data: {json.dumps(block.input, indent=2)[:200]}")
+    # In production, use client.messages.create() with:
+    #   tools=[extraction_tool, receipt_tool], tool_choice="any"
+    # Simulated: model correctly picks extract_invoice over extract_receipt
+    simulated_name = "extract_invoice"
+    simulated_data = {"invoice_number": "INV-2024-042", "vendor_name": "Acme Supply",
+                      "line_items": [{"description": "Paper", "amount": 50.00}],
+                      "total_amount": 50.00, "payment_status": "unclear", "conflict_detected": False}
+    print(f"  Model chose: {simulated_name}")
+    print(f"  (Correctly selected invoice schema over receipt schema)")
+    print(f"  Data: {json.dumps(simulated_data, indent=2)[:200]}")
 
     print("""
     When to use tool_choice "any":
@@ -6045,10 +6237,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/structured_output.py with the code above and run it.
+python lab-d4-prompt-eng/structured_output.py
 ```
 
 **What you should see:**
@@ -6140,10 +6330,9 @@ First, we define the tool schema and a validator that catches semantic errors
 (things JSON schema alone can't catch — like line items not summing to total).
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 extraction_tool = {
     "name": "extract_invoice",
@@ -6202,49 +6391,67 @@ def extract_with_retry(doc_text: str, max_retries: int = 2) -> dict:
     KEY PATTERN: Each retry includes the SPECIFIC validation errors.
     "Your previous extraction had these errors: [specific errors]"
     This is far more effective than vague retries.
+    In production, replace simulated responses with client.messages.create()
+    using tools=[extraction_tool], tool_choice={"type": "tool", "name": "extract_invoice"}
     """
-    messages = [{"role": "user",
-                 "content": f"Extract invoice data from:\n\n{doc_text}"}]
+    # Simulated extraction responses per attempt
+    if "INV-999" in doc_text:
+        # Conflicting totals -- attempt 1 misses conflict, attempt 2 corrects it
+        attempt_responses = [
+            {  # Attempt 1: misses the conflict
+                "invoice_number": "INV-999",
+                "vendor_name": "Widget Co",
+                "total_amount": 350.00,
+                "line_items": [
+                    {"description": "Widget A", "amount": 100.00},
+                    {"description": "Widget B", "amount": 200.00}
+                ],
+                "calculated_total": 300.00,
+                "conflict_detected": False  # Wrong -- should be True
+            },
+            {  # Attempt 2: corrected after specific error feedback
+                "invoice_number": "INV-999",
+                "vendor_name": "Widget Co",
+                "total_amount": 350.00,
+                "line_items": [
+                    {"description": "Widget A", "amount": 100.00},
+                    {"description": "Widget B", "amount": 200.00}
+                ],
+                "calculated_total": 300.00,
+                "conflict_detected": True  # Corrected
+            }
+        ]
+    else:
+        # Missing data doc -- retries won't help (data isn't there)
+        attempt_responses = [
+            {
+                "invoice_number": "INV-888",
+                "vendor_name": "Supply Plus",
+                "total_amount": None,  # Correctly null -- data isn't in document
+                "line_items": [],
+                "calculated_total": None,
+                "conflict_detected": False
+            }
+        ]
 
     for attempt in range(max_retries + 1):
         print(f"\n  Attempt {attempt + 1}/{max_retries + 1}...")
 
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            tools=[extraction_tool],
-            tool_choice={"type": "tool", "name": "extract_invoice"},
-            messages=messages
-        )
-
-        data = None
-        for block in response.content:
-            if block.type == "tool_use":
-                data = block.input
-
-        if not data:
-            print("  No extraction returned")
-            continue
+        # In production, this would be client.messages.create()
+        data = attempt_responses[min(attempt, len(attempt_responses) - 1)]
 
         errors = validate_extraction(data)
 
         if not errors:
-            print(f"  ✓ Valid on attempt {attempt + 1}")
+            print(f"  Valid on attempt {attempt + 1}")
             return data
 
-        print(f"  ✗ Errors: {errors}")
+        print(f"  Errors: {errors}")
 
         if attempt < max_retries:
-            # Retry with SPECIFIC error feedback
+            # In production, retry with SPECIFIC error feedback:
             error_list = "\n".join(f"- {e}" for e in errors)
-            messages = [{
-                "role": "user",
-                "content": (
-                    f"Extract invoice data from:\n\n{doc_text}\n\n"
-                    f"Your previous extraction had these specific errors:\n{error_list}\n\n"
-                    f"Re-examine the document carefully and correct these issues."
-                )
-            }]
+            print(f"  Retrying with feedback:\n{error_list}")
 
     print(f"  Returning best attempt after {max_retries + 1} tries")
     return data
@@ -6305,10 +6512,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/retry_loop.py with the code above and run it.
+python lab-d4-prompt-eng/retry_loop.py
 ```
 
 **What you should see:**
@@ -6539,11 +6744,10 @@ Claude will correctly identify that only workflow #2 (overnight report) is a bat
 ## Reference code
 
 ```python
-import anthropic
 import json
 import time
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 # ── BATCH API BASICS ───────────────────────────────────────
 # Message Batches API:
@@ -6579,66 +6783,51 @@ def create_batch_requests(documents: list) -> list:
 
 def submit_batch(documents: list) -> str:
     """Submit a batch and return the batch ID."""
+    # In production, replace with client.beta.messages.batches.create(requests=requests)
     requests = create_batch_requests(documents)
-
     print(f"Submitting batch of {len(requests)} requests...")
-    batch = client.beta.messages.batches.create(requests=requests)
-
-    print(f"Batch ID: {batch.id}")
-    print(f"Status: {batch.processing_status}")
-    return batch.id
+    fake_id = "batch_sim_" + str(len(requests))
+    print(f"Batch ID: {fake_id}")
+    print(f"Status: in_progress")
+    return fake_id
 
 
 def poll_batch(batch_id: str, max_wait_seconds: int = 300) -> dict:
     """
     Poll until batch completes.
-    In production: use a webhook or scheduled check — don't poll in a tight loop.
+    In production: use a webhook or scheduled check -- don't poll in a tight loop.
+    In production, replace with client.beta.messages.batches.retrieve(batch_id)
     """
-    print(f"\nPolling batch {batch_id}...")
-    start = time.time()
-
-    while time.time() - start < max_wait_seconds:
-        batch = client.beta.messages.batches.retrieve(batch_id)
-        status = batch.processing_status
-
-        print(f"  Status: {status} | "
-              f"Succeeded: {batch.request_counts.succeeded} | "
-              f"Errored: {batch.request_counts.errored} | "
-              f"Processing: {batch.request_counts.processing}")
-
-        if status == "ended":
-            return batch
-
-        time.sleep(5)  # Wait 5 seconds before next check
-
-    print("Timeout waiting for batch")
-    return None
+    print(f"\nPolling batch {batch_id} (simulated)...")
+    # Simulated polling sequence
+    print(f"  Status: in_progress | Succeeded: 0 | Errored: 0 | Processing: 3")
+    time.sleep(1)
+    print(f"  Status: in_progress | Succeeded: 1 | Errored: 0 | Processing: 2")
+    time.sleep(1)
+    print(f"  Status: ended | Succeeded: 2 | Errored: 1 | Processing: 0")
+    return {"processing_status": "ended", "request_counts": {"succeeded": 2, "errored": 1, "processing": 0}}
 
 
 def process_batch_results(batch_id: str) -> dict:
     """
     Process results and correlate via custom_id.
     Handle failures: resubmit only failed documents.
+    In production, replace with client.beta.messages.batches.results(batch_id)
     """
-    results = {}
-    failures = []
+    # Simulated batch results
+    results = {
+        "doc-001": {"status": "success", "data": {"vendor": "Acme Corp", "total": 500.00}},
+        "doc-002": {"status": "success", "data": {"vendor": "Widget Co", "total": 1200.00}},
+        "doc-003": {"status": "error", "error": "context_length_exceeded"}
+    }
+    failures = ["doc-003"]
 
-    for result in client.beta.messages.batches.results(batch_id):
-        custom_id = result.custom_id
-
-        if result.result.type == "succeeded":
-            text = result.result.message.content[0].text
-            try:
-                data = json.loads(text[text.find("{"):text.rfind("}")+1])
-                results[custom_id] = {"status": "success", "data": data}
-            except:
-                results[custom_id] = {"status": "parse_error", "raw": text[:100]}
-                failures.append(custom_id)
-
-        elif result.result.type == "errored":
-            error = result.result.error
-            results[custom_id] = {"status": "error", "error": str(error)}
-            failures.append(custom_id)
+    print(f"Processing results for batch {batch_id}:")
+    for cid, res in results.items():
+        if res["status"] == "success":
+            print(f"  custom_id={cid}: {res['data']}")
+        else:
+            print(f"  custom_id={cid}: FAILED - {res['error']}")
 
     return results, failures
 
@@ -6727,10 +6916,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/batch_processing.py with the code above and run it.
+python lab-d4-prompt-eng/batch_processing.py
 ```
 
 **What you should see:**
@@ -6810,10 +6997,9 @@ This demonstrates the self-review limitation: the same session that wrote the co
 ## Reference code
 
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
+# In production, replace with client.messages.create()
 
 # ── WHY SELF-REVIEW FAILS ──────────────────────────────────
 # When the same Claude session generates code and then reviews it,
@@ -6823,13 +7009,15 @@ client = anthropic.Anthropic()
 
 def generate_code(prompt: str) -> str:
     """Generate code (simulates Claude generating an implementation)."""
+    # In production, replace with client.messages.create()
     print("\n[GENERATOR INSTANCE] Generating code...")
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.content[0].text
+    # Simulated generated code with a subtle bug (off-by-one in range)
+    return """def get_customer(email: str, accounts: dict) -> dict:
+    if not email or '@' not in email:
+        raise ValueError("Invalid email format")
+    # Bug: doesn't handle case where email exists but account is None
+    return accounts[email]  # KeyError if email not found
+"""
 
 
 def independent_review(code: str, review_criteria: str) -> dict:
@@ -6838,32 +7026,20 @@ def independent_review(code: str, review_criteria: str) -> dict:
 
     This is a fresh API call with no prior context.
     The reviewer has no attachment to the design decisions in the code.
+    In production, replace with client.messages.create()
     """
     print("\n[INDEPENDENT REVIEWER] Reviewing without generator context...")
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        system="""You are a code reviewer. You have not seen the requirements or
-implementation decisions for this code. Review it with fresh eyes.
-
-For each finding, report your confidence (0.0-1.0) alongside the issue.
-Low confidence findings should be flagged for human review.""",
-        messages=[{
-            "role": "user",
-            "content": f"{review_criteria}\n\nCode to review:\n```python\n{code}\n```\n\nReturn JSON array of findings."
-        }]
-    )
-    text = response.content[0].text
-    # Parse findings
-    try:
-        start = text.find("[")
-        end = text.rfind("]") + 1
-        if start >= 0 and end > start:
-            findings = json.loads(text[start:end])
-            return {"findings": findings, "raw": text[:200]}
-    except:
-        pass
-    return {"findings": [], "raw": text[:200]}
+    # Simulated independent review findings
+    # The independent reviewer catches issues the generator missed
+    findings = [
+        {"issue": "KeyError if email not in accounts dict -- no .get() or try/except",
+         "severity": "high", "confidence": 0.95, "line": 5},
+        {"issue": "No validation that account value is not None after lookup",
+         "severity": "medium", "confidence": 0.80, "line": 5},
+        {"issue": "Email validation is minimal -- does not check domain or format beyond @",
+         "severity": "low", "confidence": 0.60, "line": 2}
+    ]
+    return {"findings": findings, "raw": json.dumps(findings)[:200]}
 
 
 def multi_pass_large_review(files: dict) -> dict:
@@ -6877,57 +7053,39 @@ def multi_pass_large_review(files: dict) -> dict:
     - "Lost in the middle" effect: reviewing 10 files in one prompt
       causes attention dilution and missed issues
     - Cross-file issues need focused attention separate from local issues
+
+    In production, replace with client.messages.create() for each pass
     """
     print("\n[MULTI-PASS REVIEW]")
 
-    # Pass 1: Per-file local analysis
+    # Pass 1: Per-file local analysis (simulated)
     per_file_results = {}
+    simulated_local_findings = {
+        "auth.py": [
+            {"line": 2, "issue": "Hardcoded string comparison for admin check", "severity": "high", "confidence": 0.95},
+            {"line": 3, "issue": "No error handling for db.get() failure", "severity": "medium", "confidence": 0.85}
+        ],
+        "api.py": [
+            {"line": 3, "issue": "verify() return value not checked -- request proceeds even if auth fails", "severity": "high", "confidence": 0.92},
+            {"line": 4, "issue": "KeyError if req.user_id not in data dict", "severity": "medium", "confidence": 0.88}
+        ]
+    }
     for filename, content in files.items():
         print(f"  Pass 1: Local analysis of {filename}...")
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=512,
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Review ONLY for local issues in {filename} "
-                    f"(bugs, security within this file — NOT cross-file concerns):\n"
-                    f"```python\n{content}\n```\n"
-                    f"Return JSON: [{{\"line\": N, \"issue\": \"...\", "
-                    f"\"severity\": \"high/medium/low\", \"confidence\": 0.0-1.0}}]"
-                )
-            }]
-        )
-        text = response.content[0].text
-        try:
-            s = text.find("["); e = text.rfind("]")+1
-            per_file_results[filename] = json.loads(text[s:e]) if s>=0 and e>s else []
-        except:
-            per_file_results[filename] = []
+        # In production, replace with client.messages.create()
+        per_file_results[filename] = simulated_local_findings.get(filename, [])
 
-    # Pass 2: Cross-file integration pass
+    # Pass 2: Cross-file integration pass (simulated)
     print("  Pass 2: Cross-file integration analysis...")
-    summary = json.dumps(per_file_results, indent=2)
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Review for CROSS-FILE integration issues only:\n"
-                f"- Interface contract violations between files\n"
-                f"- Data flow inconsistencies\n"
-                f"- Missing error propagation across module boundaries\n\n"
-                f"Per-file findings:\n{summary}\n\n"
-                f"Files:\n" + "\n\n".join(f"# {fn}\n{fc}" for fn, fc in files.items()) +
-                f"\n\nReturn JSON: [{{\"files\": [\"...\"], \"issue\": \"...\", \"severity\": \"...\"}}]"
-            )
-        }]
-    )
+    # In production, replace with client.messages.create()
+    integration_text = json.dumps([
+        {"files": ["auth.py", "api.py"], "issue": "verify() in api.py ignores return value from auth.py -- unauthenticated requests proceed", "severity": "high"},
+        {"files": ["auth.py", "api.py"], "issue": "No error propagation -- db.get() failure in auth.py not caught by api.py caller", "severity": "medium"}
+    ])
 
     return {
         "per_file": per_file_results,
-        "integration": response.content[0].text[:200]
+        "integration": integration_text[:200]
     }
 
 
@@ -7008,10 +7166,8 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
-
 ```
-> Create the file lab-d4-prompt-eng/multi_instance_review.py with the code above and run it.
+python lab-d4-prompt-eng/multi_instance_review.py
 ```
 
 **What you should see:**
@@ -7169,10 +7325,7 @@ This demonstrates two key patterns:
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ── PATTERN 1: CASE FACTS BLOCK ───────────────────────────
 # Problem: Progressive summarization loses exact numbers, dates, amounts.
@@ -7325,10 +7478,10 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Create the file and run it:
 
-```
-> Create the file lab-d5-context-reliability/context_management.py with the code above and run it.
+```bash
+python lab-d5-context-reliability/context_management.py
 ```
 
 **What you should see:**
@@ -7419,10 +7572,7 @@ Notice how explicit criteria produce consistent, correct escalation decisions:
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ── ESCALATION CRITERIA WITH FEW-SHOT EXAMPLES ────────────
 # Vague escalation criteria produce unreliable behavior.
@@ -7527,55 +7677,105 @@ def execute_tool(name, input_data):
         return json.dumps({"escalated": True, "ticket_id": "TKT-1234"})
     return json.dumps({"error": f"Unknown: {name}"})
 
-def run_escalation_test(scenario: str, message: str):
+
+# ── SIMULATED RESPONSES ───────────────────────────────────
+# In production, replace with client.messages.create()
+# Each scenario shows the expected agent behavior.
+
+SIMULATED_SCENARIOS = {
+    "explicit_request": {
+        "steps": [
+            {
+                "stop_reason": "tool_use",
+                "tool_calls": [{"name": "escalate_to_human",
+                                "input": {"reason": "explicit_customer_request",
+                                          "summary": "Customer explicitly requested to speak to a manager",
+                                          "root_cause": "Customer preference for human agent",
+                                          "recommended_action": "Connect to available manager immediately"}}]
+            }
+        ],
+        "final_text": "I've escalated your case to a manager. You'll be connected shortly. Your ticket ID is TKT-1234."
+    },
+    "policy_gap": {
+        "steps": [
+            {
+                "stop_reason": "tool_use",
+                "tool_calls": [{"name": "get_customer",
+                                "input": {"email": "jane@email.com"}}]
+            },
+            {
+                "stop_reason": "tool_use",
+                "tool_calls": [{"name": "escalate_to_human",
+                                "input": {"reason": "policy_gap",
+                                          "customer_id": "CUST-001",
+                                          "summary": "Customer requests competitor price match; our policy only covers own-site adjustments",
+                                          "root_cause": "Policy gap — competitor price matching not covered",
+                                          "recommended_action": "Manager to evaluate competitor price match request"}}]
+            }
+        ],
+        "final_text": "I understand you found a lower price at Amazon. Our standard policy covers our own site price adjustments, but competitor matching requires manager approval. I've escalated this for you — ticket TKT-1234."
+    },
+    "frustrated_resolvable": {
+        "steps": [
+            {
+                "stop_reason": "tool_use",
+                "tool_calls": [{"name": "get_customer",
+                                "input": {"email": "jane@email.com"}}]
+            }
+        ],
+        "final_text": "I completely understand your frustration, and I'm sorry for the wait. I've pulled up your account. Could you share your order number so I can look into the status right away and get this resolved for you?"
+    },
+    "multiple_matches": {
+        "steps": [
+            {
+                "stop_reason": "tool_use",
+                "tool_calls": [{"name": "get_customer",
+                                "input": {"name": "John Smith"}}]
+            }
+        ],
+        "final_text": "I found multiple accounts under the name John Smith. To make sure I pull up the right account, could you provide your email address or order number?"
+    },
+}
+
+def run_escalation_test(scenario_key: str, scenario: str, message: str):
     print(f"\n{'='*60}")
     print(f"SCENARIO: {scenario}")
     print(f"MESSAGE:  {message}")
     print(f"{'='*60}")
 
-    messages = [{"role": "user", "content": message}]
+    sim = SIMULATED_SCENARIOS[scenario_key]
 
-    while True:
-        r = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=512,
-            system=SYSTEM_PROMPT, tools=tools, messages=messages
-        )
-        print(f"  stop_reason: {r.stop_reason}")
+    for step in sim["steps"]:
+        print(f"  stop_reason: {step['stop_reason']}")
+        for tc in step["tool_calls"]:
+            print(f"  Tool: {tc['name']}")
+            execute_tool(tc["name"], tc["input"])
 
-        if r.stop_reason == "end_turn":
-            text = "".join(b.text for b in r.content if hasattr(b, "text"))
-            print(f"  Response: {text[:200]}")
-            break
-        elif r.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": r.content})
-            results = []
-            for b in r.content:
-                if b.type == "tool_use":
-                    print(f"  Tool: {b.name}")
-                    results.append({"type": "tool_result", "tool_use_id": b.id,
-                                    "content": execute_tool(b.name, b.input)})
-            messages.append({"role": "user", "content": results})
-        else:
-            break
+    print(f"  stop_reason: end_turn")
+    print(f"  Response: {sim['final_text'][:200]}")
 
 
 if __name__ == "__main__":
     run_escalation_test(
+        "explicit_request",
         "Explicit human request — must escalate immediately",
         "I want to speak to a manager right now, not a chatbot."
     )
 
     run_escalation_test(
+        "policy_gap",
         "Policy gap — competitor price match",
         "I'm jane@email.com. I bought the same item at Amazon for $20 less. Will you match it?"
     )
 
     run_escalation_test(
+        "frustrated_resolvable",
         "Frustrated but within capability — should offer to help",
         "I'm jane@email.com. I'm really frustrated! I've been waiting 3 days for my order."
     )
 
     run_escalation_test(
+        "multiple_matches",
         "Multiple matches — should ask for more info",
         "I'm John Smith and I have a problem with my account."
     )
@@ -7601,10 +7801,10 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Create the file and run it:
 
-```
-> Create the file lab-d5-context-reliability/escalation_patterns.py with the code above and run it.
+```bash
+python lab-d5-context-reliability/escalation_patterns.py
 ```
 
 **What you should see:**
@@ -8316,11 +8516,8 @@ This demonstrates two key lessons:
 ## Reference code
 
 ```python
-import anthropic
 import json
 import random
-
-client = anthropic.Anthropic()
 
 # ── THE PROBLEM: AGGREGATE METRICS MASK SEGMENT FAILURES ──
 # "97% overall accuracy" sounds great.
@@ -8352,11 +8549,49 @@ def demonstrate_segment_analysis():
     print(f"Must validate accuracy by segment BEFORE reducing human review.")
 
 
+# ── SIMULATED EXTRACTION RESPONSES ────────────────────────
+# In production, replace with client.messages.create()
+# using tool_choice to force structured extraction output.
+
+SIMULATED_EXTRACTIONS = {
+    "INVOICE #001": {
+        "vendor_name": "Acme Corp",
+        "vendor_confidence": 0.98,
+        "total_amount": 500.00,
+        "total_confidence": 0.99,
+        "invoice_date": "2024-01-15",
+        "date_confidence": 0.97,
+        "ambiguous_source": False
+    },
+    "inv from acme": {
+        "vendor_name": "Acme",
+        "vendor_confidence": 0.72,
+        "total_amount": 500,
+        "total_confidence": 0.45,
+        "invoice_date": None,
+        "date_confidence": 0.20,
+        "ambiguous_source": False
+    },
+    "INVOICE\nVendor: Widget Corp": {
+        "vendor_name": "Widget Corp",
+        "vendor_confidence": 0.95,
+        "total_amount": 300,
+        "total_confidence": 0.40,
+        "invoice_date": None,
+        "date_confidence": 0.10,
+        "ambiguous_source": True
+    }
+}
+
 def extraction_with_field_confidence(document: str) -> dict:
     """
     Extract data with field-level confidence scores.
     These scores must be CALIBRATED against labeled data — raw scores aren't reliable.
+
+    In production, this would use client.messages.create() with tool_choice
+    to force structured output via the extract_with_confidence tool.
     """
+    # Tool definition (used in production with client.messages.create())
     tool = {
         "name": "extract_with_confidence",
         "description": "Extract invoice data with per-field confidence scores",
@@ -8377,24 +8612,10 @@ def extraction_with_field_confidence(document: str) -> dict:
         }
     }
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=512,
-        tools=[tool],
-        tool_choice={"type": "tool", "name": "extract_with_confidence"},
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Extract invoice data with confidence scores.\n"
-                f"Confidence 1.0 = completely certain, 0.0 = guessing.\n"
-                f"Set ambiguous_source=true if the document has contradictions.\n\n"
-                f"Document:\n{document}"
-            )
-        }]
-    )
-
-    for block in response.content:
-        if block.type == "tool_use":
-            return block.input
+    # Simulated response — match document by prefix
+    for key, result in SIMULATED_EXTRACTIONS.items():
+        if document.startswith(key):
+            return result
     return None
 
 
@@ -8493,10 +8714,10 @@ if __name__ == "__main__":
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Create the file and run it:
 
-```
-> Create the file lab-d5-context-reliability/human_review.py with the code above and run it.
+```bash
+python lab-d5-context-reliability/human_review.py
 ```
 
 **What you should see:**
@@ -9041,10 +9262,7 @@ A complete customer support agent with:
 ## Reference code
 
 ```python
-import anthropic
 import json
-
-client = anthropic.Anthropic()
 
 # ════════════════════════════════════════════
 # DOMAIN 1: Data layer (fake backend)
@@ -9312,10 +9530,96 @@ CONTEXT: Always verify customer identity FIRST with get_customer.
 """
 
 # ════════════════════════════════════════════
-# The Agent Loop
+# SIMULATED AGENT SCENARIOS
+# In production, replace with client.messages.create()
 # ════════════════════════════════════════════
 
-def run_support_agent(user_message: str):
+SIMULATED_SCENARIOS = {
+    "standard_refund": {
+        "steps": [
+            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
+            {"tool": "lookup_order", "input": {"order_id": "ORD-555"}},
+            {"tool": "process_refund", "input": {"order_id": "ORD-555", "amount": 149.99}},
+        ],
+        "final_text": (
+            "I've verified your identity and looked up order ORD-555. "
+            "I can see it contained Blue Widget x2 and Red Gadget x1 for $149.99. "
+            "I've processed a full refund of $149.99 to your original payment method. "
+            "You should see it within 3-5 business days. Is there anything else I can help with?"
+        )
+    },
+    "over_limit_refund": {
+        "steps": [
+            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
+            {"tool": "lookup_order", "input": {"order_id": "ORD-555"}},
+            {"tool": "process_refund", "input": {"order_id": "ORD-555", "amount": 750}},
+            {"tool": "escalate_to_human", "input": {
+                "reason": "high_value_refund",
+                "customer_id": "CUST-001",
+                "summary": "Customer requesting $750 refund for ORD-555, exceeds $500 auto-approval limit",
+                "root_cause": "Refund amount exceeds automated processing threshold",
+                "recommended_action": "Manager review and approval of $750 refund"
+            }},
+        ],
+        "final_text": (
+            "I understand you need a $750 refund for order ORD-555. This amount requires "
+            "manager approval since it exceeds our standard processing limit. I've escalated "
+            "your case to our senior support team — Sarah will be handling it. Your ticket "
+            "number is TKT-9999. You'll be contacted within 24 hours."
+        )
+    },
+    "explicit_human_request": {
+        "steps": [
+            {"tool": "escalate_to_human", "input": {
+                "reason": "explicit_customer_request",
+                "summary": "Customer explicitly requested to speak to a manager",
+                "root_cause": "Customer preference for human agent",
+                "recommended_action": "Connect to available manager immediately"
+            }},
+        ],
+        "final_text": (
+            "I completely understand. I'm transferring you to a manager right now. "
+            "Your ticket is TKT-9999 and Sarah from our senior support team will be with you shortly."
+        )
+    },
+    "policy_gap": {
+        "steps": [
+            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
+            {"tool": "escalate_to_human", "input": {
+                "reason": "policy_gap",
+                "customer_id": "CUST-001",
+                "summary": "Customer requests competitor price match (Amazon); our policy only covers own-site adjustments",
+                "root_cause": "Policy gap — competitor price matching not covered by current policy",
+                "recommended_action": "Manager to evaluate competitor price match request for gold-tier customer"
+            }},
+        ],
+        "final_text": (
+            "I appreciate you letting us know about the price difference. Our standard policy "
+            "covers price adjustments on our own site, but competitor price matching requires "
+            "special authorization. I've escalated this to our senior team — as a gold-tier "
+            "member, we want to make sure we find the best solution for you. Your ticket is TKT-9999."
+        )
+    },
+    "frustrated_resolvable": {
+        "steps": [
+            {"tool": "get_customer", "input": {"email": "bob@email.com"}},
+            {"tool": "lookup_order", "input": {"order_id": "ORD-777"}},
+        ],
+        "final_text": (
+            "I completely understand your frustration, Bob, and I'm sorry for the wait. "
+            "I've looked into your order ORD-777 — it's currently in processing status for "
+            "a Green Thing x1 ($29.99). I can see it hasn't shipped yet. Let me check on "
+            "what's causing the delay and get this moving for you. Would you like me to "
+            "expedite the shipment or would you prefer a different resolution?"
+        )
+    },
+}
+
+# ════════════════════════════════════════════
+# The Agent Loop (simulated)
+# ════════════════════════════════════════════
+
+def run_support_agent(scenario_key: str, user_message: str):
     global verified_customer_id, case_facts
     verified_customer_id = None
     case_facts = {}
@@ -9324,53 +9628,31 @@ def run_support_agent(user_message: str):
     print(f"CUSTOMER: {user_message}")
     print(f"{'='*65}\n")
 
-    messages = [{"role": "user", "content": user_message}]
+    sim = SIMULATED_SCENARIOS[scenario_key]
     iteration = 0
 
-    while True:
+    # Domain 5: Case facts block would be included in system context
+    # when populated (shown here as it accumulates through tool calls)
+
+    for step in sim["steps"]:
         iteration += 1
         print(f"  [Loop iteration {iteration}]")
+        print(f"  stop_reason: tool_use")
+        print(f"  Tool: {step['tool']}({json.dumps(step['input'])[:60]})")
+        execute_tool(step["tool"], step["input"])
 
-        # Domain 5: Include case facts block in system context if populated
-        system = SYSTEM_PROMPT
+        # Show case facts accumulation (Domain 5)
         if case_facts:
-            facts_block = "\n\n--- CASE FACTS (verified, persist across turns) ---\n"
-            for key, val in case_facts.items():
-                facts_block += f"  {key}: {val}\n"
-            facts_block += "--- END CASE FACTS ---"
-            system = SYSTEM_PROMPT + facts_block
+            print(f"  Case facts so far: {json.dumps(case_facts)}")
 
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=system,
-            tools=tools,
-            messages=messages
-        )
-
-        print(f"  stop_reason: {response.stop_reason}")
-
-        if response.stop_reason == "end_turn":
-            text = "".join(b.text for b in response.content if hasattr(b, "text"))
-            print(f"\nAGENT RESPONSE:\n{text}\n")
-            if case_facts:
-                print(f"Case facts accumulated: {json.dumps(case_facts)}")
-            return text
-
-        elif response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            results = []
-            for b in response.content:
-                if b.type == "tool_use":
-                    print(f"  Tool: {b.name}({json.dumps(b.input)[:60]})")
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": b.id,
-                        "content": execute_tool(b.name, b.input)
-                    })
-            messages.append({"role": "user", "content": results})
-        else:
-            break
+    # Final response
+    iteration += 1
+    print(f"  [Loop iteration {iteration}]")
+    print(f"  stop_reason: end_turn")
+    print(f"\nAGENT RESPONSE:\n{sim['final_text']}\n")
+    if case_facts:
+        print(f"Case facts accumulated: {json.dumps(case_facts)}")
+    return sim["final_text"]
 
 
 # ════════════════════════════════════════════
@@ -9379,27 +9661,32 @@ def run_support_agent(user_message: str):
 
 if __name__ == "__main__":
     print("\n=== Scenario 1: Standard refund (Domains 1, 2) ===")
-    run_support_agent("I'm jane@email.com. My order ORD-555 arrived damaged. I want a refund.")
+    run_support_agent("standard_refund",
+        "I'm jane@email.com. My order ORD-555 arrived damaged. I want a refund.")
 
     print("\n=== Scenario 2: Over-limit refund (Domain 1 gate) ===")
-    run_support_agent("I'm jane@email.com. I need a $750 refund for ORD-555.")
+    run_support_agent("over_limit_refund",
+        "I'm jane@email.com. I need a $750 refund for ORD-555.")
 
     print("\n=== Scenario 3: Explicit human request (Domain 5 escalation) ===")
-    run_support_agent("I want to speak to a manager right now. This is unacceptable.")
+    run_support_agent("explicit_human_request",
+        "I want to speak to a manager right now. This is unacceptable.")
 
     print("\n=== Scenario 4: Policy gap (Domain 5 escalation) ===")
-    run_support_agent("I'm jane@email.com. I found the same item at Amazon for $50 less. Will you price match?")
+    run_support_agent("policy_gap",
+        "I'm jane@email.com. I found the same item at Amazon for $50 less. Will you price match?")
 
     print("\n=== Scenario 5: Frustrated but resolvable (Domain 5 nuance) ===")
-    run_support_agent("I'm bob@email.com. I'm really frustrated, my order ORD-777 still says processing.")
+    run_support_agent("frustrated_resolvable",
+        "I'm bob@email.com. I'm really frustrated, my order ORD-777 still says processing.")
 ```
 
 ## Run it
 
-Ask Claude Code to create and run this file:
+Create the file and run it:
 
-```
-> Create the file lab-final-scenario/complete_agent.py with the code above and run it.
+```bash
+python lab-final-scenario/complete_agent.py
 ```
 
 **What you should see:**
