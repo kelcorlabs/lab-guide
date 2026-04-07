@@ -43,20 +43,11 @@ Every lab follows the same structure so you always know where you are:
 - Basic Python familiarity (for reading reference code)
 - Labs are sequential within each module — start at Lab X.1 and work through
 
-## Running reference code (optional)
-
-The reference code in each lab is Python that calls the Claude API. You can study it without running it — the exam tests your understanding of the patterns, not your ability to execute scripts.
-
-If you want to actually run the reference code, you'll need:
-- **Python 3.8+** installed (`python --version` to check)
-- **The anthropic package** (`pip install anthropic`)
-- **An API key** set as an environment variable (`export ANTHROPIC_API_KEY="your-key"`)
-
-You can get an API key at console.anthropic.com. This is separate from your Claude Pro subscription — the API has its own usage-based pricing.
-
 ---
 
 # SETUP — Do This First
+
+Complete all 3 steps below before starting any labs.
 
 ## Step 1: Install Claude Code
 
@@ -72,19 +63,23 @@ npm install -g @anthropic-ai/claude-code
 
 Install the Claude Code extension for VS Code or JetBrains from the marketplace.
 
-> Both options require a Claude Pro, Max, or Team subscription. Claude Code handles authentication automatically — you do NOT need a separate API key.
+Both options require a Claude Pro, Max, or Team subscription.
 
-## Step 2: Verify it works
+## Step 2: Install Python
+
+Many labs include Python scripts that demonstrate the patterns you'll see on the exam. You need Python to run them.
+
+Check if Python is installed:
 
 ```bash
-claude "Hello, confirm you're working"
+python --version
 ```
 
-You should see Claude respond. If using the IDE extension, open the Claude panel and send a test message.
+If you see `Python 3.8` or higher, you're good. If not, install from python.org.
+
+> **No API key needed.** The lab scripts use simulated data so you can run them with just Python — no Anthropic API key, no `pip install`, no extra billing.
 
 ## Step 3: Create your lab workspace
-
-Open a terminal (not Claude Code) and run these commands to create the directory structure:
 
 ```bash
 mkdir -p ~/claude-architect-labs
@@ -110,21 +105,20 @@ This is where you'll do all your lab work.
 
 Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Overview, Try it, Reference code, Run it, Check your understanding, Exam tips, and Key takeaways.
 
-The **Try it** sections use Claude Code directly — no extra setup needed. The **Reference code** sections contain Python scripts that call the Claude API. You can study them without running them. If you want to run them, see "Running reference code" in the Course Overview.
+- **Try it** — interactive Claude Code prompts that demonstrate the concept
+- **Reference code** — Python scripts you study AND run to see the patterns in action
+- **Run it** — instructions to create and execute the reference code
+- **Check your understanding** — exercises to test your comprehension
 
 ## Troubleshooting — Common Issues
 
 1. **Claude Code not connecting**: Inside Claude Code, type `/doctor` to run diagnostics. If Claude Code won't start at all, check that your subscription is active at claude.ai.
 
-2. **Python version**: Some labs use Python scripts. Requires Python 3.8+. Check with `python --version`. If you have `python3` instead of `python`, use `python3` throughout.
+2. **`python: command not found`**: Python isn't installed or isn't in your PATH. Install from python.org. On some systems, use `python3` instead of `python`.
 
-3. **Dependencies not installed**: When Claude Code runs a Python script for you, ask it to install any missing packages. For example: "Install the anthropic package and then run the script."
+3. **Claude Code not recognizing CLAUDE.md**: Restart Claude Code after creating/modifying CLAUDE.md files. Use `/memory` to verify what's loaded.
 
-4. **Permission denied on .sh files**: Run `chmod +x filename.sh` before executing bash scripts.
-
-5. **Claude Code not recognizing CLAUDE.md**: Restart Claude Code after creating/modifying CLAUDE.md files. Use `/memory` to verify what's loaded.
-
-6. **Labs produce different output than expected**: Claude's responses vary between runs. Focus on the STRUCTURE (stop_reason values, error categories, tool calls) not exact text.
+4. **Labs produce different output than expected**: Claude's responses vary between runs. Focus on the STRUCTURE (stop_reason values, error categories, tool calls) not exact text.
 
 ---
 
@@ -240,12 +234,12 @@ Build me a Python script with a while True agentic loop. It should:
 
 ## Reference code
 
+This script simulates exactly what happens when Claude runs an agentic loop. It uses the same data structures, stop_reason values, and tool_result format as the real Claude API — so you can study the pattern and run it with just Python, no API key needed.
+
 ```python
-import anthropic
 import json
 
-client = anthropic.Anthropic()
-
+# ── Fake data (same as a real backend would have) ────────
 CUSTOMERS = {
     "jane@email.com": {"id": "CUST-001", "name": "Jane Smith", "tier": "gold"},
     "bob@email.com":  {"id": "CUST-002", "name": "Bob Jones",  "tier": "silver"}
@@ -260,6 +254,7 @@ ORDERS = {
 }
 
 def execute_tool(name, input_data):
+    """Execute a tool and return the result as JSON (same as a real MCP tool)."""
     if name == "get_customer":
         c = CUSTOMERS.get(input_data.get("email", ""))
         return json.dumps(c) if c else json.dumps({"error": "No customer found"})
@@ -268,6 +263,7 @@ def execute_tool(name, input_data):
         return json.dumps(o) if o else json.dumps({"error": "Order not found"})
     return json.dumps({"error": f"Unknown tool: {name}"})
 
+# ── Tool definitions (these tell Claude what tools are available) ──
 tools = [
     {
         "name": "get_customer",
@@ -293,66 +289,159 @@ tools = [
     }
 ]
 
+# ── Simulated Claude responses ───────────────────────────
+# In production, these come from client.messages.create().
+# Here we hardcode them to show the exact loop pattern.
+
+def simulate_claude_responses(user_message):
+    """
+    Returns a list of simulated API responses showing the agentic loop.
+    Each response has stop_reason and content — identical structure to real API.
+    """
+    if "jane@email.com" in user_message and "ORD-555" in user_message:
+        return [
+            # Iteration 1: Claude decides to look up the customer
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Let me look up your account first."},
+                    {"type": "tool_use", "id": "call_001",
+                     "name": "get_customer", "input": {"email": "jane@email.com"}}
+                ]
+            },
+            # Iteration 2: Claude got customer, now looks up the order
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "text", "text": "Found your account, Jane. Let me check that order."},
+                    {"type": "tool_use", "id": "call_002",
+                     "name": "lookup_order", "input": {"order_id": "ORD-555"}}
+                ]
+            },
+            # Iteration 3: Claude has all info, responds to the user
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "text", "text": "Hi Jane! Your order ORD-555 (Blue Widget x2, $149.99) "
+                     "has been shipped. Tracking number: 1Z999AA10123456784."}
+                ]
+            }
+        ]
+    else:
+        return [
+            {
+                "stop_reason": "tool_use",
+                "content": [
+                    {"type": "tool_use", "id": "call_010",
+                     "name": "get_customer", "input": {"email": user_message.split()[0]}}
+                ]
+            },
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "text", "text": "I couldn't find an account with that email. "
+                     "Could you double-check your email address?"}
+                ]
+            }
+        ]
+
+# ── THE AGENTIC LOOP ─────────────────────────────────────
+# This is the core pattern. Everything above is setup.
+# In production, replace simulate_claude_responses() with
+# client.messages.create() — the loop logic stays identical.
+
 def run_agent(user_message):
     print(f"\n{'='*60}\nUSER: {user_message}\n{'='*60}\n")
+
     messages = [{"role": "user", "content": user_message}]
+    responses = simulate_claude_responses(user_message)
     iteration = 0
 
-    while True:
+    for response in responses:
         iteration += 1
         print(f"--- Loop iteration {iteration} ---")
-
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            tools=tools,
-            messages=messages
-        )
 
         # ┌──────────────────────────────────────┐
         # │  stop_reason is the ONLY loop signal  │
         # └──────────────────────────────────────┘
-        print(f"    stop_reason: {response.stop_reason}")
+        print(f"    stop_reason: {response['stop_reason']}")
 
-        if response.stop_reason == "end_turn":
-            text = "".join(b.text for b in response.content if hasattr(b, "text"))
+        if response["stop_reason"] == "end_turn":
+            # Done — extract final text and return
+            text = " ".join(b["text"] for b in response["content"] if b.get("type") == "text")
             print(f"\nAGENT RESPONSE:\n{text}\n")
             return text
 
-        elif response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
+        elif response["stop_reason"] == "tool_use":
+            # Not done — execute the tools Claude asked for
+            messages.append({"role": "assistant", "content": response["content"]})
+
             tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    print(f"    Tool call: {block.name}({json.dumps(block.input)})")
-                    result = execute_tool(block.name, block.input)
+            for block in response["content"]:
+                if block.get("type") == "tool_use":
+                    print(f"    Tool call: {block['name']}({json.dumps(block['input'])})")
+                    result = execute_tool(block["name"], block["input"])
                     print(f"    Result: {result[:80]}...")
+
+                    # Tool results MUST be sent back as role "user"
                     tool_results.append({
                         "type": "tool_result",
-                        "tool_use_id": block.id,
+                        "tool_use_id": block["id"],
                         "content": result
                     })
+
+            # This line is critical — without it, Claude never gets the tool output
             messages.append({"role": "user", "content": tool_results})
-        else:
-            break
+
 
 if __name__ == "__main__":
+    # Test 1: Known customer with known order (3 iterations)
     run_agent("I'm jane@email.com, can you check on my order ORD-555?")
-    run_agent("I'm unknown@email.com, where's my order?")
+
+    # Test 2: Unknown customer (2 iterations — fails at lookup)
+    run_agent("unknown@email.com where's my order?")
+
+    print("="*60)
+    print("KEY EXAM CONCEPTS:")
+    print("  - stop_reason 'tool_use' → execute tools, loop continues")
+    print("  - stop_reason 'end_turn' → return response, loop terminates")
+    print("  - Tool results MUST be appended as role 'user'")
+    print("  - NEVER parse text to detect loop completion")
+    print("="*60)
 ```
 
 ## Run it
 
-> **Requires:** Python 3.8+, `pip install anthropic`, and `ANTHROPIC_API_KEY` environment variable. See "Running reference code" in the Course Overview if you haven't set this up. You can skip this step and still learn the pattern from reading the code.
-
-If you have the prerequisites, create and run the file:
+Create this file and run it — no API key needed:
 
 ```bash
 cd ~/claude-architect-labs
 python lab-d1-agentic-arch/basic_loop.py
 ```
 
-**What you should see:** iteration 1 → stop_reason: tool_use → iteration 2 → stop_reason: tool_use → iteration 3 → stop_reason: end_turn.
+**What you should see:**
+
+```
+============================================================
+USER: I'm jane@email.com, can you check on my order ORD-555?
+============================================================
+
+--- Loop iteration 1 ---
+    stop_reason: tool_use
+    Tool call: get_customer({"email": "jane@email.com"})
+    Result: {"id": "CUST-001", "name": "Jane Smith", "tier": "gold"}...
+--- Loop iteration 2 ---
+    stop_reason: tool_use
+    Tool call: lookup_order({"order_id": "ORD-555"})
+    Result: {"id": "ORD-555", "customer_id": "CUST-001", "items": ["Blue Widget x2...
+--- Loop iteration 3 ---
+    stop_reason: end_turn
+
+AGENT RESPONSE:
+Hi Jane! Your order ORD-555 (Blue Widget x2, $149.99) has been shipped...
+```
+
+Notice the pattern: **3 iterations.** Iterations 1 and 2 have `stop_reason: tool_use` — the loop continues. Iteration 3 has `stop_reason: end_turn` — the loop terminates.
 
 The loop terminates only when Claude returns `end_turn`.
 
