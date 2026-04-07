@@ -1059,6 +1059,7 @@
 <h2>How each lab works</h2>
 <p>Every lab follows the same structure so you always know where you are:</p>
 <ol>
+<li><strong>Learning objectives</strong> — what you&#39;ll be able to do after completing this lab</li>
 <li><strong>Recall</strong> — quick questions from prior labs to activate what you already learned</li>
 <li><strong>Overview</strong> — the problem this concept solves and why it matters for the exam</li>
 <li><strong>Try it</strong> — a hands-on Claude Code prompt to see the concept in action</li>
@@ -1102,7 +1103,7 @@ mkdir -p lab-d5-context-reliability
 mkdir -p lab-final-scenario
 </code></pre>
 <h2>How labs work</h2>
-<p>See the Course Overview above for the full structure. In short: each lab follows a consistent 8-section pattern from Recall through Key takeaways.</p>
+<p>Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Overview, Try it, Reference code, Run it, Check your understanding, Exam tips, and Key takeaways.</p>
 <p>When a lab has reference code, ask Claude Code to create and run it — Claude Code handles dependencies and API access automatically.</p>
 <h2>Troubleshooting — Common Issues</h2>
 <ol>
@@ -1183,17 +1184,17 @@ mkdir -p lab-final-scenario
 <li>You forget to send tool results back as <code>role: &quot;user&quot;</code> → Claude never gets the data it asked for</li>
 </ul>
 <h2>Try it</h2>
-<p>Open Claude Code and try this:</p>
-<pre><code>I&#39;m jane@email.com. Can you look up my customer record and then check on order ORD-555?
+<p>Watch the agentic loop in action using Claude Code&#39;s own built-in tools. Open Claude Code in your lab workspace and try this:</p>
+<pre><code>Find all Python files in this project, then read the contents of the first one you find and summarize what it does.
 </code></pre>
 <p>Watch what happens in the output. Claude Code will:</p>
 <ol>
-<li>Call a tool to look up the customer by email</li>
-<li>Receive the result and process it</li>
-<li>Call another tool to look up the order</li>
-<li>Receive that result and compose a final response</li>
+<li>Use the <strong>Glob</strong> tool to find <code>.py</code> files (first tool call — one loop iteration)</li>
+<li>Use the <strong>Read</strong> tool to read the file (second tool call — another loop iteration)</li>
+<li>Compose a final summary response (no more tools needed — loop ends)</li>
 </ol>
-<p>Each tool call is one iteration of the agentic loop. The loop continues until Claude has all the information it needs — that&#39;s the <code>stop_reason: &quot;end_turn&quot;</code> signal.</p>
+<p>This is the agentic loop pattern: Claude decides which tool to call, your code executes it and sends the result back, and the loop continues until Claude has all the information it needs.</p>
+<p>The reference code below shows the same pattern built from scratch with the Claude API — with custom tools (<code>get_customer</code>, <code>lookup_order</code>) instead of built-in ones.</p>
 <h3>Challenge Mode (optional — try before looking at the reference)</h3>
 <p><strong>Build it yourself first.</strong> Before reading the code below, ask Claude Code:</p>
 <pre><code>Build me a Python script with a while True agentic loop. It should:
@@ -1373,11 +1374,17 @@ is almost always the coordinator&#39;s task decomposition being too narrow — n
 <li>How the coordinator decides which subagents to invoke dynamically</li>
 </ul>
 <h2>Try it</h2>
-<p>Open Claude Code and try this:</p>
-<pre><code>Research the current state of electric vehicle adoption. First search for recent market data, then analyze regional differences, then synthesize everything into a summary with sources cited.
+<p>Ask Claude Code to do a multi-step task that requires different skills in sequence:</p>
+<pre><code>In the lab-d1-agentic-arch directory, find all Python files, read each one, then write a summary document called ANALYSIS.md that describes what each file does and how they relate to each other.
 </code></pre>
-<p>Watch how Claude Code breaks this into distinct phases — searching, analyzing, and synthesizing. Each phase uses different capabilities, and Claude Code must carry context forward explicitly.</p>
-<p>This is the hub-and-spoke pattern: one coordinator (Claude Code) managing specialized tasks that don&#39;t automatically share context with each other.</p>
+<p>Watch how Claude Code coordinates multiple phases:</p>
+<ol>
+<li><strong>Search phase</strong> — uses Glob to find files</li>
+<li><strong>Analysis phase</strong> — uses Read on each file to understand the code</li>
+<li><strong>Synthesis phase</strong> — uses Write to produce the combined summary</li>
+</ol>
+<p>This is the hub-and-spoke pattern in action: one coordinator (Claude Code) breaking a task into specialized steps. Each step uses different tools and the coordinator carries findings forward.</p>
+<p>The reference code below shows this same pattern built programmatically with the Claude API — using dedicated search, analysis, and synthesis subagents.</p>
 <h2>Reference code</h2>
 <pre><code class="language-python">import anthropic
 import json
@@ -1602,11 +1609,12 @@ if __name__ == &quot;__main__&quot;:
 <p><strong>The problem:</strong> Your coordinator delegates research to 3 subagents. They each return raw text blobs. When the synthesis agent combines them, it can&#39;t tell which claim came from which source. The final report says &quot;revenue grew 14%&quot; with no attribution — useless for verification.</p>
 <p><strong>The fix:</strong> Define a <strong>structured handoff format</strong> that every subagent must use. Each finding includes the claim, evidence, source, and date. Now the synthesis agent can merge findings AND preserve where each fact came from.</p>
 <p><strong>Exam connection (Sample Q8):</strong> When a subagent fails, the coordinator needs structured error context (failure type, partial results, alternatives) — not just &quot;error occurred.&quot; Same principle: structure enables intelligent downstream decisions.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Structured handoff format:</strong> customer_id, root_cause, recommended_action — so downstream agents can act on findings without guessing</li>
-<li><strong>Parallel subagent spawning:</strong> The coordinator emits multiple Task calls in one response — subagents run concurrently, cutting latency</li>
-<li><strong>Goal-based vs step-by-step prompts:</strong> &quot;Find the root cause&quot; outperforms &quot;Step 1: check logs, Step 2: check metrics&quot; — Claude adapts better with goals</li>
-<li><strong>AgentDefinition:</strong> The SDK structure that configures each subagent (name, description, system_prompt, allowed_tools)</li>
+<li><strong>Structured handoff format</strong> — each finding includes claim, evidence, source, and date so downstream agents can act without guessing</li>
+<li><strong>Parallel subagent spawning</strong> — the coordinator emits multiple Task calls in one response, subagents run concurrently</li>
+<li><strong>Goal-based vs step-by-step prompts</strong> — &quot;Find the root cause&quot; outperforms &quot;Step 1: check logs, Step 2: check metrics&quot; because Claude adapts better with goals</li>
+<li><strong>AgentDefinition</strong> — the SDK structure that configures each subagent (name, description, system_prompt, allowed_tools)</li>
 </ul>
 <h3>fork_session — Independent Exploration Branches</h3>
 <p><code>fork_session</code> creates independent branches from a shared analysis baseline. Each branch explores a different approach without contaminating the other.</p>
@@ -1893,11 +1901,12 @@ until <code>get_customer</code> has returned a verified customer ID. The model l
 <p><strong>Exam connection (Sample Q1):</strong> This is the exam&#39;s signature question. Programmatic enforcement
 beats prompt-based enforcement when compliance matters. Every wrong answer on this topic uses
 prompts where gates are needed.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Prerequisite gates:</strong> Code that blocks tool B until tool A has completed</li>
-<li><strong>Why prompts fail:</strong> Non-zero failure rate on required sequences</li>
-<li><strong>Escalation thresholds:</strong> Amounts &gt; $500 → redirect to human, enforced in code</li>
-<li><strong>Multi-concern decomposition:</strong> Customer raises 3 issues → investigate each → unified response</li>
+<li><strong>Prerequisite gates</strong> — code that blocks tool B until tool A has completed</li>
+<li><strong>Why prompts fail</strong> — non-zero failure rate on required sequences</li>
+<li><strong>Escalation thresholds</strong> — amounts &gt; $500 redirect to human, enforced in code</li>
+<li><strong>Multi-concern decomposition</strong> — customer raises 3 issues, investigate each, unified response</li>
 </ul>
 <h2>Try it</h2>
 <p>Open Claude Code and try this:</p>
@@ -2193,10 +2202,11 @@ that&#39;s probabilistic — it works 95% of the time. For a production agent, 9
 <p><strong>The solution: hooks.</strong> A <strong>PostToolUse hook</strong> intercepts every tool result and normalizes dates to ISO 8601 format <em>before Claude sees them</em>. Claude never encounters inconsistent dates.</p>
 <p>A <strong>PreToolUse hook</strong> intercepts tool calls <em>before they execute</em> — you can block policy-violating operations (e.g., refunds over $500) with 100% reliability.</p>
 <p><strong>The key insight (exam pattern):</strong> Hooks provide <strong>deterministic guarantees</strong>. Prompts provide <strong>probabilistic guidance</strong>. When compliance matters, use hooks.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>PostToolUse hooks:</strong> Transform tool results after execution but before the model processes them (normalization, filtering, enrichment)</li>
-<li><strong>PreToolUse hooks:</strong> Intercept and block tool calls before execution (policy enforcement, threshold checks)</li>
-<li><strong>When to use hooks vs prompts:</strong> Hooks = 100% enforcement for compliance/financial rules. Prompts = guidance for stylistic/behavioral preferences</li>
+<li><strong>PostToolUse hooks</strong> — transform tool results after execution but before the model processes them (normalization, filtering, enrichment)</li>
+<li><strong>PreToolUse hooks</strong> — intercept and block tool calls before execution (policy enforcement, threshold checks)</li>
+<li><strong>When to use hooks vs prompts</strong> — hooks = 100% enforcement for compliance/financial rules; prompts = guidance for stylistic/behavioral preferences</li>
 </ul>
 <h2>Reference code</h2>
 <pre><code class="language-python">import json
@@ -2411,10 +2421,11 @@ incomplete results because the agent didn&#39;t decompose thoroughly enough.</p>
 <p><strong>Exam connection (Sample Q5):</strong> &quot;Restructure a monolith into microservices&quot; → plan mode
 (adaptive decomposition). &quot;Fix an off-by-one error&quot; → direct execution (fixed steps).
 The exam tests your judgment about WHICH strategy fits WHICH situation.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Prompt chaining:</strong> Fixed sequential pipeline — each step always runs regardless of input. Best for predictable multi-aspect reviews.</li>
-<li><strong>Dynamic decomposition:</strong> Agent analyzes the input first, then decides what subtasks to create. Best for complex, unpredictable problems.</li>
-<li><strong>Decision rule:</strong> Known steps → chain. Unknown complexity → decompose.</li>
+<li><strong>Prompt chaining</strong> — fixed sequential pipeline, each step always runs regardless of input. Best for predictable multi-aspect reviews.</li>
+<li><strong>Dynamic decomposition</strong> — agent analyzes the input first, then decides what subtasks to create. Best for complex, unpredictable problems.</li>
+<li><strong>Decision rule</strong> — known steps → chain. Unknown complexity → decompose.</li>
 </ul>
 <h3>High-impact area identification (dynamic decomposition deep dive)</h3>
 <p>The exam specifically tests this pattern: &quot;Decomposing open-ended tasks by <strong>first mapping structure, identifying high-impact areas</strong>, then creating a prioritized plan that adapts as dependencies are discovered.&quot;</p>
@@ -2695,11 +2706,12 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>Explore a file in your workspace, then exit. Reopen with <code>--resume my-test-session</code> and ask about the same file. Notice how context persists.</p>
 <p>Now modify that file and resume again. Ask Claude about the file — does it reference the old version? That&#39;s the stale context problem.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Named sessions:</strong> Continue work across sessions with <code>--resume</code></li>
-<li><strong>fork_session:</strong> Branch from a shared baseline for parallel exploration</li>
-<li><strong>Context degradation:</strong> Why long sessions produce worse results (Claude starts saying &quot;typically&quot; instead of citing specific code)</li>
-<li><strong>The decision rule:</strong> Stale tool results or degraded context → start fresh with injected summary. Recent, valid context → resume.</li>
+<li><strong>Named sessions</strong> — continue work across sessions with <code>--resume</code></li>
+<li><strong>fork_session</strong> — branch from a shared baseline for parallel exploration</li>
+<li><strong>Context degradation</strong> — why long sessions produce worse results (Claude starts saying &quot;typically&quot; instead of citing specific code)</li>
+<li><strong>The decision rule</strong> — stale tool results or degraded context → start fresh with injected summary. Recent, valid context → resume.</li>
 </ul>
 <h2>Reference code</h2>
 <p>This script demonstrates the core session management concepts with real code.
@@ -3257,10 +3269,11 @@ Should it retry? Is the data gone? Was the input wrong? A generic error message 
 the agent either retries blindly or gives up. The fix: structured error responses with categories
 (transient/validation/business/permission) and <code>isRetryable</code> flags that tell the agent exactly
 what went wrong and what to do next.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>4 error categories</strong> (transient, validation, business, permission) with isRetryable flags</li>
-<li><strong>The critical distinction:</strong> isError:true (access failure) vs isError:false with null results (valid empty)</li>
-<li><strong>Local error recovery:</strong> How subagents implement local error recovery before propagating to the coordinator</li>
+<li><strong>4 error categories</strong> — transient, validation, business, permission — each with <code>isRetryable</code> flags</li>
+<li><strong>The critical distinction</strong> — <code>isError:true</code> (access failure) vs <code>isError:false</code> with null results (valid empty)</li>
+<li><strong>Local error recovery</strong> — subagents implement local recovery before propagating to the coordinator</li>
 </ul>
 <h2>Try it</h2>
 <p>Ask Claude Code:</p>
@@ -3537,9 +3550,10 @@ if __name__ == &quot;__main__&quot;:
 <h2>Overview</h2>
 <p>Your extraction pipeline needs guaranteed structured output — but <code>tool_choice=&#39;auto&#39;</code> sometimes returns text instead of calling the tool. Your parser crashes.</p>
 <p>The fix: <code>tool_choice=&#39;any&#39;</code> forces a tool call, and forced selection (<code>{&quot;type&quot;: &quot;tool&quot;, &quot;name&quot;: &quot;X&quot;}</code>) guarantees a SPECIFIC tool runs. No more hoping the model cooperates — you control when tools are mandatory.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>tool_choice options:</strong> &quot;auto&quot; (model decides), &quot;any&quot; (must call a tool), forced (must call specific tool)</li>
-<li><strong>Scoped tool access:</strong> Why giving agents 18 tools degrades reliability — scope to 4-5 per role</li>
+<li><strong>tool_choice options</strong> — <code>&quot;auto&quot;</code> (model decides), <code>&quot;any&quot;</code> (must call a tool), forced (must call specific tool)</li>
+<li><strong>Scoped tool access</strong> — why giving agents 18 tools degrades reliability; scope to 4-5 per role</li>
 <li><strong>Constrained alternatives:</strong> How to replace generic tools with constrained alternatives</li>
 </ul>
 <h2>Try it</h2>
@@ -7392,10 +7406,11 @@ D) Batch both with a timeout fallback</p>
 <p>After 15 turns, your agent says &quot;your order was approximately $150&quot; when the real total from turn 3 was $149.99. Progressive summarization compressed the exact value.</p>
 <p><strong>The fix:</strong> extract transactional facts into a persistent case facts block -- exact amounts, dates, order IDs -- outside the summarized history.</p>
 <p><strong>Exam connection:</strong> Case facts blocks and tool result trimming are core Domain 5 concepts. The exam tests whether you know that progressive summarization loses precision.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Long conversations</strong> accumulate verbose tool results that consume tokens disproportionately.</li>
-<li><strong>&quot;Lost in the middle&quot;:</strong> model misses findings in the middle of long inputs.</li>
-<li><strong>Case facts block:</strong> persistent structured layer outside summarized history.</li>
+<li><strong>Long conversations</strong> — accumulate verbose tool results that consume tokens disproportionately</li>
+<li><strong>&quot;Lost in the middle&quot;</strong> — model misses findings in the middle of long inputs</li>
+<li><strong>Case facts block</strong> — persistent structured layer outside summarized history</li>
 </ul>
 <h3>Challenge Mode (optional — try before looking at the solution)</h3>
 <p>A customer support agent has a 22-field tool result from <code>lookup_order</code>. Design:</p>
@@ -8168,10 +8183,11 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Crash recovery manifests</strong> for resilient resume</li>
 </ul>
 <p><strong>Exam connection:</strong> The exam tests scratchpad files for persistence, subagent delegation for isolation, and manifest-based recovery for crash resilience.</p>
+<h3>Key concepts in this lab</h3>
 <ul>
-<li><strong>Extended sessions</strong> cause context degradation -- model references &quot;typical patterns&quot; not specific code.</li>
-<li><strong>Scratchpad files</strong> persist findings across context boundaries.</li>
-<li><strong>Manifest-based crash recovery</strong> enables graceful resume after failures.</li>
+<li><strong>Extended sessions</strong> — cause context degradation; model references &quot;typical patterns&quot; not specific code</li>
+<li><strong>Scratchpad files</strong> — persist findings across context boundaries</li>
+<li><strong>Manifest-based crash recovery</strong> — enables graceful resume after failures</li>
 </ul>
 <h2>Try it</h2>
 <p>Ask Claude Code to explore this project:</p>
