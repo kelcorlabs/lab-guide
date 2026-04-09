@@ -194,6 +194,8 @@ Think of it like a conversation between your code and Claude:
 
 This loop continues until `stop_reason="end_turn"`. That's the entire pattern.
 
+**Model-driven vs pre-configured:** Notice that Claude decides which tool to call based on the user's message — your code doesn't pick for it. This is **model-driven decision-making**: Claude reasons about context and chooses. The alternative — hardcoding a fixed sequence like "always call get_customer, then lookup_order" — is a **pre-configured decision tree**. The exam tests this distinction: model-driven agents adapt to novel inputs; pre-configured sequences are brittle and can't handle unexpected requests.
+
 **The two things that can go wrong:**
 - You check for the wrong termination signal (e.g., parsing text instead of stop_reason) → agent exits mid-task
 - You forget to send tool results back as `role: "user"` → Claude never gets the data it asked for
@@ -509,8 +511,8 @@ each with 3-4 tools and a focused prompt.
 
 But this creates a new problem: **subagents can't see each other's work.** If your search agent
 finds 3 articles and your analysis agent needs those articles, someone has to pass them explicitly.
-That "someone" is the **coordinator** — a central agent that decides who works on what and
-routes context between them.
+That "someone" is the **coordinator** — a central agent that decides who works on what,
+routes context between them, and handles errors when subagents fail (covered in depth in Lab 5.3).
 
 **Exam connection (Sample Q7):** When a multi-agent report misses entire topics, the root cause
 is almost always the coordinator's task decomposition being too narrow — not a subagent failure.
@@ -733,6 +735,10 @@ Look at how `synthesis_subagent()` receives `search_results` and `analysis_resul
 **Exercise 3 — What happens if the coordinator delegates only ONE subtopic?**
 
 This matches Sample Q7 on the exam. If the coordinator's task decomposition is too narrow (e.g., only researching "market size" but not "barriers" or "regional variation"), the final report has coverage gaps. The root cause is the coordinator's decomposition, not a subagent failure.
+
+**Exercise 4 — Trace the iterative refinement loop in the code.**
+
+Look at Step 4 in the `coordinator()` function. When `coverage_gaps` is non-empty, the coordinator re-delegates a targeted search, merges the new findings, and re-invokes synthesis. What would happen if the coordinator skipped this step and returned the first synthesis result directly? Answer: The final report would acknowledge a gap ("policy incentives not covered") but never attempt to fill it. The iterative loop is what turns gap detection into gap resolution.
 
 ## Exam tips
 
@@ -1051,6 +1057,10 @@ The goal-based version says "cover market size, growth rate, and key barriers" �
 In the parallel pattern, all Task tool calls appear in a single coordinator response and execute concurrently. Sequential spawning takes the sum of all subagent runtimes; parallel takes only the longest single runtime.
 
 The exam tests whether you know that multiple Task calls in ONE response = parallel execution.
+
+**Exercise 4 — When would you use fork_session instead of spawning parallel subagents?**
+
+Parallel subagents (multiple Task calls) are for dividing work across specialists — search, analysis, synthesis. fork_session is for exploring divergent *approaches* from the same baseline — e.g., "should we use caching or database indexes to fix this performance issue?" Each fork inherits the shared analysis but explores independently, so approach A doesn't contaminate approach B.
 
 ## Exam tips
 
@@ -1765,7 +1775,7 @@ Create lab-d1-agentic-arch/hooks_demo.py with the code above and run it
 
 2. **Can a system prompt replace a PreToolUse hook for refund limits?** No — prompt enforcement ("Never process refunds over $500") has a non-zero failure rate. Over 10 requests, some will slip through. Hooks provide 100% enforcement.
 
-3. **What's the difference between a hook and a gate?** A gate blocks based on prior state — "has customer been verified?" A hook intercepts every call — "is this amount over $500?"
+3. **Your agent must log every tool call for audit compliance AND block account deletions entirely. Which mechanism handles each requirement — a hook or a gate?** Logging every call regardless of state is a hook (PostToolUse — intercepts every call). Blocking deletions entirely is also a hook (PreToolUse — intercepts the specific call). A gate would be wrong here because gates check prior state ("has X happened yet?"), while these requirements apply unconditionally to every matching call.
 
 ## Exam tips
 
@@ -2050,6 +2060,10 @@ The extra API call to plan the work is wasted tokens and latency.
 - **Complex restructuring with unknown dependencies** (e.g., monolith to microservices) → dynamic decomposition
 
 The key signal is whether you know the steps before you start.
+
+**Exercise 4 — You're asked to "add comprehensive tests to a legacy codebase." What are the three phases of dynamic decomposition, and why does starting by writing tests for the largest file waste effort?**
+
+Phase 1: Map structure (modules, entry points, dependency graph). Phase 2: Identify high-impact areas (most callers, zero tests, recent bug fixes, system boundaries). Phase 3: Create a prioritized plan that adapts as dependencies emerge. Starting with the largest file wastes effort because it might be a utility module nothing calls — you'd test dead code while the untested payment module processes real money.
 
 ## Exam tips
 
@@ -2356,6 +2370,7 @@ claude --resume lab-session-test
 1. **Resume a session after changing a file that was analyzed.** Does Claude reference the old version? (Answer: yes — stale tool results persist in the resumed context)
 2. **Run 30+ turns without /compact.** Ask Claude about a finding from turn 3. Does it cite the specific finding or say "typically"? (Answer: likely "typically" — context degradation)
 3. **Why not always start fresh?** (Answer: you lose the full conversation context. Resume is better when context is still valid and tool results haven't gone stale)
+4. **You've analyzed a slow API endpoint and identified two possible fixes: add a Redis cache, or add a database index. Which session strategy lets you explore both without cross-contamination?** (Answer: fork_session. Each fork inherits the shared performance analysis but explores independently. Cache findings don't pollute index findings, so you can compare objectively.)
 
 ## Exam tips
 
