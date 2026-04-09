@@ -9889,20 +9889,20 @@ D) The model's temperature setting is too high, causing erratic behavior.
 **Q2 (Task 1.2).** Your multi-agent research system produces reports that consistently cover only 2 of 5 relevant subtopics. Each subagent completes its assigned work correctly. Coordinator logs show it delegates narrow subtasks. What should you fix?
 
 A) Give the synthesis agent instructions to identify and flag coverage gaps.
-B) Broaden the coordinator's task decomposition to cover all relevant subtopics before delegating.
-C) Add more web search queries to each search subagent.
+B) Add more web search queries to each search subagent.
+C) Broaden the coordinator's task decomposition to cover all relevant subtopics before delegating.
 D) Increase the context window for each subagent so they can find more information.
 
-**Correct: B.** The problem is at the coordinator level — it's decomposing too narrowly. Subagents execute their assignments correctly; the issue is what they were assigned. This matches Exam Sample Q7. **Why not A:** A synthesis agent can only flag gaps in what it receives — it can't generate research on subtopics that were never investigated. **Why not C:** More search queries per subagent deepens coverage of already-assigned subtopics but doesn't address the missing ones. **Why not D:** Larger context windows help subagents process more information but don't fix the coordinator's failure to assign all subtopics. (Lab 1.2)
+**Correct: C.** The problem is at the coordinator level — it's decomposing too narrowly. Subagents execute their assignments correctly; the issue is what they were assigned. This matches Exam Sample Q7. **Why not A:** A synthesis agent can only flag gaps in what it receives — it can't generate research on subtopics that were never investigated. **Why not B:** More search queries per subagent deepens coverage of already-assigned subtopics but doesn't address the missing ones. **Why not D:** Larger context windows help subagents process more information but don't fix the coordinator's failure to assign all subtopics. (Lab 1.2)
 
 **Q3 (Task 1.5).** A customer support agent must block refunds over $500 and redirect to human escalation. Currently, the system prompt says "Do not process refunds above $500." In testing, the agent processes a $600 refund 3% of the time. What's the best fix?
 
 A) Add few-shot examples showing the agent refusing $600+ refunds.
-B) Implement a PreToolUse hook that intercepts process_refund calls and blocks amounts > $500 with a structured error redirecting to escalation.
-C) Reduce the model temperature to 0 for more deterministic behavior.
+B) Reduce the model temperature to 0 for more deterministic behavior.
+C) Implement a PreToolUse hook that intercepts process_refund calls and blocks amounts > $500 with a structured error redirecting to escalation.
 D) Add "CRITICAL" emphasis to the system prompt instruction about the $500 limit.
 
-**Correct: B.** When business rules require 100% compliance, programmatic enforcement (hooks/gates) provides deterministic guarantees. Prompt-based approaches (A, C, D) still have a non-zero failure rate. This matches Exam Sample Q1's reasoning. **Why not A:** Few-shot examples improve probabilistic behavior but cannot guarantee 100% compliance — the 3% failure rate would shrink but not reach zero. **Why not C:** Temperature 0 makes output more deterministic in token selection but does not eliminate the possibility of the model ignoring instructions. **Why not D:** Emphasizing prompt instructions with "CRITICAL" is still a prompt-based approach and cannot provide the deterministic guarantee a financial rule requires. (Lab 1.5)
+**Correct: C.** When business rules require 100% compliance, programmatic enforcement (hooks/gates) provides deterministic guarantees. Prompt-based approaches (A, C, D) still have a non-zero failure rate. This matches Exam Sample Q1's reasoning. **Why not A:** Few-shot examples improve probabilistic behavior but cannot guarantee 100% compliance — the 3% failure rate would shrink but not reach zero. **Why not B:** Temperature 0 makes output more deterministic in token selection but does not eliminate the possibility of the model ignoring instructions. **Why not D:** Emphasizing prompt instructions with "CRITICAL" is still a prompt-based approach and cannot provide the deterministic guarantee a financial rule requires. (Lab 1.5)
 
 ---
 
@@ -9912,19 +9912,19 @@ D) Add "CRITICAL" emphasis to the system prompt instruction about the $500 limit
 
 A) Add a routing classifier to pre-select the correct tool based on input type.
 B) Consolidate both tools into a single `analyze` tool.
-C) Expand each tool's description to include input formats, example queries, when to use it, and when NOT to use it versus the other tool.
-D) Add 10 few-shot examples showing correct tool selection for each input type.
+C) Add 10 few-shot examples showing correct tool selection for each input type.
+D) Expand each tool's description to include input formats, example queries, when to use it, and when NOT to use it versus the other tool.
 
-**Correct: C.** Tool descriptions are the primary mechanism LLMs use for selection. Expanding descriptions to differentiate tools is the lowest-effort, highest-leverage fix. This matches Exam Sample Q2. **Why not A:** A routing classifier adds unnecessary complexity when the root cause is ambiguous tool descriptions — fix the descriptions first before adding infrastructure. **Why not B:** Consolidating tools removes useful specialization and creates an overly broad tool that may perform worse at both tasks. **Why not D:** Few-shot examples consume tokens and are a heavier intervention than simply clarifying tool descriptions, which is the more direct fix. (Lab 2.1)
+**Correct: D.** Tool descriptions are the primary mechanism LLMs use for selection. Expanding descriptions to differentiate tools is the lowest-effort, highest-leverage fix. This matches Exam Sample Q2. **Why not A:** A routing classifier adds unnecessary complexity when the root cause is ambiguous tool descriptions — fix the descriptions first before adding infrastructure. **Why not B:** Consolidating tools removes useful specialization and creates an overly broad tool that may perform worse at both tasks. **Why not C:** Few-shot examples consume tokens and are a heavier intervention than simply clarifying tool descriptions, which is the more direct fix. (Lab 2.1)
 
 **Q5 (Task 2.2).** A subagent's database query times out. It returns `{"error": "Operation failed"}` to the coordinator. The coordinator can't determine whether to retry, use a backup, or proceed with partial results. What change enables intelligent recovery?
 
 A) Add automatic retry with exponential backoff inside the subagent.
-B) Return structured error context: failure type, attempted query, partial results, and suggested alternatives.
-C) Log the error and return an empty result set marked as successful.
+B) Log the error and return an empty result set marked as successful.
+C) Return structured error context: failure type, attempted query, partial results, and suggested alternatives.
 D) Propagate the exception to terminate the entire workflow.
 
-**Correct: B.** Structured error context gives the coordinator enough information to make recovery decisions. Generic errors (A's eventual output) hide context. Empty-as-success (C) silently suppresses failures. Full termination (D) is excessive. This matches Exam Sample Q8. **Why not A:** Automatic retry handles transient failures but still returns a generic error if retries exhaust, leaving the coordinator without context to choose alternative recovery strategies. **Why not C:** Returning an empty result marked as successful hides the failure entirely, causing the coordinator to proceed with missing data it believes is complete. **Why not D:** Terminating the entire workflow over a single subagent timeout is disproportionate when partial results or alternative queries could still produce a useful outcome. (Lab 2.2)
+**Correct: C.** Structured error context gives the coordinator enough information to make recovery decisions. Generic errors (A's eventual output) hide context. Empty-as-success (C) silently suppresses failures. Full termination (D) is excessive. This matches Exam Sample Q8. **Why not A:** Automatic retry handles transient failures but still returns a generic error if retries exhaust, leaving the coordinator without context to choose alternative recovery strategies. **Why not B:** Returning an empty result marked as successful hides the failure entirely, causing the coordinator to proceed with missing data it believes is complete. **Why not D:** Terminating the entire workflow over a single subagent timeout is disproportionate when partial results or alternative queries could still produce a useful outcome. (Lab 2.2)
 
 ---
 
@@ -9941,12 +9941,12 @@ D) Place a CLAUDE.md file in every directory that contains test files.
 
 **Q7 (Task 3.6).** Your CI pipeline runs `claude "Review this PR"` but the job hangs indefinitely. What's the fix?
 
-A) Use the `-p` flag: `claude -p "Review this PR"`
+A) Add `--batch` flag: `claude --batch "Review this PR"`
 B) Set `CLAUDE_HEADLESS=true` environment variable.
 C) Redirect stdin: `claude "Review this PR" < /dev/null`
-D) Add `--batch` flag: `claude --batch "Review this PR"`
+D) Use the `-p` flag: `claude -p "Review this PR"`
 
-**Correct: A.** The `-p` (--print) flag runs Claude Code in non-interactive mode. Options B, C, D reference non-existent features or workarounds. This IS Exam Sample Q10. **Why not B:** `CLAUDE_HEADLESS=true` is not a real Claude Code environment variable — there is no headless mode toggle via env vars. **Why not C:** Redirecting stdin from /dev/null is a generic Unix workaround that doesn't properly invoke Claude Code's non-interactive processing pipeline. **Why not D:** `--batch` is not a valid Claude Code flag — it doesn't exist in the CLI. (Lab 3.6)
+**Correct: D.** The `-p` (--print) flag runs Claude Code in non-interactive mode. Options B, C, D reference non-existent features or workarounds. This IS Exam Sample Q10. **Why not B:** `CLAUDE_HEADLESS=true` is not a real Claude Code environment variable — there is no headless mode toggle via env vars. **Why not C:** Redirecting stdin from /dev/null is a generic Unix workaround that doesn't properly invoke Claude Code's non-interactive processing pipeline. **Why not A:** `--batch` is not a valid Claude Code flag — it doesn't exist in the CLI. (Lab 3.6)
 
 ---
 
@@ -9955,11 +9955,11 @@ D) Add `--batch` flag: `claude --batch "Review this PR"`
 **Q8 (Task 4.3).** Your extraction pipeline uses `tool_use` with a JSON schema. Invoices are extracted correctly with no JSON syntax errors. However, line items sometimes don't sum to the stated total, and the model fills in made-up vendor IDs for documents that don't contain them. What should you add?
 
 A) Switch to a stricter JSON schema mode.
-B) Add custom semantic validation (cross-field checks) and make vendor_id nullable to prevent fabrication.
+B) Add few-shot examples showing correct extraction.
 C) Increase max_tokens so the model has more room to be precise.
-D) Add few-shot examples showing correct extraction.
+D) Add custom semantic validation (cross-field checks) and make vendor_id nullable to prevent fabrication.
 
-**Correct: B.** tool_use + JSON schema eliminates syntax errors but NOT semantic errors (wrong sums, fabricated values). Custom validation catches cross-field issues, and nullable fields prevent fabrication. **Why not A:** A stricter JSON schema mode only enforces structural rules (types, required fields) — it cannot validate that line items sum correctly or detect fabricated values. **Why not C:** Increasing max_tokens gives the model more output space but does not improve the accuracy of extracted values or prevent hallucinated vendor IDs. **Why not D:** Few-shot examples can improve extraction quality probabilistically but cannot guarantee cross-field consistency or prevent fabrication the way programmatic validation can. (Lab 4.3, Lab 4.4)
+**Correct: D.** tool_use + JSON schema eliminates syntax errors but NOT semantic errors (wrong sums, fabricated values). Custom validation catches cross-field issues, and nullable fields prevent fabrication. **Why not A:** A stricter JSON schema mode only enforces structural rules (types, required fields) — it cannot validate that line items sum correctly or detect fabricated values. **Why not C:** Increasing max_tokens gives the model more output space but does not improve the accuracy of extracted values or prevent hallucinated vendor IDs. **Why not B:** Few-shot examples can improve extraction quality probabilistically but cannot guarantee cross-field consistency or prevent fabrication the way programmatic validation can. (Lab 4.3, Lab 4.4)
 
 **Q9 (Task 4.5).** Your manager wants to switch both a blocking pre-merge review and an overnight tech debt report to the Message Batches API for 50% cost savings. What's the correct evaluation?
 
@@ -9976,21 +9976,21 @@ D) Batch both with a timeout fallback to synchronous.
 
 **Q10 (Task 5.1).** After a 15-turn customer support conversation, your agent says "your order total was approximately $150" when the actual total from turn 3 was $149.99. What pattern prevents this?
 
-A) Increase the context window to retain all prior messages.
-B) Extract transactional facts (amounts, dates, order IDs) into a persistent case facts block included in each prompt.
+A) Extract transactional facts (amounts, dates, order IDs) into a persistent case facts block included in each prompt.
+B) Increase the context window to retain all prior messages.
 C) Use progressive summarization to compress the conversation.
 D) Have the agent re-read all prior tool results before each response.
 
-**Correct: B.** Case facts blocks persist exact values outside summarized history. Progressive summarization (C) is the CAUSE of the problem — it compresses specific values into vague approximations. **Why not A:** The context window is likely already large enough to hold 15 turns — the issue is that exact values get lost during summarization, not that messages are being dropped. **Why not C:** Progressive summarization is what causes exact values like $149.99 to become approximations like "approximately $150" — it makes the problem worse, not better. **Why not D:** Re-reading all prior tool results before each response wastes tokens and doesn't scale as conversation length grows, while a case facts block achieves the same goal efficiently. (Lab 5.1)
+**Correct: A.** Case facts blocks persist exact values outside summarized history. Progressive summarization (C) is the CAUSE of the problem — it compresses specific values into vague approximations. **Why not B:** The context window is likely already large enough to hold 15 turns — the issue is that exact values get lost during summarization, not that messages are being dropped. **Why not C:** Progressive summarization is what causes exact values like $149.99 to become approximations like "approximately $150" — it makes the problem worse, not better. **Why not D:** Re-reading all prior tool results before each response wastes tokens and doesn't scale as conversation length grows, while a case facts block achieves the same goal efficiently. (Lab 5.1)
 
 **Q11 (Task 5.2).** Your agent escalates 45% of cases to human agents, well above your 20% target. Logs show it escalates standard damage replacements while attempting to handle complex policy exceptions. What's the best fix?
 
-A) Add explicit escalation criteria with few-shot examples showing when to escalate vs resolve.
-B) Add sentiment analysis to only escalate frustrated customers.
+A) Add sentiment analysis to only escalate frustrated customers.
+B) Add explicit escalation criteria with few-shot examples showing when to escalate vs resolve.
 C) Have the agent self-report confidence and escalate below a threshold.
 D) Deploy a classifier trained on historical tickets.
 
-**Correct: A.** Explicit criteria with few-shot examples addresses the root cause: unclear decision boundaries. Sentiment (B) doesn't correlate with case complexity. Self-reported confidence (C) is poorly calibrated. A classifier (D) is over-engineered when prompting hasn't been tried. This matches Exam Sample Q3. **Why not B:** Customer sentiment doesn't determine case complexity — a calm customer can have a complex policy exception while a frustrated customer may have a simple replacement request. **Why not C:** LLMs are poorly calibrated at self-reporting confidence, and the agent is already confidently making wrong decisions, so a confidence threshold won't fix misclassified cases. **Why not D:** Training a classifier requires labeled historical data and infrastructure, making it over-engineered when the simpler fix of explicit criteria in the prompt hasn't been attempted yet. (Lab 5.2)
+**Correct: B.** Explicit criteria with few-shot examples addresses the root cause: unclear decision boundaries. Sentiment (B) doesn't correlate with case complexity. Self-reported confidence (C) is poorly calibrated. A classifier (D) is over-engineered when prompting hasn't been tried. This matches Exam Sample Q3. **Why not A:** Customer sentiment doesn't determine case complexity — a calm customer can have a complex policy exception while a frustrated customer may have a simple replacement request. **Why not C:** LLMs are poorly calibrated at self-reporting confidence, and the agent is already confidently making wrong decisions, so a confidence threshold won't fix misclassified cases. **Why not D:** Training a classifier requires labeled historical data and infrastructure, making it over-engineered when the simpler fix of explicit criteria in the prompt hasn't been attempted yet. (Lab 5.2)
 
 **Q12 (Task 5.6).** Your synthesis agent combines findings from 3 research subagents. The final report says "market grew 14%" without citing which source, and a conflicting statistic from another source is dropped entirely. What's the fix?
 
@@ -10017,11 +10017,11 @@ You are building a customer support agent using the Claude Agent SDK. The agent 
 **A1.** Production logs show the agent calls `process_refund` without first calling `get_customer` in 8% of cases, occasionally refunding the wrong account. The system prompt says "Always verify customer identity first." What's the most effective fix?
 
 A) Add few-shot examples showing the agent calling get_customer before every refund.
-B) Implement a programmatic prerequisite gate that blocks process_refund until get_customer returns a verified customer ID.
+B) Reduce temperature to 0 for deterministic behavior.
 C) Add "CRITICAL" to the system prompt instruction about verification.
-D) Reduce temperature to 0 for deterministic behavior.
+D) Implement a programmatic prerequisite gate that blocks process_refund until get_customer returns a verified customer ID.
 
-**Correct: B.** When compliance is required (financial operations), programmatic enforcement provides deterministic guarantees. Prompt-based approaches (A, C, D) all have non-zero failure rates. **Why not A:** Few-shot examples improve the model's tendency to call get_customer first but cannot guarantee it 100% of the time — an 8% failure rate on financial operations is unacceptable. **Why not C:** Adding "CRITICAL" emphasis is still a prompt-based approach that the model can occasionally ignore, leaving a non-zero risk of refunding the wrong account. **Why not D:** Temperature 0 makes token selection more deterministic but does not eliminate the possibility of skipping the verification step entirely. (Lab 1.4)
+**Correct: D.** When compliance is required (financial operations), programmatic enforcement provides deterministic guarantees. Prompt-based approaches (A, C, D) all have non-zero failure rates. **Why not A:** Few-shot examples improve the model's tendency to call get_customer first but cannot guarantee it 100% of the time — an 8% failure rate on financial operations is unacceptable. **Why not C:** Adding "CRITICAL" emphasis is still a prompt-based approach that the model can occasionally ignore, leaving a non-zero risk of refunding the wrong account. **Why not B:** Temperature 0 makes token selection more deterministic but does not eliminate the possibility of skipping the verification step entirely. (Lab 1.4)
 
 **A2.** After a 20-turn conversation about a billing dispute, the agent says the disputed amount is "around $200" when the original tool result showed $199.47. What pattern prevents this?
 
@@ -10034,12 +10034,12 @@ D) Use progressive summarization to compress the conversation.
 
 **A3.** A customer says "I bought a competitor's product for $30 less — can you match that price?" Your refund policy covers returns and defective items but says nothing about competitor price matching. What should the agent do?
 
-A) Deny the request since it's not covered by the refund policy.
+A) Escalate to a human agent because the policy is silent on this situation.
 B) Offer a 10% courtesy discount as a compromise.
-C) Escalate to a human agent because the policy is silent on this situation.
+C) Deny the request since it's not covered by the refund policy.
 D) Ask the customer to provide proof of the competitor's price before deciding.
 
-**Correct: C.** This is a policy gap — the policy doesn't address competitor price matching. The agent has no authority to act on something the policy doesn't cover. Denying (A) is wrong because the policy isn't denying it either — it's simply silent. Compromise (B) exceeds the agent's authority. **Why not A:** The policy doesn't deny price matching — it's silent on it, so denying the request is the agent making a policy decision it isn't authorized to make. **Why not B:** Offering a courtesy discount is inventing a policy that doesn't exist, exceeding the agent's authority to act only within defined guidelines. **Why not D:** Asking for proof implies the agent could approve a price match after verification, but no such policy exists — this delays escalation while implying authority the agent doesn't have. (Lab 5.2)
+**Correct: A.** This is a policy gap — the policy doesn't address competitor price matching. The agent has no authority to act on something the policy doesn't cover. Denying (A) is wrong because the policy isn't denying it either — it's simply silent. Compromise (B) exceeds the agent's authority. **Why not C:** The policy doesn't deny price matching — it's silent on it, so denying the request is the agent making a policy decision it isn't authorized to make. **Why not B:** Offering a courtesy discount is inventing a policy that doesn't exist, exceeding the agent's authority to act only within defined guidelines. **Why not D:** Asking for proof implies the agent could approve a price match after verification, but no such policy exists — this delays escalation while implying authority the agent doesn't have. (Lab 5.2)
 
 ---
 
@@ -10049,12 +10049,12 @@ You are integrating Claude Code into your CI/CD pipeline to automate code review
 
 **B1.** Your CI job runs `claude "Review this PR for security issues"` but hangs indefinitely. Logs show Claude Code is waiting for interactive input. What's the fix?
 
-A) Set the CLAUDE_HEADLESS=true environment variable.
-B) Add the `-p` flag: `claude -p "Review this PR for security issues"`
+A) Add the `-p` flag: `claude -p "Review this PR for security issues"`
+B) Set the CLAUDE_HEADLESS=true environment variable.
 C) Redirect stdin from /dev/null.
 D) Add the `--batch` flag.
 
-**Correct: B.** The `-p` (--print) flag runs Claude Code in non-interactive mode — processes the prompt and exits. The other options reference non-existent features or workarounds. **Why not A:** `CLAUDE_HEADLESS=true` is not a valid Claude Code environment variable — no such headless mode exists. **Why not C:** Redirecting stdin from /dev/null is a generic Unix trick that doesn't properly engage Claude Code's non-interactive processing mode. **Why not D:** `--batch` is not a valid Claude Code CLI flag — it does not exist. (Lab 3.6)
+**Correct: A.** The `-p` (--print) flag runs Claude Code in non-interactive mode — processes the prompt and exits. The other options reference non-existent features or workarounds. **Why not B:** `CLAUDE_HEADLESS=true` is not a valid Claude Code environment variable — no such headless mode exists. **Why not C:** Redirecting stdin from /dev/null is a generic Unix trick that doesn't properly engage Claude Code's non-interactive processing mode. **Why not D:** `--batch` is not a valid Claude Code CLI flag — it does not exist. (Lab 3.6)
 
 **B2.** A PR modifies 12 files. Your single-pass review produces detailed feedback for the first 3 files but superficial comments for the rest, with contradictory feedback — flagging a pattern as problematic in one file while approving identical code elsewhere. How should you restructure?
 
@@ -10068,11 +10068,11 @@ D) Run 3 independent reviews and only report issues found in at least 2 of 3.
 **B3.** Your review produces accurate security findings but also flags 60% false positives in the "comment accuracy" category. Developers have started ignoring ALL review findings. What's the best immediate action?
 
 A) Add confidence scores and filter out low-confidence findings.
-B) Disable the "comment accuracy" category entirely, then improve its criteria separately.
-C) Add more few-shot examples for the comment accuracy category.
+B) Add more few-shot examples for the comment accuracy category.
+C) Disable the "comment accuracy" category entirely, then improve its criteria separately.
 D) Switch to a more capable model for better accuracy.
 
-**Correct: B.** Disabling the high-FP category immediately restores trust in the remaining accurate categories. Developers start reading findings again. Then iterate on the problematic category's criteria before re-enabling. Confidence scores (A) don't help when the model is confidently wrong. **Why not A:** Confidence scores are unreliable when the model is confidently wrong — a high-confidence false positive still passes the filter and erodes developer trust. **Why not C:** Adding few-shot examples may gradually improve the category but doesn't address the immediate trust crisis — developers are already ignoring all findings while you iterate. **Why not D:** Switching models is expensive and slow, and there's no guarantee a different model will perform better on this specific category without also improving the criteria. (Lab 4.1)
+**Correct: C.** Disabling the high-FP category immediately restores trust in the remaining accurate categories. Developers start reading findings again. Then iterate on the problematic category's criteria before re-enabling. Confidence scores (A) don't help when the model is confidently wrong. **Why not A:** Confidence scores are unreliable when the model is confidently wrong — a high-confidence false positive still passes the filter and erodes developer trust. **Why not B:** Adding few-shot examples may gradually improve the category but doesn't address the immediate trust crisis — developers are already ignoring all findings while you iterate. **Why not D:** Switching models is expensive and slow, and there's no guarantee a different model will perform better on this specific category without also improving the criteria. (Lab 4.1)
 
 ---
 
@@ -10195,39 +10195,39 @@ You are building a customer support resolution agent using the Claude Agent SDK.
 **Q1 (Task 1.1).** Your customer support agent's agentic loop currently checks whether the assistant's response contains the phrase "I've completed your request" to decide when to stop iterating. In production, the agent sometimes terminates prematurely when it uses slightly different wording like "Your issue has been resolved." Other times it continues looping after completing the task because it phrases its response differently. What should you change about the loop termination logic?
 
 A) Add more phrase variations to the string-matching check, covering common completion phrasings.
-B) Replace the string-matching check with stop_reason inspection — continue when stop_reason is "tool_use" and terminate when it is "end_turn".
-C) Set a maximum iteration count of 10 and terminate when that limit is reached, regardless of completion status.
+B) Set a maximum iteration count of 10 and terminate when that limit is reached, regardless of completion status.
+C) Replace the string-matching check with stop_reason inspection — continue when stop_reason is "tool_use" and terminate when it is "end_turn".
 D) Add a dedicated finish_task tool that the agent must call to signal completion explicitly.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The stop_reason field is the canonical mechanism for controlling agentic loop flow — "tool_use" means Claude wants to call another tool, and "end_turn" means it has finished reasoning and is ready to present its final response. This is deterministic and language-independent. **Why not A:** Adding more phrase variations is fragile and will always miss edge cases — it's solving a fundamentally wrong approach with more of the same approach. **Why not C:** Arbitrary iteration caps as the primary stopping mechanism can truncate legitimate multi-step workflows or waste iterations on completed tasks. **Why not D:** Adding a custom finish tool adds unnecessary complexity when stop_reason already provides this signal natively.
+**Correct: C.** The stop_reason field is the canonical mechanism for controlling agentic loop flow — "tool_use" means Claude wants to call another tool, and "end_turn" means it has finished reasoning and is ready to present its final response. This is deterministic and language-independent. **Why not A:** Adding more phrase variations is fragile and will always miss edge cases — it's solving a fundamentally wrong approach with more of the same approach. **Why not B:** Arbitrary iteration caps as the primary stopping mechanism can truncate legitimate multi-step workflows or waste iterations on completed tasks. **Why not D:** Adding a custom finish tool adds unnecessary complexity when stop_reason already provides this signal natively.
 
 </details>
 
 **Q2 (Task 1.1).** You are debugging your customer support agent and notice that after calling get_customer, the agent's next turn doesn't reference any of the customer data that was returned. Examining your loop code, you find that you invoke the tool and check the stop_reason correctly, but you send the next API request with only the original conversation history. What is the most likely cause?
 
 A) The get_customer tool is returning data in a format Claude cannot parse.
-B) You are not appending the tool result to the conversation history before sending the next request, so Claude has no record of what the tool returned.
+B) The context window is full and the tool result is being silently truncated.
 C) The system prompt needs to instruct Claude to reference tool results in its reasoning.
-D) The context window is full and the tool result is being silently truncated.
+D) You are not appending the tool result to the conversation history before sending the next request, so Claude has no record of what the tool returned.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** In an agentic loop, tool results must be appended to the conversation history (as a tool_result message) so the model can reason about them in the next iteration. If the result is never added, the model literally does not see it. **Why not A:** The tool returning unparseable data would cause errors, not silent omission — the model would at least acknowledge receiving something. **Why not C:** The model naturally references data in its context; the problem is the data was never placed in context. **Why not D:** Context truncation would affect all messages, not selectively omit a single tool result.
+**Correct: D.** In an agentic loop, tool results must be appended to the conversation history (as a tool_result message) so the model can reason about them in the next iteration. If the result is never added, the model literally does not see it. **Why not A:** The tool returning unparseable data would cause errors, not silent omission — the model would at least acknowledge receiving something. **Why not C:** The model naturally references data in its context; the problem is the data was never placed in context. **Why not B:** Context truncation would affect all messages, not selectively omit a single tool result.
 
 </details>
 
 **Q3 (Task 1.2).** Your customer support system has grown to handle multiple product lines, each with specialized policies. You have a coordinator agent that receives all incoming requests. Currently, it always routes every request through a sequential pipeline: first get_customer, then lookup_order, then a product-specialist subagent, then a resolution subagent. Metrics show that 40% of requests are simple FAQ questions that don't require order lookups or product specialists. What architectural change would most improve efficiency?
 
-A) Add a caching layer so repeated FAQ questions skip all subagents entirely.
-B) Redesign the coordinator to analyze query requirements and dynamically select which subagents to invoke based on complexity, skipping unnecessary steps for simple queries.
+A) Redesign the coordinator to analyze query requirements and dynamically select which subagents to invoke based on complexity, skipping unnecessary steps for simple queries.
+B) Add a caching layer so repeated FAQ questions skip all subagents entirely.
 C) Create a separate FAQ bot that handles simple questions, and route only complex requests to the coordinator.
 D) Run all subagents in parallel for every request and discard results from agents that weren't needed.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** A coordinator agent should analyze each query's requirements and dynamically decide which subagents to invoke rather than always routing through the full pipeline. For FAQ queries, the coordinator can respond directly without invoking order lookup or product specialist subagents. **Why not A:** A caching layer addresses repeated identical questions but doesn't solve the architectural problem of unnecessary pipeline steps for novel simple questions. **Why not C:** A separate FAQ bot creates a brittle routing boundary — questions that seem simple may actually need order context, and maintaining two systems increases complexity. **Why not D:** Running all subagents in parallel for every request wastes compute and latency for the 40% of simple requests, and introduces unnecessary failure points.
+**Correct: A.** A coordinator agent should analyze each query's requirements and dynamically decide which subagents to invoke rather than always routing through the full pipeline. For FAQ queries, the coordinator can respond directly without invoking order lookup or product specialist subagents. **Why not B:** A caching layer addresses repeated identical questions but doesn't solve the architectural problem of unnecessary pipeline steps for novel simple questions. **Why not C:** A separate FAQ bot creates a brittle routing boundary — questions that seem simple may actually need order context, and maintaining two systems increases complexity. **Why not D:** Running all subagents in parallel for every request wastes compute and latency for the 40% of simple requests, and introduces unnecessary failure points.
 
 </details>
 
@@ -10235,38 +10235,38 @@ D) Run all subagents in parallel for every request and discard results from agen
 
 A) Give the billing subagent access to the get_customer and lookup_order tools so it can retrieve the information itself.
 B) Store the customer data in a shared database that both the coordinator and subagent can access.
-C) Include the complete customer details, relevant order data, and specific complaint directly in the billing subagent's prompt when spawning it via the Task tool.
-D) Have the coordinator write the customer context to a temporary file that the billing subagent reads on startup.
+C) Have the coordinator write the customer context to a temporary file that the billing subagent reads on startup.
+D) Include the complete customer details, relevant order data, and specific complaint directly in the billing subagent's prompt when spawning it via the Task tool.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Subagents do not automatically inherit the coordinator's conversation history. Context must be explicitly provided in the subagent's prompt. Including the relevant customer data, order information, and complaint directly in the Task tool's prompt gives the subagent everything it needs to produce a contextualized response. **Why not A:** Giving the subagent redundant tool access means it would need to re-discover information the coordinator already has, increasing latency and token usage, and it wouldn't know which customer to look up without context anyway. **Why not B:** A shared database adds infrastructure complexity and still requires the subagent to know what to query. **Why not D:** File-based context passing adds unnecessary I/O complexity and race conditions when the prompt itself is the natural mechanism.
+**Correct: D.** Subagents do not automatically inherit the coordinator's conversation history. Context must be explicitly provided in the subagent's prompt. Including the relevant customer data, order information, and complaint directly in the Task tool's prompt gives the subagent everything it needs to produce a contextualized response. **Why not A:** Giving the subagent redundant tool access means it would need to re-discover information the coordinator already has, increasing latency and token usage, and it wouldn't know which customer to look up without context anyway. **Why not B:** A shared database adds infrastructure complexity and still requires the subagent to know what to query. **Why not C:** File-based context passing adds unnecessary I/O complexity and race conditions when the prompt itself is the natural mechanism.
 
 </details>
 
 **Q5 (Task 1.4).** Your customer support agent handles requests that involve multiple concerns — for example, "I want to return order #456 and also dispute the shipping charge on order #789." Production logs show the agent resolves the first concern but then presents a final response without addressing the second. What is the most effective approach to fix this?
 
-A) Add instructions to the system prompt telling the agent to always check if there are multiple concerns before responding.
+A) Design the agent to decompose multi-concern requests into distinct items, investigate each using shared customer context, and synthesize a unified resolution that addresses all concerns before responding.
 B) Implement a pre-processing step that splits multi-concern messages into separate tickets, each handled independently.
-C) Design the agent to decompose multi-concern requests into distinct items, investigate each using shared customer context, and synthesize a unified resolution that addresses all concerns before responding.
+C) Add instructions to the system prompt telling the agent to always check if there are multiple concerns before responding.
 D) Limit customers to one concern per message and prompt them to submit additional requests separately.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** The agent should decompose multi-concern requests into distinct items, investigate each in parallel using the shared customer context, and then synthesize a unified resolution. This preserves the customer experience while ensuring completeness. **Why not A:** Prompt instructions alone have a non-zero failure rate for ensuring coverage — the agent already "knows" it should handle all concerns but is failing to do so consistently. **Why not B:** Splitting into separate tickets destroys shared context (the customer is the same) and creates a fragmented experience requiring the customer to repeat information. **Why not D:** Restricting customers is a poor user experience that doesn't solve the underlying system limitation.
+**Correct: A.** The agent should decompose multi-concern requests into distinct items, investigate each in parallel using the shared customer context, and then synthesize a unified resolution. This preserves the customer experience while ensuring completeness. **Why not C:** Prompt instructions alone have a non-zero failure rate for ensuring coverage — the agent already "knows" it should handle all concerns but is failing to do so consistently. **Why not B:** Splitting into separate tickets destroys shared context (the customer is the same) and creates a fragmented experience requiring the customer to repeat information. **Why not D:** Restricting customers is a poor user experience that doesn't solve the underlying system limitation.
 
 </details>
 
 **Q6 (Task 1.4).** Your agent processes refund requests. Business policy requires identity verification via get_customer before any financial operation. Despite clear system prompt instructions stating "Always verify customer identity before processing refunds," production logs show the agent skips verification in 8% of cases — particularly when customers provide order numbers upfront and sound frustrated. What change would most effectively guarantee compliance?
 
-A) Add few-shot examples showing the agent calling get_customer first, even when the customer volunteers order details and expresses urgency.
-B) Implement a programmatic prerequisite hook that blocks process_refund calls until get_customer has returned a verified customer ID in the current session.
+A) Implement a programmatic prerequisite hook that blocks process_refund calls until get_customer has returned a verified customer ID in the current session.
+B) Add few-shot examples showing the agent calling get_customer first, even when the customer volunteers order details and expresses urgency.
 C) Increase the emphasis in the system prompt by adding "CRITICAL" and "MANDATORY" tags to the verification requirement.
 D) Log all refund requests and have a human review any that skipped verification, feeding corrections back as training data.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** When a specific tool sequence is required for compliance, programmatic enforcement provides deterministic guarantees. A hook that blocks process_refund until get_customer has completed eliminates the 8% failure rate entirely. **Why not A:** Few-shot examples improve probabilistic compliance but cannot achieve the 100% guarantee required for financial operations. **Why not C:** Adding emphasis keywords does not materially change LLM compliance rates — the model already understands the instruction; it's choosing to skip it under certain conditions. **Why not D:** Post-hoc human review catches violations after they occur but doesn't prevent them, and the damage (incorrect refund) is already done.
+**Correct: A.** When a specific tool sequence is required for compliance, programmatic enforcement provides deterministic guarantees. A hook that blocks process_refund until get_customer has completed eliminates the 8% failure rate entirely. **Why not B:** Few-shot examples improve probabilistic compliance but cannot achieve the 100% guarantee required for financial operations. **Why not C:** Adding emphasis keywords does not materially change LLM compliance rates — the model already understands the instruction; it's choosing to skip it under certain conditions. **Why not D:** Post-hoc human review catches violations after they occur but doesn't prevent them, and the damage (incorrect refund) is already done.
 
 </details>
 
@@ -10285,40 +10285,40 @@ D) Add a date_converter tool that the agent can call whenever it needs to compar
 
 **Q8 (Task 1.5).** Your company policy caps automated refunds at $500. Above that threshold, a human agent must approve the refund. The support agent currently handles this through a system prompt instruction: "If the refund amount exceeds $500, use escalate_to_human instead of process_refund." In the past month, three refunds above $500 were processed automatically. What is the most effective fix?
 
-A) Add a dollar amount check in the system prompt with emphasized formatting and multiple reminders throughout the prompt.
-B) Implement a tool call interception hook that inspects process_refund calls, blocks any with amount > $500, and automatically redirects to escalate_to_human with the refund details.
+A) Implement a tool call interception hook that inspects process_refund calls, blocks any with amount > $500, and automatically redirects to escalate_to_human with the refund details.
+B) Add a dollar amount check in the system prompt with emphasized formatting and multiple reminders throughout the prompt.
 C) Remove the process_refund tool entirely and have all refunds go through human approval.
 D) Add a confirmation step where the agent asks the customer "Are you sure?" before processing refunds above $500.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** A tool call interception hook provides deterministic enforcement of business rules. Inspecting process_refund calls and blocking those exceeding $500 guarantees compliance regardless of what the model decides, then redirecting to escalate_to_human preserves the workflow. **Why not A:** The prompt already contains this instruction and fails 0.6% of the time — adding emphasis does not materially change compliance rates for business-critical rules. **Why not C:** Removing process_refund eliminates all automated refunds, including the vast majority under $500 that the agent handles correctly, destroying efficiency. **Why not D:** Asking the customer for confirmation doesn't enforce the policy — the customer will always say "yes" and the agent would still process the over-limit refund.
+**Correct: A.** A tool call interception hook provides deterministic enforcement of business rules. Inspecting process_refund calls and blocking those exceeding $500 guarantees compliance regardless of what the model decides, then redirecting to escalate_to_human preserves the workflow. **Why not B:** The prompt already contains this instruction and fails 0.6% of the time — adding emphasis does not materially change compliance rates for business-critical rules. **Why not C:** Removing process_refund eliminates all automated refunds, including the vast majority under $500 that the agent handles correctly, destroying efficiency. **Why not D:** Asking the customer for confirmation doesn't enforce the policy — the customer will always say "yes" and the agent would still process the over-limit refund.
 
 </details>
 
 **Q9 (Task 2.1).** Your agent has two tools with similar functionality: get_customer (retrieves customer profile by email or phone) and lookup_account (retrieves account details by account ID). Production logs show the agent calls get_customer when users provide account IDs, and calls lookup_account when users provide email addresses — the opposite of what's intended. Both tools have one-line descriptions: "Gets customer info" and "Gets account info." What is the most effective first step?
 
 A) Add few-shot examples to the system prompt showing correct tool selection for each input type.
-B) Expand each tool's description to clearly specify which input types it accepts, what it returns, example queries, and when to use it versus the other tool.
+B) Implement input validation in each tool that rejects incorrect identifier formats and returns an error message suggesting the correct tool.
 C) Rename the tools to search_by_email_phone and search_by_account_id to make the distinction obvious from the name alone.
-D) Implement input validation in each tool that rejects incorrect identifier formats and returns an error message suggesting the correct tool.
+D) Expand each tool's description to clearly specify which input types it accepts, what it returns, example queries, and when to use it versus the other tool.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Tool descriptions are the primary mechanism LLMs use for tool selection. When descriptions are minimal and similar ("Gets customer info" vs "Gets account info"), the model lacks context to differentiate. Expanding descriptions with input formats, example queries, and explicit boundary guidance is the highest-leverage, lowest-effort fix. **Why not A:** Few-shot examples add token overhead and don't fix the root cause — ambiguous descriptions will continue causing errors on novel query patterns not covered by examples. **Why not C:** Renaming helps but doesn't fully resolve the issue without also explaining expected inputs, outputs, and edge cases in the description. **Why not D:** Input validation is a useful safety net but reactive rather than proactive — the agent still wastes a round trip calling the wrong tool before getting corrected.
+**Correct: D.** Tool descriptions are the primary mechanism LLMs use for tool selection. When descriptions are minimal and similar ("Gets customer info" vs "Gets account info"), the model lacks context to differentiate. Expanding descriptions with input formats, example queries, and explicit boundary guidance is the highest-leverage, lowest-effort fix. **Why not A:** Few-shot examples add token overhead and don't fix the root cause — ambiguous descriptions will continue causing errors on novel query patterns not covered by examples. **Why not C:** Renaming helps but doesn't fully resolve the issue without also explaining expected inputs, outputs, and edge cases in the description. **Why not B:** Input validation is a useful safety net but reactive rather than proactive — the agent still wastes a round trip calling the wrong tool before getting corrected.
 
 </details>
 
 **Q10 (Task 2.2).** Your get_customer tool currently returns a generic error string "Error: operation failed" for all failure modes — whether the customer email doesn't exist, the database is temporarily unavailable, or the API key has expired. The agent responds to all errors by telling the customer "I'm having trouble looking up your account, let me try again," leading to infinite retry loops on non-transient errors. How should you restructure the error responses?
 
 A) Return different HTTP status codes for each error type and have the agent interpret the codes.
-B) Return structured error metadata including errorCategory (transient/validation/permission), isRetryable boolean, and a human-readable description so the agent can make appropriate recovery decisions.
+B) Log all errors to a monitoring system and have a human operator intervene when errors occur.
 C) Have the tool retry internally three times before returning any error, so the agent only sees persistent failures.
-D) Log all errors to a monitoring system and have a human operator intervene when errors occur.
+D) Return structured error metadata including errorCategory (transient/validation/permission), isRetryable boolean, and a human-readable description so the agent can make appropriate recovery decisions.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Structured error metadata gives the agent the context it needs to make appropriate decisions: retry transient errors, ask the customer for different information on validation errors, and escalate on permission errors. The isRetryable flag directly prevents infinite retry loops on non-transient failures. **Why not A:** HTTP status codes are an implementation detail of the transport layer; MCP tools should return semantic error information using the isError flag pattern with structured content. **Why not C:** Internal retries help with transient failures but mask the error type from the agent, preventing appropriate handling of non-transient errors. **Why not D:** Human operator intervention doesn't scale and introduces significant latency for issues the agent could handle automatically with better error information.
+**Correct: D.** Structured error metadata gives the agent the context it needs to make appropriate decisions: retry transient errors, ask the customer for different information on validation errors, and escalate on permission errors. The isRetryable flag directly prevents infinite retry loops on non-transient failures. **Why not A:** HTTP status codes are an implementation detail of the transport layer; MCP tools should return semantic error information using the isError flag pattern with structured content. **Why not C:** Internal retries help with transient failures but mask the error type from the agent, preventing appropriate handling of non-transient errors. **Why not B:** Human operator intervention doesn't scale and introduces significant latency for issues the agent could handle automatically with better error information.
 
 </details>
 
@@ -10351,13 +10351,13 @@ D) Build a lightweight proxy that translates MCP calls to Jira API calls, giving
 **Q13 (Task 5.1).** Your support agent handles complex cases that span 15+ conversation turns. After turn 12, the agent starts giving contradictory information — telling the customer their refund was $47.50 when earlier in the conversation the confirmed amount was $52.30. Investigation reveals the agent is summarizing earlier turns and losing precise numerical values. What is the most effective fix?
 
 A) Increase the context window size to avoid any summarization of earlier turns.
-B) Extract transactional facts (amounts, dates, order numbers, statuses) into a persistent "case facts" block that is included in every prompt, outside the summarized conversation history.
-C) Instruct the agent to always scroll back through the full conversation before providing any numerical information.
+B) Instruct the agent to always scroll back through the full conversation before providing any numerical information.
+C) Extract transactional facts (amounts, dates, order numbers, statuses) into a persistent "case facts" block that is included in every prompt, outside the summarized conversation history.
 D) Add a reminder at the end of the system prompt to "always double-check amounts before quoting them to customers."
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Progressive summarization risks losing precise numerical values, dates, and other transactional facts. Extracting these into a structured "case facts" block that persists outside the summarized history ensures the agent always has access to accurate figures regardless of how many turns have been summarized. **Why not A:** Larger context windows are expensive and don't fundamentally prevent the attention degradation that occurs with very long conversations. **Why not C:** Instructing the agent to "scroll back" doesn't work in an API context — the conversation history is whatever is in the messages array, and summarized content is already lost. **Why not D:** A reminder to double-check doesn't help when the correct values have been lost from the summarized context — the agent can only reference what's in its current context.
+**Correct: C.** Progressive summarization risks losing precise numerical values, dates, and other transactional facts. Extracting these into a structured "case facts" block that persists outside the summarized history ensures the agent always has access to accurate figures regardless of how many turns have been summarized. **Why not A:** Larger context windows are expensive and don't fundamentally prevent the attention degradation that occurs with very long conversations. **Why not B:** Instructing the agent to "scroll back" doesn't work in an API context — the conversation history is whatever is in the messages array, and summarized content is already lost. **Why not D:** A reminder to double-check doesn't help when the correct values have been lost from the summarized context — the agent can only reference what's in its current context.
 
 </details>
 
@@ -10376,14 +10376,14 @@ D) Apply the standard price adjustment policy and match the competitor's price, 
 
 **Q15 (Task 5.2).** A customer types "Just connect me to a real person." Your agent has already retrieved the customer's order and identified that the issue is a straightforward missing-item replacement that it can resolve in under a minute. What should the agent do?
 
-A) Explain that it has already identified the solution, resolve the issue, and then ask if the customer needs anything else.
-B) Immediately honor the customer's explicit request and escalate to a human agent without attempting further resolution.
+A) Immediately honor the customer's explicit request and escalate to a human agent without attempting further resolution.
+B) Explain that it has already identified the solution, resolve the issue, and then ask if the customer needs anything else.
 C) Ask the customer why they want to speak to a human and try to address their underlying concern first.
 D) Inform the customer that human agents are currently unavailable and offer to resolve the issue now.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** When a customer explicitly requests to speak to a human agent, the agent should honor that request immediately. Even if the issue is simple, the customer has made their preference clear. Attempting to override that preference damages trust. **Why not A:** Resolving the issue against the customer's stated preference is dismissive — the customer asked for a human, not a faster resolution from the bot. **Why not C:** Questioning the customer's request adds friction and can feel adversarial, especially when the customer is already frustrated enough to demand a human. **Why not D:** Fabricating excuses about human availability to force the customer to interact with the bot is deceptive and erodes trust.
+**Correct: A.** When a customer explicitly requests to speak to a human agent, the agent should honor that request immediately. Even if the issue is simple, the customer has made their preference clear. Attempting to override that preference damages trust. **Why not B:** Resolving the issue against the customer's stated preference is dismissive — the customer asked for a human, not a faster resolution from the bot. **Why not C:** Questioning the customer's request adds friction and can feel adversarial, especially when the customer is already frustrated enough to demand a human. **Why not D:** Fabricating excuses about human availability to force the customer to interact with the bot is deceptive and erodes trust.
 
 </details>
 
@@ -10397,40 +10397,40 @@ You are building a multi-agent research system using the Claude Agent SDK. A coo
 
 **Q16 (Task 1.1).** Your research coordinator agent's loop terminates after the first subagent completes, even when additional subagents need to run. Debugging reveals the loop checks if the response contains any text content and terminates if it does, because the coordinator sometimes includes a brief status update ("Web search complete, now analyzing documents...") alongside its tool_use calls. What should you change?
 
-A) Instruct the coordinator to never include text alongside tool calls.
-B) Check stop_reason instead of text content — continue the loop when stop_reason is "tool_use" (regardless of accompanying text) and terminate only when stop_reason is "end_turn".
+A) Check stop_reason instead of text content — continue the loop when stop_reason is "tool_use" (regardless of accompanying text) and terminate only when stop_reason is "end_turn".
+B) Instruct the coordinator to never include text alongside tool calls.
 C) Strip all text content from responses before checking for tool calls.
 D) Add a counter that ensures at least 4 iterations (one per subagent) before allowing termination.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The stop_reason field is the authoritative signal for loop control. A response with stop_reason "tool_use" means the model wants to execute tools, even if it also includes explanatory text. Checking for text content is an anti-pattern that breaks when the model includes status messages alongside tool calls. **Why not A:** Instructing the coordinator to suppress text is prompt-based and unreliable — models naturally include contextual text, and suppressing it reduces observability. **Why not C:** Stripping text content is a workaround that doesn't fix the root cause and destroys potentially useful coordination information. **Why not D:** A fixed iteration count is brittle — some research tasks may require 2 subagents while others require 6, and capping at 4 either wastes iterations or truncates necessary work.
+**Correct: A.** The stop_reason field is the authoritative signal for loop control. A response with stop_reason "tool_use" means the model wants to execute tools, even if it also includes explanatory text. Checking for text content is an anti-pattern that breaks when the model includes status messages alongside tool calls. **Why not B:** Instructing the coordinator to suppress text is prompt-based and unreliable — models naturally include contextual text, and suppressing it reduces observability. **Why not C:** Stripping text content is a workaround that doesn't fix the root cause and destroys potentially useful coordination information. **Why not D:** A fixed iteration count is brittle — some research tasks may require 2 subagents while others require 6, and capping at 4 either wastes iterations or truncates necessary work.
 
 </details>
 
 **Q17 (Task 1.2).** Your coordinator agent always invokes subagents in a fixed sequence: web search, then document analysis, then synthesis, then report generation — even for queries where some steps are unnecessary. For example, a query asking to "summarize the key findings from this uploaded PDF" still triggers a web search that returns irrelevant results. These irrelevant results then confuse the synthesis step. What architectural improvement would most effectively address this?
 
 A) Add a filtering step between web search and synthesis that removes irrelevant results.
-B) Design the coordinator to analyze query requirements and dynamically select which subagents to invoke, skipping unnecessary steps based on the query's needs.
-C) Give each subagent the ability to skip its own step if it determines the input is irrelevant.
+B) Give each subagent the ability to skip its own step if it determines the input is irrelevant.
+C) Design the coordinator to analyze query requirements and dynamically select which subagents to invoke, skipping unnecessary steps based on the query's needs.
 D) Create separate coordinator agents for different query types, each with a fixed pipeline appropriate to that type.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The coordinator should analyze each query's requirements and dynamically decide which subagents to invoke. For a "summarize this PDF" query, only document analysis and synthesis are needed — web search adds noise. This is the core role of a coordinator: intelligent task decomposition and delegation. **Why not A:** Filtering irrelevant results is a band-aid that still wastes the latency and cost of unnecessary web searches and may not catch all irrelevant content. **Why not C:** Individual subagents can't reliably determine relevance without the coordinator's broader query understanding, and this distributes coordination logic inappropriately. **Why not D:** Creating separate coordinators for each query type creates maintenance burden and requires an additional routing layer to select the right coordinator.
+**Correct: C.** The coordinator should analyze each query's requirements and dynamically decide which subagents to invoke. For a "summarize this PDF" query, only document analysis and synthesis are needed — web search adds noise. This is the core role of a coordinator: intelligent task decomposition and delegation. **Why not A:** Filtering irrelevant results is a band-aid that still wastes the latency and cost of unnecessary web searches and may not catch all irrelevant content. **Why not B:** Individual subagents can't reliably determine relevance without the coordinator's broader query understanding, and this distributes coordination logic inappropriately. **Why not D:** Creating separate coordinators for each query type creates maintenance burden and requires an additional routing layer to select the right coordinator.
 
 </details>
 
 **Q18 (Task 1.2).** Your coordinator decomposes the query "economic impact of remote work" into subtasks: "remote work salary data," "remote work productivity statistics," and "remote work technology costs." The final report covers only quantitative aspects, completely missing qualitative impacts like employee wellbeing, urban development, and environmental effects. What is the root cause?
 
-A) The synthesis agent is filtering out qualitative findings because its prompt emphasizes data-driven analysis.
+A) The coordinator's task decomposition is too narrow, focusing only on quantitative economic metrics and missing broader qualitative dimensions of the topic.
 B) The web search agent is biased toward returning quantitative results.
-C) The coordinator's task decomposition is too narrow, focusing only on quantitative economic metrics and missing broader qualitative dimensions of the topic.
+C) The synthesis agent is filtering out qualitative findings because its prompt emphasizes data-driven analysis.
 D) The report generation agent is summarizing too aggressively and cutting qualitative sections.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** The coordinator's decomposition into only salary, productivity, and technology cost subtasks reveals overly narrow task decomposition. The subagents executed correctly within their assigned scope — the problem is that qualitative dimensions were never assigned. This is the coordinator's responsibility. **Why not A:** The synthesis agent works with what it receives; if no qualitative findings are provided, it can't synthesize them regardless of its prompt. **Why not B:** The web search agent searches for what it's told to search for; the queries themselves were narrow, not the search behavior. **Why not D:** The report generator can't cut content that was never produced by upstream agents.
+**Correct: A.** The coordinator's decomposition into only salary, productivity, and technology cost subtasks reveals overly narrow task decomposition. The subagents executed correctly within their assigned scope — the problem is that qualitative dimensions were never assigned. This is the coordinator's responsibility. **Why not C:** The synthesis agent works with what it receives; if no qualitative findings are provided, it can't synthesize them regardless of its prompt. **Why not B:** The web search agent searches for what it's told to search for; the queries themselves were narrow, not the search behavior. **Why not D:** The report generator can't cut content that was never produced by upstream agents.
 
 </details>
 
@@ -10463,13 +10463,13 @@ D) Give the synthesis subagent a longer context window so it can process more in
 **Q21 (Task 1.6).** You need to research a broad topic with many potential subtopics. Your current approach has the coordinator generate all subtasks upfront before any research begins. The problem is that initial research often reveals important subtopics and connections that weren't apparent before investigation started, leading to incomplete coverage. What task decomposition strategy would address this?
 
 A) Have the coordinator generate more initial subtasks by casting a wider net during the planning phase.
-B) Use a fixed sequential pipeline that covers all possible subtopics in a predetermined order.
-C) Implement an iterative refinement approach where the coordinator evaluates synthesis output for coverage gaps after each round, re-delegates to search and analysis subagents with targeted queries, and re-invokes synthesis until coverage is sufficient.
+B) Implement an iterative refinement approach where the coordinator evaluates synthesis output for coverage gaps after each round, re-delegates to search and analysis subagents with targeted queries, and re-invokes synthesis until coverage is sufficient.
+C) Use a fixed sequential pipeline that covers all possible subtopics in a predetermined order.
 D) Let subagents autonomously decide to research additional subtopics they discover, without coordinator involvement.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Iterative refinement loops allow the coordinator to evaluate synthesis output for gaps and re-delegate with targeted queries. This adaptive approach discovers subtopics that emerge from initial research rather than trying to predict everything upfront. **Why not A:** Generating more initial subtasks is still a static decomposition — it can't anticipate subtopics that only become apparent after initial findings are analyzed. **Why not B:** A fixed sequential pipeline is even more rigid than the current approach and doesn't adapt to discovered information. **Why not D:** Letting subagents autonomously expand scope bypasses the coordinator's role in managing scope, observability, and preventing redundant work across agents.
+**Correct: B.** Iterative refinement loops allow the coordinator to evaluate synthesis output for gaps and re-delegate with targeted queries. This adaptive approach discovers subtopics that emerge from initial research rather than trying to predict everything upfront. **Why not A:** Generating more initial subtasks is still a static decomposition — it can't anticipate subtopics that only become apparent after initial findings are analyzed. **Why not C:** A fixed sequential pipeline is even more rigid than the current approach and doesn't adapt to discovered information. **Why not D:** Letting subagents autonomously expand scope bypasses the coordinator's role in managing scope, observability, and preventing redundant work across agents.
 
 </details>
 
@@ -10477,38 +10477,38 @@ D) Let subagents autonomously decide to research additional subtopics they disco
 
 A) Use prompt chaining for both components — define the full analysis sequence upfront.
 B) Use dynamic adaptive decomposition for both components — let the coordinator decide steps as findings emerge.
-C) Use prompt chaining for the quantitative component (predictable steps: gather data, validate sources, compile statistics) and dynamic adaptive decomposition for the qualitative component (explore expert opinions, follow emerging themes, iterate on gaps).
-D) Use a single subagent for both components to maintain consistent analysis context.
+C) Use a single subagent for both components to maintain consistent analysis context.
+D) Use prompt chaining for the quantitative component (predictable steps: gather data, validate sources, compile statistics) and dynamic adaptive decomposition for the qualitative component (explore expert opinions, follow emerging themes, iterate on gaps).
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Different task types call for different decomposition patterns. Quantitative data gathering follows predictable steps well-suited to prompt chaining, while qualitative analysis requires adaptive investigation that discovers new threads during research. Matching the pattern to the task type maximizes both efficiency and coverage. **Why not A:** Prompt chaining for qualitative analysis constrains exploration to predetermined steps, likely missing emerging themes and expert viewpoints. **Why not B:** Dynamic decomposition for quantitative gathering adds unnecessary overhead for a straightforward sequence of known steps. **Why not D:** A single agent handling both loses the benefits of specialization and parallel execution.
+**Correct: D.** Different task types call for different decomposition patterns. Quantitative data gathering follows predictable steps well-suited to prompt chaining, while qualitative analysis requires adaptive investigation that discovers new threads during research. Matching the pattern to the task type maximizes both efficiency and coverage. **Why not A:** Prompt chaining for qualitative analysis constrains exploration to predetermined steps, likely missing emerging themes and expert viewpoints. **Why not B:** Dynamic decomposition for quantitative gathering adds unnecessary overhead for a straightforward sequence of known steps. **Why not C:** A single agent handling both loses the benefits of specialization and parallel execution.
 
 </details>
 
 **Q23 (Task 1.7).** A researcher used your system yesterday to analyze market trends in renewable energy. Today they want to continue the research with a focus on policy implications, building on yesterday's findings. The original session generated extensive web search results and document analyses. What is the best approach for continuing the work?
 
 A) Resume the original session using --resume with the session name, so all prior context is preserved.
-B) Start a new session and include a structured summary of key findings from yesterday's research in the initial prompt, rather than resuming with stale tool results.
+B) Re-run all of yesterday's queries to refresh the data before adding policy analysis.
 C) Fork the original session using fork_session to explore policy implications as a separate branch.
-D) Re-run all of yesterday's queries to refresh the data before adding policy analysis.
+D) Start a new session and include a structured summary of key findings from yesterday's research in the initial prompt, rather than resuming with stale tool results.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Starting a new session with a structured summary of key findings is more reliable than resuming when prior tool results may be stale. Yesterday's web search results and document analyses consumed significant context but their raw outputs are less valuable than distilled findings. A fresh session with injected summaries gives the model clean context for the new research direction. **Why not A:** Resuming a session from yesterday means the context includes stale tool results (web pages may have changed, new sources may be available) that consume tokens without adding current value. **Why not C:** fork_session is designed for exploring divergent approaches from a shared analysis baseline within a session, not for continuing work across days with a new research direction. **Why not D:** Re-running all queries wastes time and cost when only the summarized findings are needed as context for the new research direction.
+**Correct: D.** Starting a new session with a structured summary of key findings is more reliable than resuming when prior tool results may be stale. Yesterday's web search results and document analyses consumed significant context but their raw outputs are less valuable than distilled findings. A fresh session with injected summaries gives the model clean context for the new research direction. **Why not A:** Resuming a session from yesterday means the context includes stale tool results (web pages may have changed, new sources may be available) that consume tokens without adding current value. **Why not C:** fork_session is designed for exploring divergent approaches from a shared analysis baseline within a session, not for continuing work across days with a new research direction. **Why not B:** Re-running all queries wastes time and cost when only the summarized findings are needed as context for the new research direction.
 
 </details>
 
 **Q24 (Task 2.1).** Your system has two tools for content retrieval: analyze_content and analyze_document. The web search agent calls analyze_document when it should call analyze_content, and vice versa. Both tools have descriptions that include the phrase "analyzes content from various sources." What is the most effective fix?
 
 A) Add a routing table in the system prompt that maps source types to tools.
-B) Rename the tools and update descriptions to eliminate functional overlap — for example, rename analyze_content to extract_web_results with a description specific to web page processing, and clarify analyze_document for local file analysis.
+B) Add input validation that rejects incorrect source types and suggests the correct tool.
 C) Remove one tool and have the remaining tool handle both use cases.
-D) Add input validation that rejects incorrect source types and suggests the correct tool.
+D) Rename the tools and update descriptions to eliminate functional overlap — for example, rename analyze_content to extract_web_results with a description specific to web page processing, and clarify analyze_document for local file analysis.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Renaming tools and updating descriptions to clearly differentiate their purpose, expected inputs, and boundaries eliminates the ambiguity causing misrouting. Names like extract_web_results immediately signal the tool's scope, and updated descriptions reinforce the boundaries. **Why not A:** A routing table in the system prompt adds token overhead and is probabilistic — the model may not consistently consult it, especially as the prompt grows. **Why not C:** Removing a tool only works if both truly serve the same purpose; if they access different backends (web vs local files), consolidation may not be feasible or desirable. **Why not D:** Input validation is reactive — the wrong tool is still called, wasting a round trip before the error is caught.
+**Correct: D.** Renaming tools and updating descriptions to clearly differentiate their purpose, expected inputs, and boundaries eliminates the ambiguity causing misrouting. Names like extract_web_results immediately signal the tool's scope, and updated descriptions reinforce the boundaries. **Why not A:** A routing table in the system prompt adds token overhead and is probabilistic — the model may not consistently consult it, especially as the prompt grows. **Why not C:** Removing a tool only works if both truly serve the same purpose; if they access different backends (web vs local files), consolidation may not be feasible or desirable. **Why not B:** Input validation is reactive — the wrong tool is still called, wasting a round trip before the error is caught.
 
 </details>
 
@@ -10528,13 +10528,13 @@ D) The retry count should be increased from 3 to 5 to reduce the chance of failu
 **Q26 (Task 2.5).** You need to help your document analysis subagent understand a large codebase of research papers stored in a repository. The agent needs to find all papers that reference a specific methodology, then read relevant sections. The agent currently uses Read to open every file in the directory and scan for the methodology term, which is slow and consumes enormous context. What is the better approach?
 
 A) Use Glob to find all PDF/text files, then Read each one in sequence.
-B) Use Grep to search file contents for the methodology term across all papers, then use Read only on the matching files to load the relevant sections.
+B) Pre-index all papers into a search database and query the database instead.
 C) Use Bash to run a find command and pipe it to grep for the methodology term.
-D) Pre-index all papers into a search database and query the database instead.
+D) Use Grep to search file contents for the methodology term across all papers, then use Read only on the matching files to load the relevant sections.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Grep is designed for searching file contents for patterns across a codebase. Using Grep to find matching files first, then Read to load only the relevant portions, builds understanding incrementally rather than reading everything upfront. This is the recommended pattern: start with Grep to find entry points, then use Read to follow up on specific files. **Why not A:** Glob finds files by name patterns, not by content — it can't search for a methodology term inside files. Reading every file wastes context on irrelevant papers. **Why not C:** The built-in Grep tool is preferred over running grep via Bash, as it's optimized for the agent environment with proper permissions and access. **Why not D:** A search database is a valid optimization but adds infrastructure not required when Grep already provides efficient content search across files.
+**Correct: D.** Grep is designed for searching file contents for patterns across a codebase. Using Grep to find matching files first, then Read to load only the relevant portions, builds understanding incrementally rather than reading everything upfront. This is the recommended pattern: start with Grep to find entry points, then use Read to follow up on specific files. **Why not A:** Glob finds files by name patterns, not by content — it can't search for a methodology term inside files. Reading every file wastes context on irrelevant papers. **Why not C:** The built-in Grep tool is preferred over running grep via Bash, as it's optimized for the agent environment with proper permissions and access. **Why not B:** A search database is a valid optimization but adds infrastructure not required when Grep already provides efficient content search across files.
 
 </details>
 
@@ -10553,27 +10553,27 @@ D) Log the error to an external monitoring system and alert an engineer to manua
 
 **Q28 (Task 5.6).** Your synthesis agent combines findings from web search and document analysis. Two credible sources provide conflicting statistics: one academic paper says "remote workers are 13% more productive" while a government report says "remote workers show no significant productivity difference." The synthesis agent currently picks one value and presents it as fact. How should you redesign the synthesis output?
 
-A) Have the synthesis agent pick the more recent source's value.
+A) Annotate the conflict with source attribution — present both values with their sources, methodological context, and publication dates, distinguishing well-established findings from contested ones.
 B) Average the two values and present the average.
-C) Annotate the conflict with source attribution — present both values with their sources, methodological context, and publication dates, distinguishing well-established findings from contested ones.
+C) Have the synthesis agent pick the more recent source's value.
 D) Omit the conflicting data point entirely to avoid presenting inaccurate information.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Conflicting statistics from credible sources should be annotated with source attribution rather than arbitrarily selecting one value. The synthesis output should preserve both values with their sources, note the methodological differences that may explain the discrepancy, and distinguish well-established from contested findings. **Why not A:** Recency doesn't determine accuracy — the older study may have better methodology. Arbitrarily selecting one value hides the complexity. **Why not B:** Averaging conflicting findings produces a meaningless number that neither source supports and misrepresents the state of research. **Why not D:** Omitting conflicting data produces an incomplete report and hides important nuance — disagreement among credible sources is itself a finding worth reporting.
+**Correct: A.** Conflicting statistics from credible sources should be annotated with source attribution rather than arbitrarily selecting one value. The synthesis output should preserve both values with their sources, note the methodological differences that may explain the discrepancy, and distinguish well-established from contested findings. **Why not C:** Recency doesn't determine accuracy — the older study may have better methodology. Arbitrarily selecting one value hides the complexity. **Why not B:** Averaging conflicting findings produces a meaningless number that neither source supports and misrepresents the state of research. **Why not D:** Omitting conflicting data produces an incomplete report and hides important nuance — disagreement among credible sources is itself a finding worth reporting.
 
 </details>
 
 **Q29 (Task 5.1).** Your coordinator collects findings from four subagents and passes them as a combined block to the synthesis subagent. The synthesis agent consistently produces thorough analysis of findings from the first and last subagents but provides superficial treatment of findings from the middle two subagents. All four subagents produced equally detailed outputs. What is the most likely cause and fix?
 
-A) The middle subagents' findings are less relevant, so the synthesis agent correctly deprioritizes them.
+A) This is the "lost in the middle" effect — models reliably process information at the beginning and end of long inputs but may miss middle sections. Place key findings summaries at the beginning and organize detailed results with explicit section headers.
 B) The synthesis agent has a context window limit and the middle findings are being truncated.
-C) This is the "lost in the middle" effect — models reliably process information at the beginning and end of long inputs but may miss middle sections. Place key findings summaries at the beginning and organize detailed results with explicit section headers.
+C) The middle subagents' findings are less relevant, so the synthesis agent correctly deprioritizes them.
 D) The synthesis agent needs more detailed instructions about treating all findings equally.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** The "lost in the middle" effect is a well-documented phenomenon where models attend more strongly to information at the beginning and end of long contexts. Placing key findings summaries at the top and using explicit section headers with clear structure helps mitigate position-based attention bias. **Why not A:** All four subagents produced equally detailed outputs — the superficial treatment correlates with position, not relevance. **Why not B:** If findings were truncated, the synthesis would reference incomplete data or mention missing sections, not provide superficial but coherent analysis. **Why not D:** Adding instructions doesn't address the underlying attention bias — the model isn't choosing to deprioritize middle content; it's a limitation of how attention works over long inputs.
+**Correct: A.** The "lost in the middle" effect is a well-documented phenomenon where models attend more strongly to information at the beginning and end of long contexts. Placing key findings summaries at the top and using explicit section headers with clear structure helps mitigate position-based attention bias. **Why not C:** All four subagents produced equally detailed outputs — the superficial treatment correlates with position, not relevance. **Why not B:** If findings were truncated, the synthesis would reference incomplete data or mention missing sections, not provide superficial but coherent analysis. **Why not D:** Adding instructions doesn't address the underlying attention bias — the model isn't choosing to deprioritize middle content; it's a limitation of how attention works over long inputs.
 
 </details>
 
@@ -10601,39 +10601,39 @@ You are integrating Claude Code into your CI/CD pipeline. The system runs automa
 **Q31 (Task 3.1).** A new developer joins your team and reports that Claude Code gives them different coding style suggestions than the rest of the team. Upon investigation, you find that the senior developer who set up Claude Code placed all coding standards in ~/.claude/CLAUDE.md on their own machine. What is the problem and the fix?
 
 A) The senior developer's CLAUDE.md file is outdated and needs to be refreshed.
-B) User-level CLAUDE.md (~/.claude/CLAUDE.md) applies only to that user — it is not shared with teammates via version control. Move the coding standards to the project-level .claude/CLAUDE.md or root CLAUDE.md so they are checked into the repository.
-C) The new developer needs to copy the senior developer's CLAUDE.md to their own home directory.
+B) The new developer needs to copy the senior developer's CLAUDE.md to their own home directory.
+C) User-level CLAUDE.md (~/.claude/CLAUDE.md) applies only to that user — it is not shared with teammates via version control. Move the coding standards to the project-level .claude/CLAUDE.md or root CLAUDE.md so they are checked into the repository.
 D) Add the coding standards to the CI/CD pipeline configuration instead of CLAUDE.md.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** User-level CLAUDE.md files in ~/.claude/ are personal to each developer and not shared via version control. Project-level configuration (.claude/CLAUDE.md or root CLAUDE.md) is committed to the repository and automatically available to everyone who clones it. **Why not A:** The file isn't outdated — it's in the wrong scope. Refreshing it doesn't solve the sharing problem. **Why not C:** Manually copying files between developers' machines is fragile, doesn't scale, and goes out of sync immediately when standards change. **Why not D:** CI/CD pipeline configuration serves a different purpose and doesn't affect Claude Code's behavior during interactive development.
+**Correct: C.** User-level CLAUDE.md files in ~/.claude/ are personal to each developer and not shared via version control. Project-level configuration (.claude/CLAUDE.md or root CLAUDE.md) is committed to the repository and automatically available to everyone who clones it. **Why not A:** The file isn't outdated — it's in the wrong scope. Refreshing it doesn't solve the sharing problem. **Why not B:** Manually copying files between developers' machines is fragile, doesn't scale, and goes out of sync immediately when standards change. **Why not D:** CI/CD pipeline configuration serves a different purpose and doesn't affect Claude Code's behavior during interactive development.
 
 </details>
 
 **Q32 (Task 3.1).** Your project has grown to include a large monolithic CLAUDE.md file with 400+ lines covering API conventions, testing standards, deployment procedures, security guidelines, and frontend patterns. Developers report that Claude sometimes ignores relevant guidelines, and the file is difficult to maintain because changes to one section risk breaking others. What is the most maintainable reorganization?
 
 A) Split the file into multiple sections with clear headers within the same CLAUDE.md to improve readability.
-B) Split the CLAUDE.md into focused topic-specific files in .claude/rules/ (e.g., testing.md, api-conventions.md, deployment.md) and use @import syntax where cross-references are needed.
+B) Move the less-frequently-used guidelines to a wiki and reference the wiki URL in CLAUDE.md.
 C) Create separate CLAUDE.md files in each subdirectory for the conventions relevant to that area.
-D) Move the less-frequently-used guidelines to a wiki and reference the wiki URL in CLAUDE.md.
+D) Split the CLAUDE.md into focused topic-specific files in .claude/rules/ (e.g., testing.md, api-conventions.md, deployment.md) and use @import syntax where cross-references are needed.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The .claude/rules/ directory is designed for organizing topic-specific rule files as an alternative to a monolithic CLAUDE.md. This approach makes each file independently maintainable, reduces irrelevant context loaded per session, and enables path-specific scoping with YAML frontmatter. The @import syntax supports cross-references when needed. **Why not A:** Better headers improve readability but don't reduce the context loaded per session — all 400+ lines are still included regardless of what the developer is working on. **Why not C:** Subdirectory CLAUDE.md files scope by directory location, which doesn't map well to cross-cutting concerns like testing standards that apply to files throughout the project. **Why not D:** Claude Code cannot access wiki URLs during operation — guidelines must be in local configuration files to be effective.
+**Correct: D.** The .claude/rules/ directory is designed for organizing topic-specific rule files as an alternative to a monolithic CLAUDE.md. This approach makes each file independently maintainable, reduces irrelevant context loaded per session, and enables path-specific scoping with YAML frontmatter. The @import syntax supports cross-references when needed. **Why not A:** Better headers improve readability but don't reduce the context loaded per session — all 400+ lines are still included regardless of what the developer is working on. **Why not C:** Subdirectory CLAUDE.md files scope by directory location, which doesn't map well to cross-cutting concerns like testing standards that apply to files throughout the project. **Why not B:** Claude Code cannot access wiki URLs during operation — guidelines must be in local configuration files to be effective.
 
 </details>
 
 **Q33 (Task 3.2).** Your CI/CD pipeline needs a reusable code review workflow that produces structured JSON output. The review should run in isolation so its verbose analysis output doesn't pollute the main session context. You want this available to all developers via the repository. Where and how should you configure it?
 
 A) Create a slash command in .claude/commands/ with the review instructions.
-B) Create a skill in .claude/skills/ with a SKILL.md file that includes context: fork in the frontmatter to run in an isolated sub-agent context, and allowed-tools to restrict tool access during review.
-C) Add the review logic to the project-level CLAUDE.md as a conditional instruction.
+B) Add the review logic to the project-level CLAUDE.md as a conditional instruction.
+C) Create a skill in .claude/skills/ with a SKILL.md file that includes context: fork in the frontmatter to run in an isolated sub-agent context, and allowed-tools to restrict tool access during review.
 D) Create a separate script that invokes Claude Code via the -p flag with the review prompt.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Skills in .claude/skills/ with SKILL.md files support frontmatter configuration including context: fork for isolation (preventing verbose output from polluting the main conversation) and allowed-tools for restricting tool access. This is purpose-built for reusable workflows that need isolation and controlled tool access. **Why not A:** Slash commands in .claude/commands/ don't support context: fork for isolation or allowed-tools restrictions — they run in the main session context. **Why not C:** CLAUDE.md is for always-loaded universal standards, not on-demand workflow invocations. Conditional logic in CLAUDE.md is fragile and always consumes context tokens. **Why not D:** A separate script works for CI but isn't available as an on-demand developer workflow, and loses the benefits of skill frontmatter configuration.
+**Correct: C.** Skills in .claude/skills/ with SKILL.md files support frontmatter configuration including context: fork for isolation (preventing verbose output from polluting the main conversation) and allowed-tools for restricting tool access. This is purpose-built for reusable workflows that need isolation and controlled tool access. **Why not A:** Slash commands in .claude/commands/ don't support context: fork for isolation or allowed-tools restrictions — they run in the main session context. **Why not B:** CLAUDE.md is for always-loaded universal standards, not on-demand workflow invocations. Conditional logic in CLAUDE.md is fragile and always consumes context tokens. **Why not D:** A separate script works for CI but isn't available as an on-demand developer workflow, and loses the benefits of skill frontmatter configuration.
 
 </details>
 
@@ -10654,12 +10654,12 @@ D) Create custom slash commands for each file type that developers invoke before
 
 A) Use plan mode for both tasks to ensure thorough analysis.
 B) Use direct execution for both tasks to minimize latency in the CI pipeline.
-C) Use direct execution for the single-file bug fix (clear scope, straightforward fix) and plan mode for the microservices migration (complex, multi-file, multiple valid approaches, architectural decisions).
-D) Use plan mode for the bug fix to ensure correctness, and direct execution for the migration to get results faster.
+C) Use plan mode for the bug fix to ensure correctness, and direct execution for the migration to get results faster.
+D) Use direct execution for the single-file bug fix (clear scope, straightforward fix) and plan mode for the microservices migration (complex, multi-file, multiple valid approaches, architectural decisions).
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Direct execution is appropriate for well-scoped changes with clear solutions — a single-file bug fix with an obvious stack trace doesn't need exploration. Plan mode is designed for complex tasks with architectural implications, multiple valid approaches, and multi-file changes — exactly what a microservices migration requires. **Why not A:** Plan mode for a simple bug fix adds unnecessary overhead when the problem and solution are already clear. **Why not B:** Direct execution on a 30+ file migration risks costly rework when dependencies and architectural decisions aren't explored first. **Why not D:** This is exactly backwards — simple tasks need direct execution, complex tasks need planning.
+**Correct: D.** Direct execution is appropriate for well-scoped changes with clear solutions — a single-file bug fix with an obvious stack trace doesn't need exploration. Plan mode is designed for complex tasks with architectural implications, multiple valid approaches, and multi-file changes — exactly what a microservices migration requires. **Why not A:** Plan mode for a simple bug fix adds unnecessary overhead when the problem and solution are already clear. **Why not B:** Direct execution on a 30+ file migration risks costly rework when dependencies and architectural decisions aren't explored first. **Why not C:** This is exactly backwards — simple tasks need direct execution, complex tasks need planning.
 
 </details>
 
@@ -10678,27 +10678,27 @@ D) Have Claude generate 3x more tests and let the team delete the trivial ones.
 
 **Q37 (Task 3.5).** You are iterating on Claude Code's output for a data migration script. The script handles most cases correctly but produces incorrect results for rows with null values in the "email" column — it inserts the string "null" instead of a database NULL. You've described the issue in prose but Claude keeps producing the same incorrect behavior. What approach is most likely to fix it?
 
-A) Add "IMPORTANT: Handle null values correctly" to the system prompt in bold and caps.
-B) Provide a specific test case with example input (a row with email = null) and expected output (database NULL, not the string "null"), so Claude can see exactly what correct behavior looks like.
+A) Provide a specific test case with example input (a row with email = null) and expected output (database NULL, not the string "null"), so Claude can see exactly what correct behavior looks like.
+B) Add "IMPORTANT: Handle null values correctly" to the system prompt in bold and caps.
 C) Ask Claude to explain how it handles null values, then correct its understanding.
 D) Rewrite the migration script yourself and have Claude review your solution.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** When natural language descriptions produce inconsistent results, providing specific test cases with concrete input and expected output is the most effective technique. Showing Claude exactly what null handling should look like eliminates ambiguity and enables test-driven iteration — Claude can run the test, see it fail, and fix its implementation. **Why not A:** Emphasis formatting doesn't materially change LLM behavior — the model already understands the instruction but is implementing it incorrectly due to ambiguity about what "correct" null handling means in this context. **Why not C:** Getting Claude to explain its reasoning may provide insight but doesn't guarantee it will fix the implementation without a concrete example of correct behavior. **Why not D:** Rewriting the script yourself defeats the purpose of using Claude for code generation and doesn't help Claude learn the correct pattern for future iterations.
+**Correct: A.** When natural language descriptions produce inconsistent results, providing specific test cases with concrete input and expected output is the most effective technique. Showing Claude exactly what null handling should look like eliminates ambiguity and enables test-driven iteration — Claude can run the test, see it fail, and fix its implementation. **Why not B:** Emphasis formatting doesn't materially change LLM behavior — the model already understands the instruction but is implementing it incorrectly due to ambiguity about what "correct" null handling means in this context. **Why not C:** Getting Claude to explain its reasoning may provide insight but doesn't guarantee it will fix the implementation without a concrete example of correct behavior. **Why not D:** Rewriting the script yourself defeats the purpose of using Claude for code generation and doesn't help Claude learn the correct pattern for future iterations.
 
 </details>
 
 **Q38 (Task 3.6).** Your CI pipeline runs Claude Code for automated code review, but the job hangs indefinitely in the CI runner. Logs show Claude Code is waiting for interactive input. What is the correct fix?
 
-A) Set the CLAUDE_CI=true environment variable before running the command.
-B) Add the -p (--print) flag to run Claude Code in non-interactive mode: claude -p "Review this PR for security issues".
+A) Add the -p (--print) flag to run Claude Code in non-interactive mode: claude -p "Review this PR for security issues".
+B) Set the CLAUDE_CI=true environment variable before running the command.
 C) Redirect stdin from /dev/null to prevent interactive prompts.
 D) Add the --no-interactive flag to the Claude Code command.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The -p (or --print) flag is the documented way to run Claude Code in non-interactive mode. It processes the prompt, outputs the result to stdout, and exits without waiting for user input — exactly what CI/CD pipelines require. **Why not A:** CLAUDE_CI is not a documented environment variable for Claude Code. **Why not C:** Redirecting stdin is a Unix workaround that doesn't properly address Claude Code's command syntax and may produce unexpected behavior. **Why not D:** --no-interactive is not a valid Claude Code flag.
+**Correct: A.** The -p (or --print) flag is the documented way to run Claude Code in non-interactive mode. It processes the prompt, outputs the result to stdout, and exits without waiting for user input — exactly what CI/CD pipelines require. **Why not B:** CLAUDE_CI is not a documented environment variable for Claude Code. **Why not C:** Redirecting stdin is a Unix workaround that doesn't properly address Claude Code's command syntax and may produce unexpected behavior. **Why not D:** --no-interactive is not a valid Claude Code flag.
 
 </details>
 
@@ -10744,52 +10744,52 @@ D) Reduce the severity of comment accuracy findings from "error" to "warning" so
 **Q42 (Task 4.1).** Your code review prompt says "Flag any issues you find, being conservative and only reporting high-confidence findings." Despite this instruction, the review still produces many false positives, particularly around intentional code patterns your team uses (like feature flags implemented as empty catch blocks). What change would most effectively improve precision?
 
 A) Change "conservative" to "very conservative" and add "minimize false positives."
-B) Replace the vague instruction with specific criteria: define which issues to report (bugs with clear impact, security vulnerabilities) and which patterns to skip (empty catch blocks for feature flags, intentional no-ops marked with comments), using concrete code examples.
+B) Have developers rate each finding as correct or incorrect and fine-tune the model on the feedback.
 C) Add a post-processing filter that removes findings matching known false-positive patterns.
-D) Have developers rate each finding as correct or incorrect and fine-tune the model on the feedback.
+D) Replace the vague instruction with specific criteria: define which issues to report (bugs with clear impact, security vulnerabilities) and which patterns to skip (empty catch blocks for feature flags, intentional no-ops marked with comments), using concrete code examples.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** General instructions like "be conservative" fail to improve precision because they don't tell the model which specific patterns are acceptable. Writing specific review criteria with concrete code examples defining what to flag versus skip gives the model the judgment framework it needs. **Why not A:** Adding more emphasis to vague instructions doesn't improve precision — "very conservative" is no more actionable than "conservative" for the model. **Why not C:** Post-processing filters are reactive and require maintaining a growing list of patterns, rather than teaching the model to make correct judgments upfront. **Why not D:** Fine-tuning requires significant infrastructure, labeled data, and ongoing maintenance — it's a disproportionate response when prompt improvements haven't been tried.
+**Correct: D.** General instructions like "be conservative" fail to improve precision because they don't tell the model which specific patterns are acceptable. Writing specific review criteria with concrete code examples defining what to flag versus skip gives the model the judgment framework it needs. **Why not A:** Adding more emphasis to vague instructions doesn't improve precision — "very conservative" is no more actionable than "conservative" for the model. **Why not C:** Post-processing filters are reactive and require maintaining a growing list of patterns, rather than teaching the model to make correct judgments upfront. **Why not B:** Fine-tuning requires significant infrastructure, labeled data, and ongoing maintenance — it's a disproportionate response when prompt improvements haven't been tried.
 
 </details>
 
 **Q43 (Task 4.2).** Your CI test generation produces tests that compile and pass but cover only obvious scenarios. You want Claude to generate tests for subtle edge cases like race conditions, boundary values, and error recovery paths. Adding the instruction "include edge cases" hasn't changed the output quality. What approach will most effectively improve test variety?
 
 A) Generate tests in multiple passes, with each pass targeting a specific category (happy path, boundary, error, concurrency).
-B) Provide 2-4 few-shot examples of high-quality edge case tests from your codebase, showing the reasoning for why each edge case matters — for example, a test that catches an off-by-one error at array boundaries, with a comment explaining the scenario.
-C) Increase the temperature to produce more creative test variations.
+B) Increase the temperature to produce more creative test variations.
+C) Provide 2-4 few-shot examples of high-quality edge case tests from your codebase, showing the reasoning for why each edge case matters — for example, a test that catches an off-by-one error at array boundaries, with a comment explaining the scenario.
 D) Have Claude first analyze the code for potential failure modes, then generate tests targeting those specific modes.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Few-shot examples are the most effective technique for achieving consistently formatted, actionable output when instructions alone produce inconsistent results. Showing concrete examples of the quality and type of edge case tests you expect — with reasoning about why each matters — enables the model to generalize the judgment pattern to novel code. **Why not A:** Multiple passes can improve coverage but don't address the quality problem — each pass may still produce shallow tests without examples demonstrating what "good edge case tests" look like. **Why not C:** Higher temperature increases randomness but doesn't improve judgment about which edge cases matter — it's more likely to produce nonsensical tests than thoughtful ones. **Why not D:** Analyzing failure modes first is a reasonable approach but doesn't address the output quality issue — the model may identify failure modes correctly but still generate shallow tests for them.
+**Correct: C.** Few-shot examples are the most effective technique for achieving consistently formatted, actionable output when instructions alone produce inconsistent results. Showing concrete examples of the quality and type of edge case tests you expect — with reasoning about why each matters — enables the model to generalize the judgment pattern to novel code. **Why not A:** Multiple passes can improve coverage but don't address the quality problem — each pass may still produce shallow tests without examples demonstrating what "good edge case tests" look like. **Why not B:** Higher temperature increases randomness but doesn't improve judgment about which edge cases matter — it's more likely to produce nonsensical tests than thoughtful ones. **Why not D:** Analyzing failure modes first is a reasonable approach but doesn't address the output quality issue — the model may identify failure modes correctly but still generate shallow tests for them.
 
 </details>
 
 **Q44 (Task 4.3).** Your CI pipeline needs Claude Code to produce structured review findings in a specific JSON format: {file, line, severity, issue, suggested_fix}. Currently the pipeline parses Claude's natural language output with a regex, which breaks frequently. What is the most reliable approach?
 
 A) Improve the regex to handle more output variations.
-B) Use --output-format json with --json-schema specifying the exact schema ({file, line, severity, issue, suggested_fix}) so Claude Code produces guaranteed schema-compliant structured output.
-C) Add detailed instructions to the prompt specifying the JSON format and include 5 examples.
+B) Add detailed instructions to the prompt specifying the JSON format and include 5 examples.
+C) Use --output-format json with --json-schema specifying the exact schema ({file, line, severity, issue, suggested_fix}) so Claude Code produces guaranteed schema-compliant structured output.
 D) Have Claude output XML instead of JSON for easier parsing.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Using --output-format json with --json-schema enforces structured output at the system level, eliminating JSON syntax errors and guaranteeing schema compliance. This is the purpose-built mechanism for CI contexts requiring machine-parseable output. **Why not A:** Improving regexes is an arms race — the model's natural language output will always have variations that break pattern matching. **Why not C:** Prompt-based JSON formatting is probabilistic — even with examples, the model may occasionally deviate from the format or produce invalid JSON syntax. **Why not D:** XML is harder to parse than JSON and equally susceptible to formatting inconsistencies when generated via natural language instructions.
+**Correct: C.** Using --output-format json with --json-schema enforces structured output at the system level, eliminating JSON syntax errors and guaranteeing schema compliance. This is the purpose-built mechanism for CI contexts requiring machine-parseable output. **Why not A:** Improving regexes is an arms race — the model's natural language output will always have variations that break pattern matching. **Why not B:** Prompt-based JSON formatting is probabilistic — even with examples, the model may occasionally deviate from the format or produce invalid JSON syntax. **Why not D:** XML is harder to parse than JSON and equally susceptible to formatting inconsistencies when generated via natural language instructions.
 
 </details>
 
 **Q45 (Task 4.6).** Your CI pipeline runs a single Claude Code pass to review a PR that modifies 18 files across your payment processing module. The review produces detailed, accurate feedback for the first few files but gives superficial comments for later files. It also flags a validation pattern as incorrect in one file while approving the identical pattern in another file within the same PR. How should you restructure the review?
 
 A) Increase the context window to give the model more attention capacity for all 18 files.
-B) Split the review into focused per-file local analysis passes (examining each file individually) plus a separate cross-file integration pass (examining data flow between files), then merge the findings.
-C) Run the same single-pass review three times and take the majority vote on each finding.
+B) Run the same single-pass review three times and take the majority vote on each finding.
+C) Split the review into focused per-file local analysis passes (examining each file individually) plus a separate cross-file integration pass (examining data flow between files), then merge the findings.
 D) Require developers to split large PRs into smaller submissions before review.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Splitting into per-file passes plus cross-file integration passes directly addresses attention dilution. Individual file analysis ensures consistent depth and avoids contradictory findings, while the integration pass catches cross-file data flow issues that per-file analysis would miss. **Why not A:** Larger context windows don't solve attention quality issues — the model can hold more information but still processes it unevenly. **Why not C:** Majority voting suppresses real findings that are only caught intermittently and doesn't fix the root cause of inconsistent attention. **Why not D:** Shifting burden to developers doesn't improve the review system and may not be feasible for changes that legitimately span many files.
+**Correct: C.** Splitting into per-file passes plus cross-file integration passes directly addresses attention dilution. Individual file analysis ensures consistent depth and avoids contradictory findings, while the integration pass catches cross-file data flow issues that per-file analysis would miss. **Why not A:** Larger context windows don't solve attention quality issues — the model can hold more information but still processes it unevenly. **Why not B:** Majority voting suppresses real findings that are only caught intermittently and doesn't fix the root cause of inconsistent attention. **Why not D:** Shifting burden to developers doesn't improve the review system and may not be feasible for changes that legitimately span many files.
 
 </details>
 
@@ -10809,13 +10809,13 @@ D) Add a checklist of specific edge cases the review should verify.
 **Q47 (Task 4.2).** Your code review pipeline produces findings with inconsistent formatting. Sometimes findings include file paths and line numbers; other times they're vague descriptions without location information. You've tried detailed instructions specifying the format (file, line, issue, severity, suggestion) but the output remains inconsistent. What should you add?
 
 A) A post-processing step that rejects findings without complete location information.
-B) 2-4 few-shot examples showing the exact output format you expect for different types of findings — including the file path, line number, issue description, severity level, and suggested fix in a consistent structure.
+B) A template with placeholder values that Claude fills in for each finding.
 C) A JSON schema that enforces the output structure.
-D) A template with placeholder values that Claude fills in for each finding.
+D) 2-4 few-shot examples showing the exact output format you expect for different types of findings — including the file path, line number, issue description, severity level, and suggested fix in a consistent structure.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Few-shot examples are the most effective technique for achieving consistently formatted output when detailed instructions alone produce inconsistent results. Showing 2-4 concrete examples of correctly formatted findings (with location, issue, severity, and fix) demonstrates the expected format more reliably than describing it. **Why not A:** Post-processing rejection discards potentially valuable findings rather than fixing the formatting problem at the source. **Why not C:** A JSON schema via tool_use is also effective but the question asks about adding to the existing prompt-based approach; few-shot examples are the most impactful addition to improve consistency. **Why not D:** Templates with placeholders tend to produce formulaic output where the model fills in blanks mechanically rather than providing thoughtful analysis.
+**Correct: D.** Few-shot examples are the most effective technique for achieving consistently formatted output when detailed instructions alone produce inconsistent results. Showing 2-4 concrete examples of correctly formatted findings (with location, issue, severity, and fix) demonstrates the expected format more reliably than describing it. **Why not A:** Post-processing rejection discards potentially valuable findings rather than fixing the formatting problem at the source. **Why not C:** A JSON schema via tool_use is also effective but the question asks about adding to the existing prompt-based approach; few-shot examples are the most impactful addition to improve consistency. **Why not B:** Templates with placeholders tend to produce formulaic output where the model fills in blanks mechanically rather than providing thoughtful analysis.
 
 </details>
 
@@ -10829,40 +10829,40 @@ You are building a structured data extraction system using Claude. The system ex
 
 **Q48 (Task 3.1).** Your data extraction system processes documents from multiple departments: legal contracts, medical records, and financial reports. Each document type has different extraction rules and validation criteria. You want Claude Code operators in each department to have their own extraction conventions applied automatically when working on their document types, without loading irrelevant rules from other departments. What configuration approach is best?
 
-A) Create a single CLAUDE.md at the project root with all department rules and let Claude infer which apply.
-B) Create rule files in .claude/rules/ with YAML frontmatter path scoping — e.g., paths: ["legal/**/*"] for legal extraction rules, paths: ["medical/**/*"] for medical rules — so rules load only when editing matching files.
+A) Create rule files in .claude/rules/ with YAML frontmatter path scoping — e.g., paths: ["legal/**/*"] for legal extraction rules, paths: ["medical/**/*"] for medical rules — so rules load only when editing matching files.
+B) Create a single CLAUDE.md at the project root with all department rules and let Claude infer which apply.
 C) Create separate CLAUDE.md files in each department's directory.
 D) Use environment variables to toggle between department rule sets.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Rule files in .claude/rules/ with YAML frontmatter path scoping automatically load the correct conventions based on file path. Legal rules load only when working on legal documents, medical rules for medical documents, etc. This reduces irrelevant context and ensures department-specific conventions are applied deterministically. **Why not A:** Loading all department rules for every file wastes context tokens and increases the chance Claude applies wrong-department conventions. **Why not C:** Subdirectory CLAUDE.md files work for simple cases but don't support cross-cutting concerns and lack the flexibility of glob pattern matching. **Why not D:** Environment variables require manual toggling and aren't tied to the file being edited.
+**Correct: A.** Rule files in .claude/rules/ with YAML frontmatter path scoping automatically load the correct conventions based on file path. Legal rules load only when working on legal documents, medical rules for medical documents, etc. This reduces irrelevant context and ensures department-specific conventions are applied deterministically. **Why not B:** Loading all department rules for every file wastes context tokens and increases the chance Claude applies wrong-department conventions. **Why not C:** Subdirectory CLAUDE.md files work for simple cases but don't support cross-cutting concerns and lack the flexibility of glob pattern matching. **Why not D:** Environment variables require manual toggling and aren't tied to the file being edited.
 
 </details>
 
 **Q49 (Task 3.4).** Your extraction system encounters a document in an unexpected format that the current extraction pipeline can't handle. You need to explore the document structure, understand its layout, and design a new extraction approach before implementing it. Should you use plan mode or direct execution?
 
-A) Direct execution — start extracting and adjust based on errors.
-B) Plan mode — explore the document structure, understand the layout patterns, and design an extraction approach before implementing it.
+A) Plan mode — explore the document structure, understand the layout patterns, and design an extraction approach before implementing it.
+B) Direct execution — start extracting and adjust based on errors.
 C) Direct execution with comprehensive upfront instructions specifying how to handle the unknown format.
 D) It doesn't matter — both modes produce the same result for extraction tasks.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Plan mode is designed for tasks requiring exploration before commitment. An unknown document format requires understanding the structure, identifying patterns, and choosing an appropriate extraction strategy — exactly the kind of investigation where planning prevents costly rework. **Why not A:** Starting extraction without understanding the format leads to errors and wasted iterations as you discover unexpected patterns mid-implementation. **Why not C:** You can't write comprehensive instructions for a format you don't yet understand — this assumes knowledge you don't have. **Why not D:** Plan mode and direct execution serve fundamentally different purposes; plan mode is specifically valuable for exploration tasks.
+**Correct: A.** Plan mode is designed for tasks requiring exploration before commitment. An unknown document format requires understanding the structure, identifying patterns, and choosing an appropriate extraction strategy — exactly the kind of investigation where planning prevents costly rework. **Why not B:** Starting extraction without understanding the format leads to errors and wasted iterations as you discover unexpected patterns mid-implementation. **Why not C:** You can't write comprehensive instructions for a format you don't yet understand — this assumes knowledge you don't have. **Why not D:** Plan mode and direct execution serve fundamentally different purposes; plan mode is specifically valuable for exploration tasks.
 
 </details>
 
 **Q50 (Task 3.6).** Your extraction system needs to process 5,000 invoices overnight for a weekly financial audit. The results are reviewed the next morning. Your manager proposes using real-time synchronous API calls for each invoice. How should you evaluate this proposal?
 
 A) Agree — synchronous calls ensure each extraction completes before the next begins, maintaining data integrity.
-B) Use the Message Batches API instead — it offers 50% cost savings and is designed for non-blocking, latency-tolerant workloads like overnight batch processing, while synchronous calls should be reserved for blocking workflows.
+B) Process invoices synchronously during the day when API rates are lower.
 C) Use synchronous calls but parallelize them across multiple threads for speed.
-D) Process invoices synchronously during the day when API rates are lower.
+D) Use the Message Batches API instead — it offers 50% cost savings and is designed for non-blocking, latency-tolerant workloads like overnight batch processing, while synchronous calls should be reserved for blocking workflows.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** The Message Batches API offers 50% cost savings and is designed for exactly this use case: non-blocking, latency-tolerant workloads with no immediate user waiting for results. Overnight processing with next-morning review is the ideal batch API scenario. Synchronous calls are appropriate for blocking workflows where users wait for results. **Why not A:** Sequential synchronous processing of 5,000 invoices is unnecessarily expensive and slow for a non-blocking overnight task. **Why not C:** Parallelized synchronous calls still cost twice as much as batch processing and add infrastructure complexity for managing threads and rate limits. **Why not D:** Time-of-day doesn't affect API pricing, and daytime processing contradicts the overnight use case.
+**Correct: D.** The Message Batches API offers 50% cost savings and is designed for exactly this use case: non-blocking, latency-tolerant workloads with no immediate user waiting for results. Overnight processing with next-morning review is the ideal batch API scenario. Synchronous calls are appropriate for blocking workflows where users wait for results. **Why not A:** Sequential synchronous processing of 5,000 invoices is unnecessarily expensive and slow for a non-blocking overnight task. **Why not C:** Parallelized synchronous calls still cost twice as much as batch processing and add infrastructure complexity for managing threads and rate limits. **Why not B:** Time-of-day doesn't affect API pricing, and daytime processing contradicts the overnight use case.
 
 </details>
 
@@ -10881,14 +10881,14 @@ D) Add validation strictness as a CLAUDE.md configuration parameter.
 
 **Q52 (Task 4.3).** Your extraction system needs to extract invoice data (vendor, amount, date, line_items) from unstructured documents. Currently, you instruct Claude to "output the data as JSON" in the prompt, but you frequently get invalid JSON (missing quotes, trailing commas) that crashes your downstream parser. What is the most reliable fix?
 
-A) Add examples of valid JSON in the prompt to improve formatting consistency.
+A) Define an extraction tool with a JSON schema (vendor: string, amount: number, date: string, line_items: array) and use tool_use with forced tool selection to guarantee schema-compliant structured output.
 B) Add a JSON validation step that fixes common syntax errors before parsing.
-C) Define an extraction tool with a JSON schema (vendor: string, amount: number, date: string, line_items: array) and use tool_use with forced tool selection to guarantee schema-compliant structured output.
+C) Add examples of valid JSON in the prompt to improve formatting consistency.
 D) Use a regex-based parser that's more tolerant of formatting variations.
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Tool use with JSON schemas is the most reliable approach for guaranteed schema-compliant structured output. It eliminates JSON syntax errors entirely by having the model fill in schema-defined fields rather than generating free-form JSON text. Forced tool selection ensures the extraction tool is always called. **Why not A:** Few-shot examples improve consistency but don't eliminate JSON syntax errors — the model can still produce invalid JSON occasionally. **Why not B:** A JSON fixer is a band-aid that may introduce errors when "fixing" ambiguous syntax, and doesn't guarantee the output matches your expected schema structure. **Why not D:** A tolerant parser may accept invalid JSON but can't guarantee the parsed data matches your expected fields and types.
+**Correct: A.** Tool use with JSON schemas is the most reliable approach for guaranteed schema-compliant structured output. It eliminates JSON syntax errors entirely by having the model fill in schema-defined fields rather than generating free-form JSON text. Forced tool selection ensures the extraction tool is always called. **Why not C:** Few-shot examples improve consistency but don't eliminate JSON syntax errors — the model can still produce invalid JSON occasionally. **Why not B:** A JSON fixer is a band-aid that may introduce errors when "fixing" ambiguous syntax, and doesn't guarantee the output matches your expected schema structure. **Why not D:** A tolerant parser may accept invalid JSON but can't guarantee the parsed data matches your expected fields and types.
 
 </details>
 
@@ -10907,66 +10907,66 @@ D) Change the field to optional so the model can skip it when uncertain.
 
 **Q54 (Task 4.4).** Your extraction pipeline processes vendor invoices. Validation catches that the sum of line item amounts ($450 + $225 + $125 = $800) doesn't match the stated total ($850) on the invoice. The system retries the extraction, but it produces the same result. How should you handle this?
 
-A) Accept the extracted total since it matches the document.
+A) Design the extraction to capture both "calculated_total" (sum of line items) and "stated_total" (what the document says), flag the discrepancy with a "conflict_detected" boolean, and route to human review rather than retrying — the information isn't wrong, the source document is inconsistent.
 B) Average the two values and use that as the total.
-C) Design the extraction to capture both "calculated_total" (sum of line items) and "stated_total" (what the document says), flag the discrepancy with a "conflict_detected" boolean, and route to human review rather than retrying — the information isn't wrong, the source document is inconsistent.
+C) Accept the extracted total since it matches the document.
 D) Retry with a more explicit prompt that says "ensure line items sum to the total."
 
 <details><summary>Show Answer</summary>
 
-**Correct: C.** Retries are ineffective when the inconsistency exists in the source document itself — retrying will produce the same faithful extraction. Instead, capture both values (calculated vs stated total), flag the conflict, and route to human review for resolution. This is a semantic validation issue, not an extraction error. **Why not A:** Blindly accepting the stated total ignores a real discrepancy that may indicate a billing error or data entry mistake. **Why not B:** Averaging produces a number that doesn't appear in the source document and masks the conflict. **Why not D:** Instructing "ensure they sum correctly" would cause the model to fabricate line items or modify the stated total to force consistency, rather than faithfully extracting what the document actually says.
+**Correct: A.** Retries are ineffective when the inconsistency exists in the source document itself — retrying will produce the same faithful extraction. Instead, capture both values (calculated vs stated total), flag the conflict, and route to human review for resolution. This is a semantic validation issue, not an extraction error. **Why not C:** Blindly accepting the stated total ignores a real discrepancy that may indicate a billing error or data entry mistake. **Why not B:** Averaging produces a number that doesn't appear in the source document and masks the conflict. **Why not D:** Instructing "ensure they sum correctly" would cause the model to fabricate line items or modify the stated total to force consistency, rather than faithfully extracting what the document actually says.
 
 </details>
 
 **Q55 (Task 4.4).** Your extraction system processes medical records. Some records don't include a patient's blood type, but your schema has blood_type as a required field. The model fabricates plausible blood types (usually "O+") to satisfy the required constraint. How should you fix this?
 
 A) Add instructions saying "do not guess blood types."
-B) Make the blood_type field optional (nullable) in the schema so the model can return null when the information is absent from the source document, rather than fabricating values to satisfy a required field.
-C) Add a validation step that checks if the extracted blood type matches a known database.
+B) Add a validation step that checks if the extracted blood type matches a known database.
+C) Make the blood_type field optional (nullable) in the schema so the model can return null when the information is absent from the source document, rather than fabricating values to satisfy a required field.
 D) Add a confidence score for the blood_type field and filter out low-confidence extractions.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** When source documents may not contain certain information, schema fields should be optional (nullable). A required field forces the model to produce a value even when none exists in the source, leading to fabrication. Making it nullable allows the model to honestly return null for absent information. **Why not A:** Instructions help but don't override the schema constraint — if the field is required, the model must provide a value, creating a conflict between the instruction and the schema. **Why not C:** Validation against a database catches wrong values but doesn't prevent fabrication or address the root cause — the field shouldn't be required for documents that may not contain it. **Why not D:** Confidence scores on fabricated values are meaningless — the model may be "confident" in its fabrication because it's the most common blood type.
+**Correct: C.** When source documents may not contain certain information, schema fields should be optional (nullable). A required field forces the model to produce a value even when none exists in the source, leading to fabrication. Making it nullable allows the model to honestly return null for absent information. **Why not A:** Instructions help but don't override the schema constraint — if the field is required, the model must provide a value, creating a conflict between the instruction and the schema. **Why not B:** Validation against a database catches wrong values but doesn't prevent fabrication or address the root cause — the field shouldn't be required for documents that may not contain it. **Why not D:** Confidence scores on fabricated values are meaningless — the model may be "confident" in its fabrication because it's the most common blood type.
 
 </details>
 
 **Q56 (Task 4.5).** You need to process 10,000 contracts for a quarterly compliance audit. Results must be ready within 30 hours of submission. The Message Batches API has a processing window of up to 24 hours. How should you plan the batch submission?
 
 A) Submit all 10,000 contracts in a single batch 30 hours before the deadline.
-B) Submit the batch with a 6-hour buffer (at least 30 hours before the deadline) to guarantee the 30-hour SLA given the 24-hour batch processing window, and plan to resubmit any failed documents by custom_id with modifications.
+B) Split into 10 batches of 1,000 contracts each and submit them in parallel.
 C) Submit contracts one at a time using synchronous API calls to ensure sequential processing.
-D) Split into 10 batches of 1,000 contracts each and submit them in parallel.
+D) Submit the batch with a 6-hour buffer (at least 30 hours before the deadline) to guarantee the 30-hour SLA given the 24-hour batch processing window, and plan to resubmit any failed documents by custom_id with modifications.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** With a 24-hour batch processing window and a 30-hour SLA, you need buffer time for handling failures. Submitting 6 hours before the deadline allows 24 hours for batch processing plus 6 hours for resubmitting failed documents (identified by custom_id) with appropriate modifications. **Why not A:** Submitting exactly 30 hours before leaves zero buffer — if any documents fail, you can't resubmit within the deadline since a second batch could take another 24 hours. **Why not C:** Synchronous processing of 10,000 contracts is prohibitively expensive (no 50% batch discount) and time-consuming. **Why not D:** Splitting into smaller batches doesn't reduce total processing time (each still has up to 24-hour window) and adds complexity without benefit.
+**Correct: D.** With a 24-hour batch processing window and a 30-hour SLA, you need buffer time for handling failures. Submitting 6 hours before the deadline allows 24 hours for batch processing plus 6 hours for resubmitting failed documents (identified by custom_id) with appropriate modifications. **Why not A:** Submitting exactly 30 hours before leaves zero buffer — if any documents fail, you can't resubmit within the deadline since a second batch could take another 24 hours. **Why not C:** Synchronous processing of 10,000 contracts is prohibitively expensive (no 50% batch discount) and time-consuming. **Why not B:** Splitting into smaller batches doesn't reduce total processing time (each still has up to 24-hour window) and adds complexity without benefit.
 
 </details>
 
 **Q57 (Task 5.5).** Your extraction system achieves 96% overall accuracy on your test set. Management wants to fully automate all extractions without human review. Before agreeing, what validation should you perform?
 
 A) Run the system on a larger test set to confirm the 96% holds.
-B) Analyze accuracy by document type and field to verify consistent performance across all segments — aggregate accuracy may mask poor performance on specific document types or fields that could cause systematic downstream errors.
-C) Compare accuracy against a competitor's system to validate the benchmark.
+B) Compare accuracy against a competitor's system to validate the benchmark.
+C) Analyze accuracy by document type and field to verify consistent performance across all segments — aggregate accuracy may mask poor performance on specific document types or fields that could cause systematic downstream errors.
 D) Increase the confidence threshold to 99% to further reduce errors.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Aggregate accuracy metrics can mask poor performance on specific document types or fields. A system that's 99% accurate on standard invoices but 62% accurate on handwritten receipts has a 96% aggregate if most documents are standard invoices — but the handwritten receipt errors could cause significant downstream problems. Field-level and document-type analysis reveals these hidden weaknesses. **Why not A:** A larger test set may confirm the aggregate number without revealing per-segment performance gaps. **Why not C:** Competitor comparison is irrelevant to whether the system is accurate enough for full automation — you need to validate your own system's performance across all segments. **Why not D:** Increasing the threshold filters out more extractions for human review but doesn't address the question of whether the high-confidence extractions are actually accurate across all document types.
+**Correct: C.** Aggregate accuracy metrics can mask poor performance on specific document types or fields. A system that's 99% accurate on standard invoices but 62% accurate on handwritten receipts has a 96% aggregate if most documents are standard invoices — but the handwritten receipt errors could cause significant downstream problems. Field-level and document-type analysis reveals these hidden weaknesses. **Why not A:** A larger test set may confirm the aggregate number without revealing per-segment performance gaps. **Why not B:** Competitor comparison is irrelevant to whether the system is accurate enough for full automation — you need to validate your own system's performance across all segments. **Why not D:** Increasing the threshold filters out more extractions for human review but doesn't address the question of whether the high-confidence extractions are actually accurate across all document types.
 
 </details>
 
 **Q58 (Task 5.5).** Your extraction system has been running at high accuracy for three months. You've reduced human review from 100% to only reviewing extractions where the model reports low confidence. A product manager suggests eliminating human review entirely since the system hasn't had significant errors recently. What is the right approach?
 
 A) Agree — three months of good performance demonstrates reliability.
-B) Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement and novel pattern detection, rather than eliminating review entirely.
+B) Switch to reviewing a fixed random 5% sample regardless of confidence.
 C) Keep the low-confidence review threshold but lower it further to reduce review volume.
-D) Switch to reviewing a fixed random 5% sample regardless of confidence.
+D) Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement and novel pattern detection, rather than eliminating review entirely.
 
 <details><summary>Show Answer</summary>
 
-**Correct: B.** Stratified random sampling of high-confidence extractions catches novel error patterns that confidence-based routing misses. New document formats, regulatory changes, or data drift can introduce errors the model is confidently wrong about. Ongoing sampling is the safety net that enables confident automation. **Why not A:** Past performance doesn't guarantee future accuracy — new document types, vendor format changes, or regulatory updates can introduce novel error patterns at any time. **Why not C:** Lowering the confidence threshold reduces review volume but still only reviews low-confidence extractions, missing errors in high-confidence ones. **Why not D:** Fixed random sampling is better than no review but unstratified sampling may undersample rare document types where errors are more likely.
+**Correct: D.** Stratified random sampling of high-confidence extractions catches novel error patterns that confidence-based routing misses. New document formats, regulatory changes, or data drift can introduce errors the model is confidently wrong about. Ongoing sampling is the safety net that enables confident automation. **Why not A:** Past performance doesn't guarantee future accuracy — new document types, vendor format changes, or regulatory updates can introduce novel error patterns at any time. **Why not C:** Lowering the confidence threshold reduces review volume but still only reviews low-confidence extractions, missing errors in high-confidence ones. **Why not B:** Fixed random sampling is better than no review but unstratified sampling may undersample rare document types where errors are more likely.
 
 </details>
 
