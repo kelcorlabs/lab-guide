@@ -1,4 +1,15 @@
 {
+  "name": "claude-architect-lab-guide",
+  "version": "1.0.0",
+  "description": "Hands-on lab guide for Claude Certified Architect - Foundations exam",
+  "scripts": {
+    "build": "node build.js && node -e \"require('fs').copyFileSync('lab-guide.html','index.html')\"",
+    "test": "node tests/validate-all.js",
+    "test:python": "node tests/run-python-labs.js",
+    "test:answers": "node tests/verify-answers.js",
+    "test:links": "node tests/check-links.js",
+    "test:html": "node tests/check-html.js"
+  },
   "dependencies": {
     "highlight.js": "^11.11.1",
     "marked": "^17.0.5"
