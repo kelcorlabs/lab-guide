@@ -1472,6 +1472,24 @@ const html = `<!DOCTYPE html>
     // Build ordered list of section IDs for prev/next
     const sectionOrder = sections.map(s => s.dataset.sectionId);
 
+    // Update sidebar active state and expand the target group
+    function activateNavLink(sectionId) {
+      navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+      const link = navList.querySelector('a[href="#' + CSS.escape(sectionId) + '"]');
+      if (link) {
+        link.classList.add('active');
+        const pg = link.closest('.nav-group');
+        if (pg) {
+          groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
+          pg.querySelector('.nav-group-header').classList.add('open');
+          pg.querySelector('.nav-group-children').classList.add('open');
+        }
+      }
+      if (window.innerWidth <= 900) {
+        document.getElementById('sidebar').classList.remove('open');
+      }
+    }
+
     // Function to show a specific section
     function showSection(sectionId) {
       sections.forEach(s => { s.style.display = 'none'; });
@@ -1499,17 +1517,7 @@ const html = `<!DOCTYPE html>
           prevBtn.innerHTML = '\\u2190 ' + prevShort;
           prevBtn.addEventListener('click', () => {
             showSection(prevId);
-            navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
-            const prevLink = navList.querySelector('a[href="#' + CSS.escape(prevId) + '"]');
-            if (prevLink) {
-              prevLink.classList.add('active');
-              const pg = prevLink.closest('.nav-group');
-              if (pg) {
-                groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
-                pg.querySelector('.nav-group-header').classList.add('open');
-                pg.querySelector('.nav-group-children').classList.add('open');
-              }
-            }
+            activateNavLink(prevId);
           });
           nav.appendChild(prevBtn);
         } else {
@@ -1526,17 +1534,7 @@ const html = `<!DOCTYPE html>
           nextBtn.innerHTML = nextShort + ' \\u2192';
           nextBtn.addEventListener('click', () => {
             showSection(nextId);
-            navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
-            const nextLink = navList.querySelector('a[href="#' + CSS.escape(nextId) + '"]');
-            if (nextLink) {
-              nextLink.classList.add('active');
-              const pg = nextLink.closest('.nav-group');
-              if (pg) {
-                groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
-                pg.querySelector('.nav-group-header').classList.add('open');
-                pg.querySelector('.nav-group-children').classList.add('open');
-              }
-            }
+            activateNavLink(nextId);
           });
           nav.appendChild(nextBtn);
         }

@@ -389,9 +389,15 @@ test.describe('Lab Guide E2E', () => {
     const newH1 = await visibleAfter.first().locator('h1').first().textContent();
     expect(newH1).not.toMatch(/SETUP/i);
 
-    // (b) Sidebar has an active entry
+    // (b) Sidebar active link matches the NEW section, not Setup
     const activeLink = page.locator('#navList a.active');
     await expect(activeLink).toHaveCount(1);
+    const activeHref = await activeLink.getAttribute('href');
+    expect(activeHref).not.toMatch(/setup/i);
+
+    // (b2) The Setup group's Overview link is NOT active
+    const setupLinks = page.locator('#navList a.active', { hasText: /Setup/i });
+    await expect(setupLinks).toHaveCount(0);
 
     // (c) Scroll position is at the top (within 100px)
     const scrollY = await page.evaluate(() => window.scrollY);
@@ -400,6 +406,11 @@ test.describe('Lab Guide E2E', () => {
     // Now test cross-module: navigate to Lab 1.7 and click Next to go to Module 2
     await openLab(page, '1.7');
     await page.waitForTimeout(300);
+
+    // Verify Lab 1.7's sidebar link is active before clicking Next
+    const lab17Active = page.locator('#navList a.active');
+    const lab17Href = await lab17Active.getAttribute('href');
+    expect(lab17Href).toMatch(/lab-1-7/i);
 
     const nextBtn2 = page.locator('.content-section:visible .lesson-nav-btn.lesson-nav-next');
     await nextBtn2.scrollIntoViewIfNeeded();
@@ -411,9 +422,14 @@ test.describe('Lab Guide E2E', () => {
     const crossH1 = await visibleCross.first().locator('h1').first().textContent();
     expect(crossH1).not.toMatch(/LAB 1\.7/i);
 
-    // Sidebar active state updated
+    // Sidebar active link changed to the new section (Module 2 area)
     const activeLink2 = page.locator('#navList a.active');
     await expect(activeLink2).toHaveCount(1);
+    const activeHref2 = await activeLink2.getAttribute('href');
+    expect(activeHref2).not.toMatch(/lab-1-7/i);
+
+    // The new section's accordion group is expanded (active link is visible)
+    await expect(activeLink2).toBeVisible();
   });
 
 });
