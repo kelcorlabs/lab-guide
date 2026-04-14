@@ -12775,684 +12775,852 @@ Explore a different codebase concern: "how does pagination work across the API l
 
 ---
 
+
 # LAB 5.5: HUMAN REVIEW WORKFLOWS AND CONFIDENCE CALIBRATION
-# Domain 5 — Task Statement 5.5
-# Concept: Stratified sampling, field-level confidence, accuracy by segment
-# Time: ~20 minutes | Difficulty: Advanced 
-# Prerequisites: Lab 5.1
+# Domain 5 -- Task Statement 5.5
+# Concept: Deterministic routing rules, structured handoff, review queues
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 5.4
 
-## Learning objectives
+## Scenario
 
-After completing this lab, you will be able to:
+Your loan approval agent autonomously approves or denies 80% of applications and routes the remaining 20% to human review. The problem: it is flagging the wrong 20%. Clear approvals (high income, excellent credit, low amount) get routed to humans unnecessarily. Meanwhile, edge cases (credit score of 605 in the 580-620 gray zone, amount just below the $10k threshold, missing income verification) get auto-approved without review.
 
-- Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement and novel pattern detection
-- Analyze accuracy by document type and field to verify consistent performance across all segments before reducing human review
-- Design field-level confidence scores calibrated using labeled validation sets for routing review attention
+The agent uses self-assessed confidence to route: "I am 92% confident this should be approved." But 92% confidence on an edge case is no more reliable than 92% on a clear case -- LLM confidence is not calibrated to decision difficulty. You need deterministic routing rules based on observable case properties, not model self-assessment.
 
-## Recall
-1. What causes context degradation in extended sessions? (Lab 5.4)
-2. How do scratchpad files fix context degradation? (Lab 5.4)
+## What you'll learn
 
-## Overview
+- Why LLM self-assessed confidence is unreliable for routing decisions (callback to Lab 5.2)
+- Defining deterministic routing rules based on case properties (dollar thresholds, gray-zone ranges, missing documentation)
+- Structured handoff context for human reviewers (summary, reasoning, specific concerns, recommendation)
+- The review queue pattern: priority ordering by risk, not FIFO
+- When to route for review vs when to auto-decide
 
-Your extraction pipeline reports 96% accuracy. You automate it. Then a client complains: handwritten invoices are extracted at 62% accuracy.
+## Concepts
 
-**The 96% aggregate masked the segment failure.** The fix: validate accuracy by document type AND field before automating.
+**The confidence calibration problem:** LLMs report similar confidence (0.85-0.95) regardless of actual decision difficulty. A clear approval and a gray-zone edge case both get "92% confident." Self-assessed confidence does NOT correlate with case difficulty. This is the same anti-pattern from Lab 5.2 (escalation), now applied to review routing.
 
-**Exam connection (Exercise 3):** "Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement."
+**Deterministic routing rules** check observable properties:
+- Dollar amount > $10,000 --> human review (high stakes)
+- Credit score 580-620 --> human review (gray zone)
+- Missing income verification --> human review (incomplete data)
+- All criteria clearly met --> auto-approve
+- All criteria clearly failed --> auto-deny
 
-## Try it
+**Structured handoff context:** A human reviewer receiving a case needs: (1) summary of the application, (2) the agent's reasoning, (3) specific concerns flagged, (4) the agent's recommendation (approve/deny). Without this, the reviewer starts from scratch. Callback to Lab 1.4's structured handoff summaries.
 
-Try this in Claude Code:
+**Priority ordering:** Route gray-zone cases first (highest risk of wrong decision), not FIFO. A $50k application in the gray zone is more urgent than a $500 clear approval that was unnecessarily flagged.
 
-```
-> My extraction pipeline reports 96% accuracy overall. Here is the breakdown:
-> - Digital PDF invoices (800 docs): 99% accuracy
-> - Scanned paper invoices (150 docs): 91% accuracy
-> - Handwritten invoices (50 docs): 62% accuracy
->
-> My manager wants to automate all extractions since "96% is good enough."
-> Why is this dangerous? What would happen to the handwritten invoices?
->
-> Design a review routing system with these confidence thresholds:
-> - Auto-approve: confidence >= 0.90
-> - Spot-check: confidence 0.70-0.89
-> - Human review: confidence < 0.70 OR ambiguous source
->
-> Why must these thresholds be calibrated with labeled validation data
-> rather than using the model's raw confidence scores?
-```
+## Walkthrough
 
-This demonstrates two key lessons:
-- **Aggregate accuracy masks segment failures** -- 96% overall can hide 62% in one segment
-- **Confidence scores must be calibrated** before trusting them for routing decisions
+### Step 1: See the problem -- wrong 20% routed
 
-## Reference code
+Create `~/claude-architect-labs/lab-d5-context-reliability/review_router.py`:
 
 ```python
 import json
-import random
-
-# -- THE PROBLEM: AGGREGATE METRICS MASK SEGMENT FAILURES --
-# "96% overall accuracy" sounds great.
-# But: 99% on simple invoices, 62% on handwritten invoices
-# -> Automating based on aggregate metric would cause 38% errors on handwritten docs
-
-def demonstrate_segment_analysis():
-    """Show why aggregate accuracy masks segment issues."""
-    print("=== Aggregate vs Segment Accuracy ===\n")
-
-    # Simulated accuracy data
-    accuracy_data = [
-        {"segment": "Digital PDF invoices",    "doc_count": 800, "accuracy": 0.99},
-        {"segment": "Scanned paper invoices",  "doc_count": 150, "accuracy": 0.91},
-        {"segment": "Handwritten invoices",    "doc_count": 50,  "accuracy": 0.62},
-    ]
-
-    total = sum(s["doc_count"] for s in accuracy_data)
-    weighted_avg = sum(s["accuracy"] * s["doc_count"] for s in accuracy_data) / total
-
-    print(f"Aggregate accuracy: {weighted_avg:.1%}  <- looks great!")
-    print(f"\nBut by segment:")
-    for s in accuracy_data:
-        flag = " <- PROBLEM" if s["accuracy"] < 0.85 else ""
-        print(f"  {s['segment']:35s}: {s['accuracy']:.0%}{flag}")
-
-    print(f"\nConclusion: Automating 'high-confidence' extractions would fail")
-    print(f"on {accuracy_data[2]['doc_count']} handwritten invoices at 62% accuracy.")
-    print(f"Must validate accuracy by segment BEFORE reducing human review.")
 
 
-# -- SIMULATED EXTRACTION RESPONSES ------------------------
-# In production, replace with client.messages.create()
-# using tool_choice to force structured extraction output.
+# ============================================================
+# PART 1: THE PROBLEM -- WRONG CASES ROUTED
+# ============================================================
 
-SIMULATED_EXTRACTIONS = {
-    "INVOICE #001": {
-        "vendor_name": "Acme Corp",
-        "vendor_confidence": 0.98,
-        "total_amount": 500.00,
-        "total_confidence": 0.99,
-        "invoice_date": "2024-01-15",
-        "date_confidence": 0.97,
-        "ambiguous_source": False
+APPLICATIONS = [
+    {
+        "id": "APP-001",
+        "applicant": "Alice Chen",
+        "amount": 5000,
+        "credit_score": 780,
+        "income_verified": True,
+        "employment_years": 8,
+        "description": "Clear approval -- high credit, "
+                       "low amount, verified income",
     },
-    "inv from acme": {
-        "vendor_name": "Acme",
-        "vendor_confidence": 0.72,
-        "total_amount": 500,
-        "total_confidence": 0.45,
-        "invoice_date": None,
-        "date_confidence": 0.20,
-        "ambiguous_source": False
+    {
+        "id": "APP-002",
+        "applicant": "Bob Diaz",
+        "amount": 15000,
+        "credit_score": 605,
+        "income_verified": True,
+        "employment_years": 2,
+        "description": "Gray zone -- score 605 in "
+                       "580-620 range, amount > $10k",
     },
-    "INVOICE\nVendor: Widget Corp": {
-        "vendor_name": "Widget Corp",
-        "vendor_confidence": 0.95,
-        "total_amount": 300,
-        "total_confidence": 0.40,
-        "invoice_date": None,
-        "date_confidence": 0.10,
-        "ambiguous_source": True
-    }
+    {
+        "id": "APP-003",
+        "applicant": "Carol Evans",
+        "amount": 8000,
+        "credit_score": 720,
+        "income_verified": False,
+        "employment_years": 5,
+        "description": "Missing docs -- income not "
+                       "verified",
+    },
+    {
+        "id": "APP-004",
+        "applicant": "Dan Foster",
+        "amount": 3000,
+        "credit_score": 450,
+        "income_verified": True,
+        "employment_years": 1,
+        "description": "Clear denial -- very low credit",
+    },
+    {
+        "id": "APP-005",
+        "applicant": "Eve Garcia",
+        "amount": 25000,
+        "credit_score": 690,
+        "income_verified": True,
+        "employment_years": 4,
+        "description": "High amount -- $25k needs "
+                       "review regardless of credit",
+    },
+]
+
+# Simulated: model confidence (uncalibrated)
+MODEL_CONFIDENCE = {
+    "APP-001": 0.94,  # Clear case, high confidence -- OK
+    "APP-002": 0.91,  # Edge case, ALSO high confidence -- BAD
+    "APP-003": 0.88,  # Missing docs, still confident -- BAD
+    "APP-004": 0.93,  # Clear denial, high confidence -- OK
+    "APP-005": 0.87,  # High amount, moderate -- OK-ish
+}
+```
+
+### Step 2: Build deterministic routing rules
+
+```python
+# ============================================================
+# PART 2: DETERMINISTIC ROUTING RULES
+# ============================================================
+
+ROUTING_RULES = {
+    "high_amount": {
+        "condition": "amount > 10000",
+        "action": "REVIEW",
+        "reason": "High-value application requires "
+                  "human oversight",
+    },
+    "gray_zone_credit": {
+        "condition": "credit_score between 580-620",
+        "action": "REVIEW",
+        "reason": "Credit score in gray zone -- "
+                  "borderline approval/denial",
+    },
+    "missing_docs": {
+        "condition": "income_verified is False",
+        "action": "REVIEW",
+        "reason": "Missing income verification -- "
+                  "cannot auto-decide without docs",
+    },
+    "clear_denial": {
+        "condition": "credit_score < 550",
+        "action": "DENY",
+        "reason": "Credit score below minimum "
+                  "threshold",
+    },
+    "clear_approval": {
+        "condition": "All criteria met, no flags",
+        "action": "APPROVE",
+        "reason": "All requirements clearly satisfied",
+    },
 }
 
-def extraction_with_field_confidence(document: str) -> dict:
-    """
-    Extract data with field-level confidence scores.
-    These scores must be CALIBRATED against labeled data — raw scores aren't reliable.
 
-    In production, this would use client.messages.create() with tool_choice
-    to force structured output via the extract_with_confidence tool.
-    """
-    # Tool definition (used in production with client.messages.create())
-    tool = {
-        "name": "extract_with_confidence",
-        "description": "Extract invoice data with per-field confidence scores",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "vendor_name": {"type": "string"},
-                "vendor_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                "total_amount": {"type": ["number", "null"]},
-                "total_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                "invoice_date": {"type": ["string", "null"]},
-                "date_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                "ambiguous_source": {"type": "boolean",
-                                     "description": "True if source document has contradictions"}
-            },
-            "required": ["vendor_name", "vendor_confidence",
-                         "total_confidence", "date_confidence", "ambiguous_source"]
+def route_application(app):
+    """Route using deterministic rules, NOT model
+    confidence."""
+    flags = []
+
+    # Rule 1: High amount
+    if app["amount"] > 10000:
+        flags.append(("high_amount",
+                       ROUTING_RULES["high_amount"]))
+
+    # Rule 2: Gray zone credit
+    if 580 <= app["credit_score"] <= 620:
+        flags.append(("gray_zone_credit",
+                       ROUTING_RULES["gray_zone_credit"]))
+
+    # Rule 3: Missing documentation
+    if not app["income_verified"]:
+        flags.append(("missing_docs",
+                       ROUTING_RULES["missing_docs"]))
+
+    # Decision
+    if flags:
+        return {
+            "action": "REVIEW",
+            "flags": flags,
+            "priority": len(flags) * app["amount"],
         }
+
+    if app["credit_score"] < 550:
+        return {
+            "action": "DENY",
+            "flags": [("clear_denial",
+                        ROUTING_RULES["clear_denial"])],
+            "priority": 0,
+        }
+
+    return {
+        "action": "APPROVE",
+        "flags": [("clear_approval",
+                    ROUTING_RULES["clear_approval"])],
+        "priority": 0,
     }
+```
 
-    # Simulated response — match document by prefix
-    for key, result in SIMULATED_EXTRACTIONS.items():
-        if document.startswith(key):
-            return result
-    return None
+### Step 3: Build structured handoff context
 
+```python
+# ============================================================
+# PART 3: STRUCTURED HANDOFF FOR REVIEWERS
+# ============================================================
 
-def route_for_review(extraction: dict, thresholds: dict) -> str:
-    """
-    Route based on calibrated confidence thresholds.
+def build_handoff(app, routing_result):
+    """Build structured context for human reviewer."""
+    if routing_result["action"] != "REVIEW":
+        return None
 
-    Thresholds should be calibrated using labeled validation sets,
-    not arbitrary numbers.
-    """
-    if extraction.get("ambiguous_source"):
-        return "human_review"
+    return {
+        "application_id": app["id"],
+        "applicant": app["applicant"],
+        "summary": (
+            f"${app['amount']:,} loan request. "
+            f"Credit: {app['credit_score']}. "
+            f"Employment: {app['employment_years']}yr. "
+            f"Income verified: {app['income_verified']}."
+        ),
+        "routing_flags": [
+            f["reason"] for _, f in routing_result["flags"]
+        ],
+        "recommendation": (
+            "Approve with conditions"
+            if app["credit_score"] >= 600
+            else "Needs additional review"
+        ),
+        "priority_score": routing_result["priority"],
+    }
+```
 
-    min_confidence = min(
-        extraction.get("vendor_confidence", 0),
-        extraction.get("total_confidence", 0),
-        extraction.get("date_confidence", 0)
-    )
+### Step 4: Compare model confidence vs deterministic routing
 
-    if min_confidence >= thresholds["auto_approve"]:
-        return "auto_approve"
-    elif min_confidence >= thresholds["spot_check"]:
-        return "spot_check"
-    else:
-        return "human_review"
+```python
+# ============================================================
+# PART 4: CONFIDENCE VS DETERMINISTIC COMPARISON
+# ============================================================
 
+def compare_approaches():
+    """Show why deterministic rules beat confidence."""
+    sep = "=" * 60
+    print(sep)
+    print("MODEL CONFIDENCE VS DETERMINISTIC RULES")
+    print(sep)
 
-def stratified_sampling_demo(extractions: list, sample_rate: float = 0.05):
-    """
-    Stratified random sampling: sample high-confidence extractions
-    to measure actual error rate and detect novel error patterns.
-    """
-    print("\n=== Stratified Sampling ===\n")
+    # Confidence-based routing (threshold = 0.90)
+    print("\n  --- Confidence-based (threshold 0.90) ---")
+    conf_reviews = 0
+    for app in APPLICATIONS:
+        conf = MODEL_CONFIDENCE[app["id"]]
+        routed = "REVIEW" if conf < 0.90 else "AUTO"
+        flag = ""
+        if routed == "AUTO" and (
+            app["amount"] > 10000
+            or 580 <= app["credit_score"] <= 620
+            or not app["income_verified"]
+        ):
+            flag = " <- MISSED EDGE CASE"
+        if routed == "REVIEW" and (
+            app["credit_score"] > 700
+            and app["amount"] < 10000
+            and app["income_verified"]
+        ):
+            flag = " <- UNNECESSARY REVIEW"
+        if routed == "REVIEW":
+            conf_reviews += 1
+        print(f"  {app['id']}: conf={conf:.2f} "
+              f"-> {routed}{flag}")
 
-    high_confidence = [e for e in extractions if e.get("total_confidence", 0) >= 0.9]
-    sample_size = max(1, int(len(high_confidence) * sample_rate))
-    sample = random.sample(high_confidence, min(sample_size, len(high_confidence)))
+    # Deterministic routing
+    print("\n  --- Deterministic rules ---")
+    det_reviews = 0
+    for app in APPLICATIONS:
+        result = route_application(app)
+        if result["action"] == "REVIEW":
+            det_reviews += 1
+            reasons = ", ".join(
+                n for n, _ in result["flags"]
+            )
+            print(f"  {app['id']}: -> REVIEW "
+                  f"({reasons})")
+        else:
+            print(f"  {app['id']}: -> "
+                  f"{result['action']}")
 
-    print(f"Total extractions:     {len(extractions)}")
-    print(f"High-confidence (≥0.9): {len(high_confidence)}")
-    print(f"Sample for review:     {len(sample)} ({sample_rate:.0%} of high-confidence)")
-    print(f"\nPurpose: Verify 'high-confidence' claims are actually accurate.")
-    print(f"If sample error rate > 5%: recalibrate thresholds")
-    print(f"Watch for: novel error patterns not seen in training data")
+    print(f"\n  Confidence routed {conf_reviews}/5 "
+          f"to review")
+    print(f"  Deterministic routed {det_reviews}/5 "
+          f"to review")
+    print(f"  Deterministic catches edge cases that "
+          f"confidence misses")
+```
+
+### Step 5: Build the review queue with priority
+
+```python
+# ============================================================
+# PART 5: PRIORITY REVIEW QUEUE
+# ============================================================
+
+def build_review_queue(applications):
+    """Build priority-ordered review queue."""
+    queue = []
+    for app in applications:
+        result = route_application(app)
+        if result["action"] == "REVIEW":
+            handoff = build_handoff(app, result)
+            queue.append(handoff)
+
+    # Sort by priority (highest first)
+    queue.sort(key=lambda x: x["priority_score"],
+               reverse=True)
+    return queue
+```
+
+### Step 6: Add demo runner and run
+
+```python
+# ============================================================
+# PART 6: DEMO
+# ============================================================
+
+def run_demo():
+    compare_approaches()
+
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("REVIEW QUEUE (priority-ordered)")
+    print(sep)
+
+    queue = build_review_queue(APPLICATIONS)
+    for i, item in enumerate(queue, 1):
+        print(f"\n  #{i} (priority: "
+              f"{item['priority_score']:,})")
+        print(f"  {item['application_id']}: "
+              f"{item['applicant']}")
+        print(f"  {item['summary']}")
+        print(f"  Flags: "
+              + ", ".join(item["routing_flags"]))
+        print(f"  Recommendation: "
+              f"{item['recommendation']}")
+
+    print(f"\n{sep}")
+    print("ROUTING RULES REFERENCE")
+    print(sep)
+    for name, rule in ROUTING_RULES.items():
+        print(f"  {name}:")
+        print(f"    If: {rule['condition']}")
+        print(f"    Then: {rule['action']}")
+        print(f"    Why: {rule['reason']}")
 
 
 if __name__ == "__main__":
-    demonstrate_segment_analysis()
-
-    print("\n\n=== Field-Level Confidence Extraction ===\n")
-    test_docs = [
-        "INVOICE #001\nVendor: Acme Corp\nDate: 2024-01-15\nTotal: $500.00",
-        "inv from acme\ntotal somewhere around $500 or maybe $450\n date unclear",
-        "INVOICE\nVendor: Widget Corp\nTotal: $300\nAlso total shows $350 on page 2",
-    ]
-
-    thresholds = {"auto_approve": 0.9, "spot_check": 0.7}
-
-    for doc in test_docs:
-        print(f"\nDoc: {doc[:60]}...")
-        result = extraction_with_field_confidence(doc)
-        if result:
-            route = route_for_review(result, thresholds)
-            print(f"  Confidences: vendor={result.get('vendor_confidence'):.2f} "
-                  f"total={result.get('total_confidence'):.2f} "
-                  f"date={result.get('date_confidence'):.2f}")
-            print(f"  Ambiguous: {result.get('ambiguous_source')}")
-            print(f"  -> Route: {route}")
-
-    # Simulate batch of extractions for sampling demo
-    fake_extractions = [{"total_confidence": random.uniform(0.5, 1.0)} for _ in range(200)]
-    stratified_sampling_demo(fake_extractions)
-
-    print("\n\n=== Review Routing Architecture ===")
-    print("""
-    Routing pipeline:
-
-    Extraction -> Confidence scores -> Route decision:
-      ambiguous_source=true              -> human_review (always)
-      min_confidence ≥ 0.90              -> auto_approve
-      min_confidence 0.70-0.89           -> spot_check (sample review)
-      min_confidence < 0.70              -> human_review
-
-    Calibration process:
-    1. Extract 500 labeled documents (known correct answers)
-    2. Compare model confidence to actual accuracy at each confidence level
-    3. Set thresholds where actual accuracy matches requirements
-    4. Re-calibrate monthly as document types and accuracy evolve
-
-    Ongoing monitoring:
-    - Sample 5% of auto-approved extractions monthly
-    - Measure error rate in sampled set
-    - If error rate rises -> lower auto-approve threshold -> route more to review
-    """)
+    run_demo()
 ```
 
-## Run it
-
-Create the file and run it:
+Run the script:
 
 ```bash
-python lab-d5-context-reliability/human_review.py
+cd ~/claude-architect-labs
+python lab-d5-context-reliability/review_router.py
 ```
 
-**What you should see:**
-- "Aggregate vs Segment Accuracy" showing 96% overall accuracy that masks a 62% accuracy problem on handwritten invoices (flagged as PROBLEM)
-- "Field-Level Confidence Extraction" processing 3 test invoices: a clean invoice (high confidence, auto-approved), a vague invoice (lower confidence, spot-check or human review), and a contradictory invoice (ambiguous_source=true, routed to human review)
-- "Stratified Sampling" showing how 5% of high-confidence extractions are sampled for human verification to catch novel error patterns
-- A "Review Routing Architecture" summary with the full routing pipeline and calibration process
+You should see:
+- **Confidence-based:** APP-002 (gray zone, 0.91 confidence) auto-approved -- MISSED. APP-005 (high amount, 0.87) sent to review.
+- **Deterministic:** APP-002 routed to REVIEW (gray_zone_credit + high_amount). APP-003 routed (missing_docs). APP-001 auto-approved (clear case). APP-004 auto-denied (clear denial).
+- **Review queue:** Priority-ordered by risk (highest-dollar gray-zone cases first)
+- **Structured handoff:** Each review case has summary, flags, recommendation
+
+## Try it yourself
+
+Take a different decision task: refund approval.
+
+1. Define deterministic routing rules: amount > $500 --> review, reason is "policy gap" --> review, customer has 3+ refunds in 30 days --> review.
+2. Create 5 test refund requests with varying amounts, reasons, and history.
+3. Run the router and verify: clear refunds auto-approved, edge cases routed to review.
 
 ## Check your understanding
 
-1. **What happens if you trust the 96% aggregate accuracy** and automate everything? (Answer: 38% error rate on handwritten invoices — clients get wrong data, you don't notice until complaints pile up. Aggregate metrics mask segment failures.)
-2. **Why is stratified sampling of high-confidence extractions necessary?** What if a new document format appears that the model hasn't seen? (Answer: novel error patterns go undetected without sampling. Stratified sampling catches accuracy drift before it becomes a crisis.)
-3. **Why can't you trust raw model confidence scores** for routing thresholds? (Answer: uncalibrated scores may be overconfident — a model reporting "90% confidence" may only be correct 70% of the time. Calibrate with labeled validation sets before trusting thresholds.)
+**Q1.** Your loan approval agent uses self-assessed confidence (0.0-1.0) to decide which applications to route to human review. An edge case with credit score 605 (gray zone) gets confidence 0.92 and is auto-approved. What is the root problem?
 
-## Exam tips
+**A.** The confidence threshold should be set higher (0.95)
+**B.** LLM self-assessed confidence is not calibrated to decision difficulty -- a gray-zone edge case gets similar confidence to a clear approval. Use deterministic rules based on observable case properties instead.
+**C.** The model needs more training data on edge cases
+**D.** Add a second model to verify the first model's confidence
 
-- **If the exam says** "96% accuracy overall" → check accuracy BY SEGMENT, not just aggregate
-- **Wrong answer trap:** "Automate all high-confidence extractions" — aggregate masks poor segments
-- **Wrong answer trap:** "Lower the confidence threshold to catch more errors" — threshold tuning without segment analysis still misses entire document types that fail systematically
-- **The correct pattern:** Stratified sampling by document type and field. Validate each segment independently before automating.
+**Correct: B.** Self-assessed confidence does not correlate with case difficulty. The model reports 0.92 whether the case is clear or borderline. Deterministic rules (credit score 580-620 = gray zone = review) catch edge cases that confidence misses. **Why not A:** Higher thresholds still rely on uncalibrated scores. **Why not C:** Training data does not fix the fundamental miscalibration. **Why not D:** A second model has the same calibration problem.
+
+---
+
+**Q2.** A human reviewer receives a flagged application with no context -- just "APP-002: needs review." They spend 15 minutes reconstructing the case from scratch. What should the routing system provide?
+
+**A.** Just the application ID -- the reviewer can look it up
+**B.** A structured handoff with: summary, agent reasoning, specific routing flags, and the agent's recommendation -- so the reviewer can start from the agent's analysis instead of from scratch
+**C.** The full conversation history between the agent and the applicant
+**D.** The model's confidence score so the reviewer knows how certain the agent was
+
+**Correct: B.** Structured handoff context lets the reviewer start from the agent's analysis. The summary, flags, and recommendation provide immediate context. **Why not A:** Looking up the case from scratch wastes reviewer time. **Why not C:** Full conversation history is too verbose -- the reviewer needs a focused summary. **Why not D:** Confidence scores are not calibrated and don't help the reviewer make the decision.
+
+---
+
+**Q3.** Your review queue processes cases in FIFO order. A $50,000 gray-zone application sits behind twenty $500 clear approvals that were unnecessarily flagged. What should change?
+
+**A.** Process all cases faster by adding more reviewers
+**B.** Priority-order the queue by risk (dollar amount x number of flags) so high-stakes edge cases are reviewed first
+**C.** Auto-approve everything under $1,000 to clear the queue
+**D.** Remove the routing rules so fewer cases enter the queue
+
+**Correct: B.** Priority ordering ensures high-risk cases (large amounts, multiple flags) get reviewed first. The $50k gray-zone case is higher priority than $500 clear approvals. **Why not A:** More reviewers doesn't fix the ordering problem. **Why not C:** Auto-approving by amount alone bypasses the routing rules that exist for good reasons. **Why not D:** Removing rules would let edge cases through without review.
 
 ## Key takeaways
 
-- Aggregate accuracy masks segment failures — validate by document type AND field
-- Field-level confidence scores must be calibrated with labeled validation sets
-- Stratified random sampling of high-confidence extractions detects novel error patterns
-- Route: ambiguous source → human; high confidence → auto; medium → spot-check
-- Ongoing monitoring: sample auto-approved items to detect accuracy drift
+- LLM self-assessed confidence is NOT calibrated to decision difficulty -- do not use for routing
+- Deterministic routing rules check observable properties: dollar thresholds, gray-zone ranges, missing docs
+- Structured handoff: summary + reasoning + flags + recommendation (reviewer starts from agent's analysis)
+- Priority-order the review queue by risk, not FIFO
+- Clear cases should auto-decide; only genuine edge cases should route to humans
+
+## Exam tips
+
+- **"Agent routes wrong cases to review"** --> replace confidence-based routing with deterministic rules
+- **"Reviewer starts from scratch"** --> add structured handoff context
+- **Wrong answer trap:** "Calibrate confidence scores" -- requires labeled data and ongoing maintenance; deterministic rules are simpler and more reliable
+- **Wrong answer trap:** "Self-reported confidence with threshold" -- same uncalibrated signal at any threshold
+- **The core pattern:** deterministic rules for routing; structured handoff for reviewers; priority queue for ordering
+
+**Next:** Lab 5.6 covers information provenance and multi-source synthesis -- how to preserve the source of every claim through a synthesis pipeline and surface conflicts instead of silently resolving them.
 
 ---
 
 # LAB 5.6: INFORMATION PROVENANCE AND MULTI-SOURCE SYNTHESIS
-# Domain 5 — Task Statement 5.6
-# Concept: Claim-source mappings, conflicting data, temporal metadata
-# Time: ~20 minutes | Difficulty: Advanced
-# Prerequisites: Lab 5.1
+# Domain 5 -- Task Statement 5.6
+# Concept: Claim-source mappings, conflict surfacing, temporal metadata
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 5.5
 
-## Learning objectives
+## Scenario
 
-After completing this lab, you will be able to:
+Your research synthesis agent combines information from 4 sources -- an internal wiki, public documentation, a Slack thread, and a vendor datasheet -- into a single response. A stakeholder reads the response, takes action based on a pricing figure, and it turns out that figure came from an outdated Slack thread that was later corrected. There is no way to trace which fact came from which source -- the agent synthesized everything into a seamless paragraph with no citations.
 
-- Require subagents to output structured claim-source mappings (source URLs, document names, relevant excerpts) that downstream agents preserve through synthesis
-- Structure reports with explicit sections distinguishing well-established findings from contested ones, preserving original source characterizations
-- Implement conflict annotation with both sources and methodology differences rather than arbitrarily selecting one value
-- Require subagents to include publication or data collection dates in structured outputs to enable correct temporal interpretation
+You need synthesis that preserves the source of every claim, ranks sources by reliability (authoritative docs > public sources > transient chat), and surfaces conflicts between sources instead of silently picking one.
 
-## Recall
-1. Why can aggregate accuracy (e.g., "96% overall") be misleading? (Lab 5.5)
-2. What is stratified random sampling used for? (Lab 5.5)
+## What you'll learn
 
-## Overview
+- Preserving information provenance: every claim tagged with source, URL, date, and excerpt
+- Source reliability ranking: policy docs > current documentation > community content > transient chat
+- Conflict surfacing: when two sources disagree, annotate both instead of silently picking one
+- Temporal metadata: publication dates prevent false contradictions (old data vs new data)
+- Content-type rendering: financial data as tables, news as prose, technical specs as lists
 
-Your research synthesis says "the EV market grew 14%" without citing the source. A stakeholder asks "where did that number come from?" You can't answer -- provenance was lost during summarization.
+## Concepts
 
-**The fix:** require structured claim-source mappings from all subagents, preserved through synthesis.
+**Information provenance** means every claim in the synthesis output carries its source. Not just "market grew 35%" but "market grew 35% (IEA Global EV Outlook 2024, published 2024-01-15, p.12)." Provenance is lost at summarization steps unless you explicitly require its preservation.
 
-**Exam connection:** The exam tests:
-- **Claim-source mappings** preserved through synthesis
-- **Conflicting data annotation** (both values + sources, not picking one)
-- **Temporal metadata** to prevent false contradictions
+**Source reliability ranking:**
 
-## Reference code
+| Tier | Source type | Example |
+|------|-----------|---------|
+| 1 (highest) | Official policy / authoritative docs | Internal policy PDF, API spec |
+| 2 | Current public documentation | Vendor docs, published reports |
+| 3 | Community content | Stack Overflow, blog posts |
+| 4 (lowest) | Transient communication | Slack threads, emails, chat |
+
+When two sources conflict, the ranking helps prioritize -- but both should be surfaced with the conflict annotated, not silently resolved.
+
+**Conflict surfacing:** "EV market share: 14% (BNEF, BEV only) vs 18% (IEA, BEV + PHEV)." The difference is methodology, not error. Silently picking 18% hides valid data. The exam tests this -- "synthesis agent drops conflicting data" is an anti-pattern.
+
+**Temporal metadata:** "Battery costs: $400/kWh" and "$139/kWh" look like a contradiction. With publication dates (2015 vs 2024), it is a 9-year trend. Without dates, the synthesis agent may flag a false conflict or silently drop one.
+
+Callback to Lab 4.3: structured output with tool_use. Provenance is structured output with a source field per claim.
+
+## Walkthrough
+
+### Step 1: See the problem -- unsourced synthesis
+
+Create `~/claude-architect-labs/lab-d5-context-reliability/provenance_tracker.py`:
 
 ```python
 import json
-from datetime import datetime
 
-# -- PROVENANCE THROUGH SYNTHESIS PIPELINE ----------------
-# Problem: summarization compresses findings without preserving claim-source mappings
-# Solution: require structured claim-source format from all subagents
 
-def demonstrate_provenance_loss():
-    """Show how provenance is lost in naive summarization."""
-    print("=== Provenance Loss in Naive Summarization ===\n")
+# ============================================================
+# PART 1: THE PROBLEM -- PROVENANCE LOST
+# ============================================================
 
-    # Raw findings with provenance
-    raw_findings = [
-        {
-            "claim": "Global EV market grew 35% in 2023",
-            "source_url": "https://iea.org/reports/global-ev-outlook-2024",
-            "source_name": "IEA Global EV Outlook 2024",
-            "publication_date": "2024-01-15",
-            "relevant_excerpt": "The global electric vehicle market saw 35% growth..."
-        },
-        {
-            "claim": "Battery costs fell to $139/kWh",
-            "source_url": "https://bnef.com/battery-price-survey-2024",
-            "source_name": "BloombergNEF Battery Price Survey 2024",
-            "publication_date": "2024-02-01",
-            "relevant_excerpt": "Average battery pack prices reached $139/kWh..."
-        }
-    ]
+SOURCES = {
+    "internal_wiki": {
+        "type": "authoritative",
+        "tier": 1,
+        "name": "Internal Product Wiki",
+        "last_updated": "2024-03-01",
+    },
+    "public_docs": {
+        "type": "documentation",
+        "tier": 2,
+        "name": "Vendor Public Documentation",
+        "last_updated": "2024-02-15",
+    },
+    "slack_thread": {
+        "type": "transient",
+        "tier": 4,
+        "name": "Slack #pricing-updates",
+        "last_updated": "2023-11-20",
+    },
+    "vendor_datasheet": {
+        "type": "documentation",
+        "tier": 2,
+        "name": "Vendor Datasheet v3.2",
+        "last_updated": "2024-01-10",
+    },
+}
 
-    # BAD: Naive summarization loses provenance
-    naive_summary = "The EV market grew 35% and battery costs fell to $139/kWh."
-    print(f"Naive summary: '{naive_summary}'")
-    print("Problem: No sources. Can't verify. Can't flag if sources conflict.")
+# Raw findings with provenance
+RAW_FINDINGS = [
+    {
+        "claim": "Enterprise plan costs $499/month",
+        "source_id": "internal_wiki",
+        "excerpt": "Enterprise tier: $499/mo (updated Q1 2024)",
+        "publication_date": "2024-03-01",
+    },
+    {
+        "claim": "Enterprise plan costs $399/month",
+        "source_id": "slack_thread",
+        "excerpt": "fyi enterprise is $399/mo for now",
+        "publication_date": "2023-11-20",
+    },
+    {
+        "claim": "API rate limit is 1000 req/min",
+        "source_id": "public_docs",
+        "excerpt": "Rate limits: 1000 requests per minute",
+        "publication_date": "2024-02-15",
+    },
+    {
+        "claim": "API rate limit is 500 req/min",
+        "source_id": "vendor_datasheet",
+        "excerpt": "Rate limiting: 500 req/min (basic tier)",
+        "publication_date": "2024-01-10",
+    },
+]
 
-    # GOOD: Structured claim-source mapping
-    structured_summary = {
-        "synthesis": "EV market grew 35% while battery costs declined to $139/kWh",
-        "claims": [
-            {
-                "claim": raw_findings[0]["claim"],
-                "source": raw_findings[0]["source_name"],
-                "source_url": raw_findings[0]["source_url"],
-                "publication_date": raw_findings[0]["publication_date"],
-                "excerpt": raw_findings[0]["relevant_excerpt"]
-            },
-            {
-                "claim": raw_findings[1]["claim"],
-                "source": raw_findings[1]["source_name"],
-                "source_url": raw_findings[1]["source_url"],
-                "publication_date": raw_findings[1]["publication_date"],
-                "excerpt": raw_findings[1]["relevant_excerpt"]
-            }
-        ]
+def demo_provenance_loss():
+    """Show unsourced vs sourced synthesis."""
+    print("=" * 60)
+    print("THE PROBLEM: PROVENANCE LOST")
+    print("=" * 60)
+
+    # BAD: unsourced synthesis
+    bad = ("Enterprise plan costs $399/month. "
+           "API rate limit is 500 req/min.")
+    print(f"\n  Unsourced: {bad}")
+    print(f"  Problem: $399 is from an outdated Slack "
+          f"thread. Current price is $499.")
+    print(f"  Problem: 500 req/min is basic tier. "
+          f"Docs say 1000.")
+    print(f"  No way to trace or verify either claim.")
+```
+
+### Step 2: Build the source reliability ranker
+
+```python
+# ============================================================
+# PART 2: SOURCE RELIABILITY RANKING
+# ============================================================
+
+def rank_sources(findings):
+    """Rank findings by source reliability tier."""
+    ranked = []
+    for f in findings:
+        source = SOURCES[f["source_id"]]
+        ranked.append({
+            **f,
+            "source_name": source["name"],
+            "source_tier": source["tier"],
+            "source_type": source["type"],
+        })
+    ranked.sort(key=lambda x: x["source_tier"])
+    return ranked
+```
+
+### Step 3: Build the conflict detector
+
+```python
+# ============================================================
+# PART 3: CONFLICT DETECTION
+# ============================================================
+
+def detect_conflicts(findings):
+    """Find claims about the same topic from different
+    sources with different values."""
+    # Group by topic (simplified: check for overlapping
+    # key terms)
+    topics = {}
+    for f in findings:
+        # Extract topic key from claim
+        claim = f["claim"].lower()
+        if "enterprise" in claim and "cost" in claim:
+            key = "enterprise_pricing"
+        elif "rate limit" in claim:
+            key = "api_rate_limit"
+        else:
+            key = f["claim"][:30]
+
+        topics.setdefault(key, []).append(f)
+
+    conflicts = []
+    for topic, claims in topics.items():
+        if len(claims) > 1:
+            # Check if values actually differ
+            values = set(c["claim"] for c in claims)
+            if len(values) > 1:
+                conflicts.append({
+                    "topic": topic,
+                    "claims": claims,
+                    "source_count": len(claims),
+                })
+
+    return conflicts
+```
+
+### Step 4: Build the provenance-preserving synthesizer
+
+```python
+# ============================================================
+# PART 4: SYNTHESIS WITH PROVENANCE
+# ============================================================
+
+def synthesize_with_provenance(findings):
+    """Synthesize findings preserving all provenance."""
+    ranked = rank_sources(findings)
+    conflicts = detect_conflicts(findings)
+
+    output = {
+        "synthesis": [],
+        "conflicts": [],
+        "source_summary": {},
     }
 
-    print(f"\nStructured summary:\n{json.dumps(structured_summary, indent=2)}")
-    print("\nProvenance preserved through synthesis step.")
+    # Build sourced claims
+    for f in ranked:
+        output["synthesis"].append({
+            "claim": f["claim"],
+            "source": f["source_name"],
+            "source_tier": f["source_tier"],
+            "publication_date": f["publication_date"],
+            "excerpt": f["excerpt"],
+        })
 
+    # Annotate conflicts
+    for conflict in conflicts:
+        sources = []
+        for c in conflict["claims"]:
+            src = SOURCES[c["source_id"]]
+            sources.append({
+                "claim": c["claim"],
+                "source": src["name"],
+                "tier": src["tier"],
+                "date": c["publication_date"],
+            })
 
-def demonstrate_conflicting_sources():
-    """Show how to handle conflicting statistics from credible sources."""
-    print("\n=== Handling Conflicting Statistics ===\n")
+        # Sort by tier (most authoritative first)
+        sources.sort(key=lambda x: x["tier"])
 
-    conflicting_data = [
-        {
-            "claim": "EV market share reached 18% globally in 2023",
-            "source": "IEA Global EV Outlook 2024",
-            "publication_date": "2024-01-15",
-            "methodology": "Includes all BEV and PHEV vehicles"
-        },
-        {
-            "claim": "EV market share was 14% globally in 2023",
-            "source": "BloombergNEF EV Forecast 2024",
-            "publication_date": "2024-02-01",
-            "methodology": "Battery electric vehicles only (excludes PHEV)"
+        resolution = ""
+        dates = [s["date"] for s in sources]
+        if len(set(dates)) > 1:
+            resolution = (
+                "Temporal difference: sources from "
+                "different dates. Prefer most recent "
+                "authoritative source."
+            )
+        else:
+            resolution = (
+                "Same-date conflict: may reflect "
+                "different tiers/methodologies. "
+                "Flag for human review."
+            )
+
+        output["conflicts"].append({
+            "topic": conflict["topic"],
+            "sources": sources,
+            "resolution_note": resolution,
+            "recommended_value": sources[0]["claim"],
+            "recommended_source": sources[0]["source"],
+        })
+
+    # Source summary
+    for sid, src in SOURCES.items():
+        used = [f for f in findings
+                if f["source_id"] == sid]
+        output["source_summary"][src["name"]] = {
+            "tier": src["tier"],
+            "type": src["type"],
+            "claims_used": len(used),
+            "last_updated": src["last_updated"],
         }
-    ]
 
-    print("Two credible sources, different numbers:\n")
-    for d in conflicting_data:
-        print(f"  {d['source']}: {d['claim']}")
-        print(f"  Methodology: {d['methodology']}\n")
+    return output
+```
 
-    # BAD: Pick one arbitrarily
-    bad_synthesis = "EV market share was 18% globally in 2023."
-    print(f"BAD synthesis (picks one): '{bad_synthesis}'")
-    print("Problem: Discards valid data. May mislead reader.\n")
+### Step 5: Add demo runner
 
-    # GOOD: Annotate conflict with both sources
-    good_synthesis = {
-        "topic": "Global EV market share 2023",
-        "synthesized_finding": "EV market share ranged from 14-18% depending on methodology",
-        "conflict_detected": True,
-        "source_comparison": [
-            {
-                "claim": d["claim"],
-                "source": d["source"],
-                "source_url": f"https://example.com/{d['source'].lower().replace(' ', '-')}",
-                "publication_date": d["publication_date"],
-                "methodology_note": d["methodology"]
-            }
-            for d in conflicting_data
-        ],
-        "resolution_note": (
-            "The difference (14% vs 18%) is explained by methodology: "
-            "IEA includes PHEVs while BNEF counts BEVs only. "
-            "Both figures are correct for their respective definitions."
-        )
-    }
+```python
+# ============================================================
+# PART 5: DEMO
+# ============================================================
 
-    print(f"GOOD synthesis (annotates conflict):\n{json.dumps(good_synthesis, indent=2)}")
+def run_demo():
+    # Show the problem
+    demo_provenance_loss()
 
+    sep = "=" * 60
 
-def demonstrate_temporal_metadata():
-    """Show why publication dates prevent false contradictions."""
-    print("\n\n=== Temporal Metadata ===\n")
+    # Show sourced synthesis
+    print(f"\n{sep}")
+    print("SYNTHESIS WITH PROVENANCE")
+    print(sep)
 
-    findings_without_dates = [
-        "Battery costs were $400/kWh",
-        "Battery costs fell to $139/kWh"
-    ]
+    result = synthesize_with_provenance(RAW_FINDINGS)
 
-    print("Without dates, these look contradictory:")
-    for f in findings_without_dates:
-        print(f"  '{f}'")
-    print("Problem: Is one wrong? Or are they from different years?\n")
+    print("\n  Sourced claims (ranked by reliability):")
+    for claim in result["synthesis"]:
+        print(f"    [Tier {claim['source_tier']}] "
+              f"{claim['claim']}")
+        print(f"      Source: {claim['source']} "
+              f"({claim['publication_date']})")
 
-    findings_with_dates = [
-        {"claim": "Battery costs were $400/kWh", "publication_date": "2015-01-01",
-         "source": "BNEF 2015 Survey"},
-        {"claim": "Battery costs fell to $139/kWh", "publication_date": "2024-02-01",
-         "source": "BNEF 2024 Survey"}
-    ]
+    # Show conflicts
+    print(f"\n{sep}")
+    print("CONFLICTS DETECTED")
+    print(sep)
+    for conflict in result["conflicts"]:
+        print(f"\n  Topic: {conflict['topic']}")
+        for src in conflict["sources"]:
+            print(f"    [Tier {src['tier']}] "
+                  f"{src['claim']}")
+            print(f"      {src['source']} "
+                  f"({src['date']})")
+        print(f"    Resolution: "
+              f"{conflict['resolution_note']}")
+        print(f"    Recommended: "
+              f"{conflict['recommended_value']}")
+        print(f"    From: "
+              f"{conflict['recommended_source']}")
 
-    print("With dates, the 'contradiction' is resolved:")
-    for f in findings_with_dates:
-        print(f"  [{f['publication_date']}] '{f['claim']}' — {f['source']}")
-    print("\nConclusion: Battery costs dropped 65% over 9 years. No contradiction.")
+    # Source summary
+    print(f"\n{sep}")
+    print("SOURCE SUMMARY")
+    print(sep)
+    for name, info in result["source_summary"].items():
+        print(f"  {name}")
+        print(f"    Tier: {info['tier']} "
+              f"({info['type']})")
+        print(f"    Claims: {info['claims_used']}")
+        print(f"    Updated: {info['last_updated']}")
 
-    print("""
-    Required temporal metadata in subagent outputs:
-    - publication_date: when the source was published
-    - data_collection_date: when the underlying data was collected (may differ from pub date)
-    - as_of_date: what time period the statistic represents
-
-    Without this: old statistics look like contradictions to recent ones.
-    With this: temporal differences are visible and interpretable.
-    """)
-
-
-def build_synthesis_subagent_prompt(search_results: list, analysis_results: list) -> str:
-    """
-    Builds synthesis prompt that REQUIRES claim-source preservation.
-    """
-    return f"""
-Synthesize the following research findings into a comprehensive report.
-
-CRITICAL REQUIREMENTS:
-1. Preserve ALL source attributions — every claim must have its source URL and publication date
-2. When two sources conflict: annotate with BOTH sources, explain the likely reason
-3. Include temporal metadata (publication_date) in all structured claim outputs
-4. Do NOT summarize away specific numbers, dates, or source references
-
-Search agent findings:
-{json.dumps(search_results, indent=2)}
-
-Analysis agent findings:
-{json.dumps(analysis_results, indent=2)}
-
-Output format:
-{{
-  "synthesis_text": "...",
-  "claims": [
-    {{
-      "claim": "...",
-      "source": "...",
-      "source_url": "...",
-      "publication_date": "...",
-      "excerpt": "..."
-    }}
-  ],
-  "conflicts": [
-    {{
-      "topic": "...",
-      "sources": [...],
-      "resolution_note": "..."
-    }}
-  ]
-}}
-"""
+    # Content-type rendering
+    print(f"\n{sep}")
+    print("CONTENT-TYPE RENDERING")
+    print(sep)
+    print("  Financial data  -> tables")
+    print("  News/narrative  -> prose paragraphs")
+    print("  Technical specs -> structured lists")
+    print("  DO NOT convert all to one format")
+    print("  Each type has meaning in its structure")
 
 
 if __name__ == "__main__":
-    demonstrate_provenance_loss()
-    demonstrate_conflicting_sources()
-    demonstrate_temporal_metadata()
-
-    print("\n\n=== Subagent Output Requirements for Provenance ===")
-    prompt = build_synthesis_subagent_prompt(
-        search_results=[{"claim": "test", "source_url": "https://example.com",
-                          "publication_date": "2024-01"}],
-        analysis_results=[{"claim": "test2", "source": "doc.pdf", "page": 5}]
-    )
-    print("Synthesis prompt structure (first 400 chars):")
-    print(prompt[:400])
-
-    print("\n\n=== Key Exam Concept ===")
-    print("""
-    Provenance is lost at summarization steps unless you require its preservation.
-
-    Require from ALL subagents:
-    - source_url (not just source name)
-    - publication_date
-    - relevant_excerpt (not just the claim)
-
-    Handle conflicts by:
-    - Annotating with BOTH sources (not picking one)
-    - Explaining the methodology difference
-    - Including temporal context
-
-    The synthesis agent's job is to COMBINE findings, not COMPRESS them.
-    """)
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
 
-Ask Claude Code to create and run this file:
-
+```bash
+cd ~/claude-architect-labs
+python lab-d5-context-reliability/provenance_tracker.py
 ```
-Create lab-d5-context-reliability/provenance.py with the code above and run it
-```
 
-**What you should see:**
-- "Provenance Loss in Naive Summarization" showing a bare summary with no sources vs a structured claim-source mapping with `source_url`, `publication_date`, and `excerpt` for each claim
-- "Handling Conflicting Statistics" showing two credible sources reporting different EV market share numbers (14% vs 18%), with the BAD synthesis picking one arbitrarily vs the GOOD synthesis annotating both with methodology differences
-- "Temporal Metadata" demonstrating how two battery cost claims ($400/kWh vs $139/kWh) look contradictory without dates but are resolved as a 9-year trend when publication dates are included
-- A synthesis prompt structure requiring claim-source preservation and conflict annotation in the output format
+You should see:
+- **Provenance loss:** Unsourced synthesis with outdated $399 price and wrong rate limit
+- **Sourced synthesis:** All 4 claims with source name, tier, and publication date
+- **Conflicts detected:** Enterprise pricing ($499 wiki vs $399 Slack -- temporal difference, prefer wiki). Rate limits (1000 docs vs 500 datasheet -- tier/methodology difference)
+- **Source summary:** Each source with tier, type, claim count, and last-updated date
 
-### Reference: Multi-content-type rendering in synthesis
+## Try it yourself
 
-Different content types need different formatting. The exam tests this specifically:
-"Render financial data as tables, news as prose, technical findings as structured lists."
-Converting everything to one format loses meaning.
+Take a different synthesis task: "summarize the current pricing policy" from 3 sources:
+1. Official pricing PDF (tier 1, updated 2024-03-01): "$499/mo enterprise"
+2. An outdated internal email (tier 4, 2023-09-15): "$399/mo enterprise"
+3. A Slack thread (tier 4, 2024-02-28): "enterprise is going up to $549 next quarter"
 
-```python
-def demonstrate_content_type_rendering():
-    """
-    Synthesis output should render each content type in its natural format.
-    Not: convert everything to prose (loses table structure)
-    Not: convert everything to bullets (loses narrative flow)
-    """
-
-    # Example synthesis output with type-appropriate rendering
-    synthesis_output = """
-## Research Synthesis: EV Market Analysis
-
-### Market Overview
-[NEWS — render as prose]
-Global EV adoption accelerated in 2023, driven primarily by policy incentives in
-Europe and falling battery costs in Asian markets. Consumer sentiment shifted
-markedly toward EVs in Q3, coinciding with new model launches from major OEMs.
-
-### Financial Data
-[FINANCIAL — render as table]
-
-| Metric                | 2022     | 2023     | Change  |
-|-----------------------|----------|----------|---------|
-| Market size (units)   | 10.5M    | 14.2M    | +35%    |
-| Battery cost ($/kWh)  | $161     | $139     | -14%    |
-| Average EV price      | $54,000  | $47,200  | -13%    |
-| Market share (global) | 13%      | 18%      | +5pp    |
-
-### Technical Findings
-[TECHNICAL — render as structured list]
-
-Battery Technology:
-- Lithium iron phosphate (LFP) chemistry gaining market share due to lower cost
-- Solid-state batteries: 2027-2028 commercial availability (Toyota, Samsung SDI)
-- Fast charging: 350kW peak now standard in new premium models
-
-Charging Infrastructure:
-- DC fast charger installations: +67% YoY in North America
-- Grid integration: V2G pilots in 8 countries, commercial deployment 2025-2026
-
-### Source Attribution
-All findings include original claim-source mappings. See appendix for full citations.
-"""
-
-    print(synthesis_output)
-
-    print("""
-    Why type-appropriate rendering matters:
-
-    Financial data as prose:
-    -> "Revenue was $54,000 in 2022 and fell to $47,200 in 2023, a 13% decrease"
-    [BLOCKED] Hard to compare multiple metrics | Can't see trends at a glance
-
-    News as bullet points:
-    -> "• Global EV adoption accelerated | • Policy incentives drove growth | • Sentiment shifted"
-    [BLOCKED] Loses narrative causality | "driven by" and "coinciding with" relationships disappear
-
-    Technical findings as paragraph:
-    -> "LFP is gaining share. Solid state will be ready 2027-2028. Toyota and Samsung..."
-    [BLOCKED] Hard to scan | Important items buried in prose
-
-    EXAM RULE: The synthesis agent should specify content type in structured output
-    so the report generator renders each section correctly.
-    """)
-
-    # How to instruct synthesis agent
-    synthesis_instruction = """
-Your synthesis report must specify the appropriate format for each section:
-
-Financial data:
-- ALWAYS render as markdown tables
-- Include: metric name, values per period, delta/trend
-
-News/market developments:
-- Render as flowing prose paragraphs
-- Preserve causal relationships ("driven by", "following", "coinciding with")
-
-Technical specifications:
-- Render as nested bullet lists
-- Group by category (battery, charging, software)
-
-Do NOT convert all content to a single uniform format.
-"""
-    print("Synthesis instruction snippet:")
-    print(synthesis_instruction)
-
-demonstrate_content_type_rendering()
-```
+Apply the provenance tracker. Verify:
+- All 3 claims carry their source and date
+- The conflict between $499 and $399 is annotated (temporal: policy updated)
+- The Slack thread about $549 is flagged as unconfirmed (tier 4, no official source)
 
 ## Check your understanding
 
-1. **What happens if source attribution is removed from subagent outputs?** The synthesis agent can't cite sources -- "14% growth" appears with no source, making the report unverifiable. Provenance must be preserved through the entire pipeline.
+**Q1.** Your synthesis agent combines findings from 3 research subagents. The final report says "market grew 14%" without citing which source. A conflicting statistic from another source is dropped entirely. What is the fix?
 
-2. **When two sources conflict, should the synthesis agent pick one?** No -- annotate BOTH values with their sources and methodology, and let the reader decide. Arbitrarily dropping data is an anti-pattern.
+**A.** Give the synthesis agent access to the original sources for re-verification
+**B.** Require subagents to output structured claim-source mappings that the synthesis agent must preserve and merge
+**C.** Run two synthesis passes and compare outputs
+**D.** Have each subagent also produce a summary alongside raw findings
 
-3. **Two sources report different CEO names. Is this a conflict?** Maybe not -- the CEO may have changed. Temporal metadata (publication dates) prevents false contradictions.
+**Correct: B.** Structured claim-source mappings force the synthesis agent to preserve attribution. Conflicting values should be annotated with both sources, not dropped. **Why not A:** Re-verification is expensive and doesn't address the structural problem of lost provenance. **Why not C:** Comparing two synthesis outputs may surface inconsistencies but doesn't fix the root cause of missing attribution. **Why not D:** Summaries alongside findings add tokens without ensuring provenance preservation.
 
-## Exam tips
+---
 
-- **If the exam says** "report cites statistics without sources" → claim-source mappings lost during synthesis
-- **Wrong answer trap:** "Give synthesis agent access to original sources" — re-verification is expensive and misses the root cause
-- **Wrong answer trap:** "Add footnotes in post-processing" — post-hoc attribution is unreliable when provenance wasn't tracked during collection
-- **The correct pattern:** Require structured claim-source mappings from subagents, preserved through synthesis
+**Q2.** Two sources report different EV market share numbers: 14% (BNEF, BEV only) and 18% (IEA, BEV + PHEV). What should the synthesis agent do?
+
+**A.** Use the higher number since IEA is more authoritative
+**B.** Average them to get 16%
+**C.** Annotate both values with their sources and methodology differences: "14-18% depending on methodology (BNEF counts BEV only; IEA includes PHEV)"
+**D.** Drop both and note the data is inconclusive
+
+**Correct: C.** Both values are correct for their methodology. Annotating the conflict with the explanation lets the reader choose the relevant metric. **Why not A:** Picking one arbitrarily hides valid data. **Why not B:** Averaging different methodologies produces a meaningless number. **Why not D:** Both statistics are valid and useful -- dropping them loses information.
+
+---
+
+**Q3.** Your synthesis output includes two claims: "battery costs: $400/kWh" and "battery costs: $139/kWh." Without temporal metadata, what happens?
+
+**A.** The synthesis agent correctly identifies this as a trend over time
+**B.** The synthesis agent may flag a false contradiction or silently drop one claim -- publication dates (2015 vs 2024) would show this is a 9-year trend, not a conflict
+**C.** The synthesis agent averages the two values
+**D.** The reader can infer the temporal context from the claim text
+
+**Correct: B.** Without dates, the two claims look contradictory. With dates (2015 vs 2024), they show a price decline over 9 years. Temporal metadata prevents false contradiction flags. **Why not A:** The agent cannot infer temporal ordering without dates. **Why not C:** Averaging makes no sense for data from different years. **Why not D:** The claim text ("$400/kWh" and "$139/kWh") contains no date information.
 
 ## Key takeaways
 
 - Provenance is lost at summarization unless explicitly required to be preserved
-- Require: source_url, publication_date, relevant_excerpt from all subagents
-- Conflicting statistics: annotate with both sources + methodology difference
-- Temporal metadata prevents false contradictions (different years look like conflicts)
-- Synthesis = combine findings, not compress them
-- Render by content type: financial → tables, news → prose, technical → structured lists
-- Converting everything to one format loses meaning inherent to that content type
+- Every claim needs: source, URL, publication_date, excerpt
+- Source reliability tiers: authoritative docs > public docs > community > transient chat
+- Conflicting data: annotate both sources + methodology difference (never silently pick one)
+- Temporal metadata prevents false contradictions (different years are not conflicts)
+- Content-type rendering: financial data as tables, news as prose, specs as lists
+- Synthesis combines findings -- it does not compress them
+
+## Exam tips
+
+- **"Report cites statistics without sources"** --> claim-source mappings lost during synthesis
+- **"Two sources conflict"** --> annotate both, do not silently pick one
+- **"Old statistic looks like it contradicts new one"** --> temporal metadata missing
+- **Wrong answer trap:** "Give synthesis agent access to original sources" -- re-verification is expensive and misses root cause
+- **Wrong answer trap:** "Add footnotes in post-processing" -- post-hoc attribution is unreliable
+- **The core pattern:** structured claim-source mappings from subagents, preserved through synthesis
+
+**Next:** Lab Final is the capstone -- a complete customer support agent that weaves together everything from all 5 modules into one production-ready system.
 
 ---
 
