@@ -1,5 +1,5 @@
 ﻿# Claude Certified Architect – Foundations
-# HANDS-ON LAB GUIDE — COMPLETE EDITION
+# HANDS-ON LAB GUIDE
 # ═══════════════════════════════════════════
 # Covers all 30 task statements across 5 domains
 # Powered by Claude Code
@@ -8,7 +8,7 @@
 
 ## COURSE OVERVIEW
 
-This hands-on guide covers all 30 task statements tested on the Claude Certified Architect – Foundations exam. It's organized into 5 modules matching the exam domains, a final integrated scenario, and a 60-question practice exam.
+5 modules matching the exam domains, a final integrated scenario, and a 60-question practice exam.
 
 ## Learning path
 
@@ -25,7 +25,7 @@ This hands-on guide covers all 30 task statements tested on the Claude Certified
 
 ## How each lab works
 
-Every lab follows the same structure so you always know where you are:
+Every lab follows this structure:
 
 1. **Learning objectives** — what you'll be able to do after completing this lab
 2. **Recall** — quick questions from prior labs to activate what you already learned
@@ -77,7 +77,7 @@ python --version
 
 If you see `Python 3.8` or higher, you're good. If not, install from python.org.
 
-> **No API key needed.** The lab scripts use simulated data so you can run them with just Python — no Anthropic API key, no `pip install`, no extra billing.
+The lab scripts use simulated data — no Anthropic API key or `pip install` required.
 
 ## Step 3: Create your lab workspace
 
@@ -101,15 +101,6 @@ claude
 
 This is where you'll do all your lab work.
 
-## How labs work
-
-Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Overview, Try it, Reference code, Run it, Check your understanding, Exam tips, and Key takeaways.
-
-- **Try it** — interactive Claude Code prompts that demonstrate the concept
-- **Reference code** — Python scripts you study AND run to see the patterns in action
-- **Run it** — instructions to create and execute the reference code
-- **Check your understanding** — exercises to test your comprehension
-
 ## Troubleshooting — Common Issues
 
 1. **Claude Code not connecting**: Inside Claude Code, type `/doctor` to run diagnostics. If Claude Code won't start at all, check that your subscription is active at claude.ai.
@@ -130,7 +121,7 @@ Each lab follows a consistent 9-section pattern: Learning objectives, Recall, Ov
 
 ## Key Terms for Module 1
 
-Before diving in, here are the core terms you'll use throughout this module:
+Core terms for this module:
 
 - **Agentic loop**: A while-loop in your code where Claude keeps running until the task is done. Each iteration: send request → check stop_reason → execute tools or return response.
 - **stop_reason**: Claude's signal telling your code what to do next. `"tool_use"` = "I need you to run these tools and give me the results." `"end_turn"` = "I'm done, here's my final answer."
@@ -187,7 +178,7 @@ The catch: Claude can't call your backend directly. It can only *ask* your code 
 
 ### Step 1: Create the script
 
-Create your lab directory and the script file. This script simulates the Claude API — it uses the same data structures, `stop_reason` values, and `tool_result` format as the real API, so you can study the loop pattern with just Python, no API key needed.
+Create your lab directory and the script file. This script simulates the Claude API — same data structures, `stop_reason` values, and `tool_result` format as the real API.
 
 ```bash
 mkdir -p ~/claude-architect-labs/lab-d1-agentic-arch
@@ -590,7 +581,7 @@ D) The model's temperature setting is too high, causing erratic behavior.
 
 ## Scenario
 
-You are building a multi-agent research system using the Claude Agent SDK. A coordinator agent delegates to specialized subagents — one searches the web, one analyzes documents, one synthesizes findings — to produce comprehensive cited reports on stakeholder questions. Each subagent has a focused scope: 3-4 tools, a targeted prompt, and no access to what the other subagents found.
+You are building a multi-agent research system using the Claude Agent SDK. A coordinator agent delegates to specialized subagents — one searches the web, one analyzes documents, one synthesizes findings — to produce cited reports on stakeholder questions. Each subagent has a focused scope: 3-4 tools, a targeted prompt, and no access to what the other subagents found.
 
 The coordinator's job: analyze the query, decide which subagents to invoke, pass findings between them, evaluate whether the final synthesis covers all relevant subtopics, and re-delegate targeted queries when it doesn't. When a report only covers 2 of 5 relevant topics, the root cause is almost always the coordinator's decomposition being too narrow — not a subagent failure.
 
@@ -1579,7 +1570,7 @@ D) Create a Python file in `.claude/agents/code_reviewer.py` with a `run()` func
 - **Wrong answer trap: "Give synthesis access to original sources"** — adds token cost and complexity; the handoff should already contain everything synthesis needs
 - **The core pattern:** structured handoff separates content from metadata. Every claim carries its source through the entire pipeline.
 
-**Next:** Lab 1.6 covers task decomposition strategies — when to use prompt chaining (fixed sequential pipeline) vs dynamic decomposition (adaptive investigation based on what you discover).
+**Next:** Lab 1.4 covers prerequisite gates -- programmatic enforcement that blocks tool calls until prior steps complete (e.g., verify customer before processing refund).
 
 ---
 
@@ -2299,7 +2290,7 @@ D) Implement a programmatic prerequisite gate that blocks `process_refund` until
 - **Wrong answer trap: "Reduce temperature to 0"** — temperature controls word choice, not workflow ordering
 - **The core pattern:** when compliance matters (financial operations, identity verification), use programmatic enforcement. Prompt-based = probabilistic. Gates = deterministic.
 
-**Next:** Lab 1.5 covers hooks — stateless interceptors that enforce policies (like the $500 limit) without tracking prior steps. Gates and hooks are often confused on the exam; the distinction is whether state matters.
+**Next:** Lab 1.5 covers hooks -- stateless interceptors that enforce policies (like the $500 limit) without tracking prior steps. The exam tests the gate vs hook distinction: gates track state, hooks don't.
 
 ---
 
@@ -3343,7 +3334,7 @@ D) Run 3 independent reviews and only report issues found in at least 2 of 3.
 - **Wrong answer trap: "Use dynamic decomposition for everything"** — adds unnecessary overhead to known-step tasks
 - **The core pattern:** known steps → chain them. Unknown scope → map first, then decompose adaptively.
 
-**Next:** Module 2 (Lab 2.1) shifts from orchestrating tools to designing them — starting with how tool description quality directly affects whether Claude picks the right tool.
+**Next:** Lab 1.7 covers session state -- `--resume` to continue named sessions, `--fork-session` to explore divergent approaches from a shared baseline.
 
 ---
 
@@ -3848,7 +3839,7 @@ D) Claude is hallucinating — the finding was never actually recorded in the se
 - **Wrong answer trap: "Just re-run the tools"** — without informing Claude what changed, it may not know which tools to re-run
 - **The core pattern:** `--resume` when context is valid; `--fork-session` when comparing approaches; fresh start with summary when tool results are stale
 
-**Next:** Lab 1.2 applies the agentic loop to multi-agent coordination, where a coordinator agent manages subagents in a hub-and-spoke architecture.
+**Next:** Module 2 (Lab 2.1) shifts from orchestrating agents to designing tools -- starting with how tool description quality affects whether Claude picks the right tool.
 
 ---
 
@@ -4302,7 +4293,7 @@ Take this vague tool description:
 - **Renaming vs splitting:** Renaming helps when the tool name is ambiguous. Splitting is required when a single tool covers multiple unrelated jobs -- renaming cannot fix a scope problem.
 - **System prompt keyword collisions** are a tested pattern: a word in the system prompt that matches a tool name creates bias toward that tool.
 
-**Next:** Lab 2.3 explores `tool_choice` modes -- how to force Claude to use a specific tool, allow it to choose freely, or prevent tool calls entirely when no available tool fits the request.
+**Next:** Lab 2.2 covers structured error responses -- error categories, the `isRetryable` flag, and the difference between `isError` (tool failed) and an empty result (tool succeeded, nothing found).
 
 ---
 
@@ -4796,7 +4787,7 @@ D) Propagate the exception to terminate the entire workflow.
 - **Wrong answer trap: `isError: false` with null results -> retry** — `isError: false` means the tool succeeded; do not retry a successful empty result
 - **The exam pattern:** when any answer describes a coordinator that "cannot determine next action" -> structured error context is always the correct fix
 
-**Next:** Lab 2.1 (Tool Description Quality) completes the tool contract: where Lab 2.2 defines what a tool returns when things go wrong, Lab 2.1 defines what the tool description tells Claude before it ever makes a call. Together they specify the full interface between Claude and a tool.
+**Next:** Lab 2.3 covers `tool_choice` modes -- how to force Claude to use a specific tool, allow it to choose freely, or prevent tool calls entirely when no available tool fits the request.
 
 ---
 
@@ -7798,8 +7789,6 @@ Run a large exploration task without the Explore subagent. Read 25 files in your
 
 Your first draft of a code review prompt produces shallow feedback -- "this code could be improved" instead of specific findings with line numbers and severity. You rewrite the prompt with more detail, but now it flags everything including style issues you don't care about. You need a systematic way to refine: evaluate output against a rubric, identify gaps, tighten the prompt, use `/compact` to manage context growth, and repeat until the quality threshold is met.
 
-The same problem applies to any prompt: extraction, test generation, analysis. The first draft is never production-ready. Iterative refinement with concrete examples and scoring is how you get there.
-
 ## What you'll learn
 
 - The iterative refinement loop: prompt, evaluate against a rubric, identify gaps, refine, repeat
@@ -8495,7 +8484,7 @@ CI runs `claude -p "Review this code" --output-format json` without `--allowedTo
 
 - **Retry-with-feedback**: When extraction fails validation, send a follow-up with: original document + failed extraction + specific errors. Claude can self-correct.
 - **detected_pattern**: Field added to findings that records which code construct triggered it. Enables analysis of which patterns produce false positives.
-- **Pydantic / library validators**: Python libraries (Pydantic, attrs, or similar) for schema validation. Catches type/schema errors (wrong types, missing fields). Does NOT catch semantic errors (values don't sum correctly). This lab uses built-in checks for simplicity; production code would typically use Pydantic here.
+- **Pydantic / library validators**: Python libraries (Pydantic, attrs, or similar) for schema validation. Catches type/schema errors (wrong types, missing fields). Does NOT catch semantic errors (values don't sum correctly). This lab uses built-in checks for simplicity; production code uses Pydantic.
 
 - **Message Batches API**: Anthropic API for batch processing. 50% cost savings, up to 24-hour processing window, no latency SLA guarantee. Does NOT support multi-turn tool calling.
 - **custom_id**: Your identifier in batch requests to correlate requests with responses.
@@ -9417,7 +9406,7 @@ Improvement: 20% -> 100%
 - **Wrong answer trap:** "Add a JSON schema" -- schema enforces structure but does not teach ambiguous case reasoning
 - **The correct pattern:** 2-4 targeted examples including an ambiguous case with reasoning
 
-**Next:** Few-shot examples enforce format consistency, but what happens when Claude adds prose around your JSON? In Lab 4.3, we move from guidance (examples) to enforcement (tool_use with JSON schemas) -- guaranteeing structured output at the API level.
+**Next:** Lab 4.3 moves from guidance (few-shot examples) to enforcement -- using `tool_use` with JSON schemas to guarantee structured output at the API level.
 
 ---
 
@@ -13622,14 +13611,14 @@ Apply the provenance tracker. Verify:
 - **Wrong answer trap:** "Add footnotes in post-processing" -- post-hoc attribution is unreliable
 - **The core pattern:** structured claim-source mappings from subagents, preserved through synthesis
 
-**Next:** Lab Final is the capstone -- a complete customer support agent that weaves together everything from all 5 modules into one production-ready system.
+**Next:** Lab Final -- a customer support agent that integrates patterns from all 5 modules into one system.
 
 ---
 
 
-# LAB FINAL: THE COMPLETE EXAM SCENARIO
+# LAB FINAL: CAPSTONE EXAM SCENARIO
 # All 5 Domains -- Capstone Integration
-# Build a production-grade customer support agent
+# Build a customer support agent
 # Time: ~45 minutes | Difficulty: Advanced
 # Prerequisites: All modules (1.1 through 5.6)
 
@@ -13637,11 +13626,11 @@ Apply the provenance tracker. Verify:
 
 You are architecting a customer support agent that will replace the first-line human support team for a mid-sized e-commerce company. The agent handles refund requests, order status inquiries, shipping issues, and account updates. It routes hard cases -- policy edge cases, high-dollar refunds, compliance-sensitive requests -- to human agents with structured handoff context.
 
-This is the capstone. Everything from Modules 1-5 comes together in one system: the agentic loop from Module 1, the tool design and structured errors from Module 2, the CLAUDE.md configuration and CI deployment from Module 3, the explicit criteria and structured output from Module 4, and the case facts, escalation rules, and provenance tracking from Module 5.
+The agentic loop from Module 1, tool design and structured errors from Module 2, CLAUDE.md configuration from Module 3, explicit criteria and structured output from Module 4, and case facts, escalation rules, and provenance tracking from Module 5 -- all in one system.
 
 ## What you'll learn
 
-- Integrating all 5 domain patterns into a single production-grade agent
+- Integrating all 5 domain patterns into a single agent
 - Domain 1: Agentic loop with prerequisite gates and PostToolUse hooks for data normalization
 - Domain 2: Well-described tools with structured error responses and scoped access
 - Domain 3: CLAUDE.md hierarchy, path-specific rules, slash commands, and CI deployment
