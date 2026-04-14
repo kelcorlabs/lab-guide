@@ -10346,513 +10346,794 @@ Add a new semantic validator that checks: "if invoice_date is present, it must n
 
 ---
 
+
 # LAB 4.5: BATCH PROCESSING WITH MESSAGE BATCHES API
-# Domain 4 — Task Statement 4.5
-# Concept: 50% cost savings, 24hr window, custom_id, when not to use
+# Domain 4 -- Task Statement 4.5
+# Concept: 50% cost savings, 24hr window, custom_id, blocking vs non-blocking
 # Time: ~20 minutes | Difficulty: Intermediate
-# Prerequisites: Lab 4.1
+# Prerequisites: Lab 4.4
 
-## Learning objectives
+## Scenario
 
-- Design API approach selection based on workflow latency requirements: synchronous API for blocking pre-merge checks, batch API for overnight/weekly analysis
-- Implement batch failure handling by resubmitting only failed documents (identified by custom_id) with appropriate modifications
-- Apply prompt refinement on a sample set before batch-processing large volumes to maximize first-pass success rates
+Your invoice extraction pipeline processes 10,000 invoices overnight. Running them through the real-time API costs $500/night. Nobody is waiting on the results -- the finance team reviews the extraction report at 9am. The Message Batches API cuts the cost to $250/night (50% discount) and completes within 24 hours.
 
-## Recall
-1. When do retries help vs when are they futile? (Lab 4.4)
-2. What three layers of validation catch different types of errors? (Lab 4.4)
+But your manager also wants to batch the pre-merge security review that blocks every PR. That review needs results in under 5 minutes -- developers are waiting. The Batches API has no latency SLA. You need to know when to batch and when to stay synchronous.
 
-## Overview
+## What you'll learn
 
-**The problem:** Your team runs two Claude-powered workflows:
-1. A **pre-merge security review** -- developers wait for it before merging
-2. An **overnight tech debt report** -- reviewed the next morning
+- When to use the Message Batches API (non-blocking) vs synchronous API (blocking)
+- The 50% cost savings and 24-hour completion window trade-offs
+- Using `custom_id` to correlate batch results with source documents and handle per-item failures
+- Why multi-turn tool calling is not supported in batch (single request/response only)
+- Building a cost calculator that recommends batch vs real-time for a given workload
 
-Both cost $2,000/month in API calls. Your manager proposes switching both to the Message Batches API for 50% savings. Sounds great -- $1,000/month saved. Should you do it?
+## Concepts
 
-**The answer: only for workflow #2.** The Batch API processes requests within a 24-hour window with no guaranteed latency. Developers can't wait 24 hours for a pre-merge review. But an overnight report that nobody reads until 9am? Perfect batch candidate.
+**The decision rule:** Is anyone waiting on the result right now?
+- **Yes** (pre-merge check, customer chat) --> synchronous API
+- **No** (overnight report, weekly audit) --> Message Batches API (50% savings)
 
-**The key facts:**
-- **50% cost savings** vs synchronous API
-- **Up to 24-hour processing window** (often faster, but no SLA)
-- **No multi-turn tool calling** (can't run agentic loops in batch)
-- **`custom_id`** correlates each request with its result (essential for failure handling)
+**Key constraints:**
+- **50% cost savings** on all batch requests
+- **Up to 24-hour processing window** (usually under 1 hour, but no SLA)
+- **No multi-turn tool calling** -- each batch request is a single message/response exchange. You can define tools and get a tool_use response, but you cannot run an agentic loop within a batch request.
+- **`custom_id`** is your identifier for each request. Without it, you cannot match results to source documents or resubmit only failed items.
 
-**Exam connection (Sample Q11):** This exact scenario is tested. The wrong answer is "batch both." The right answer is "batch the overnight report, keep synchronous for blocking checks."
+**Failure handling:** When 3 of 100 batch requests fail, identify them by `custom_id`, fix the issue (e.g., chunk oversized documents), and resubmit only the failures -- never the whole batch. Callback to Lab 2.2: batch failures need the same structured error categorization.
 
-## Try it
+**Cost optimization:** Refine prompts on 10-20 synchronous test requests first. Only then submit the full batch. This avoids expensive resubmission of 10,000 requests due to a prompt issue.
 
-Try this in Claude Code:
+## Walkthrough
 
-```
-> I have two workflows that each cost $2,000/month in Claude API calls:
-> 1. A pre-merge security review that blocks developer PRs until complete
-> 2. An overnight tech debt report reviewed the next morning
->
-> My manager wants to switch both to the Message Batches API for 50% savings.
-> Evaluate this decision. Consider: the Batch API has up to 24-hour processing
-> with no latency SLA, and does NOT support multi-turn tool calling.
-> Which workflow(s) should use batch, and why?
-```
+### Step 1: Define the workload profiles
 
-Claude will correctly identify that only workflow #2 (overnight report) is a batch candidate, because developers cannot wait up to 24 hours for a blocking pre-merge review.
-
-## Reference code
+Create `~/claude-architect-labs/lab-d4-prompt-engineering/batch_cost_calculator.py`:
 
 ```python
 import json
-import time
 
-# In production, replace with client.messages.create()
 
-# -- BATCH API BASICS ---------------------------------------
-# Message Batches API:
-# - 50% cost savings vs synchronous API
-# - Up to 24-hour processing window
-# - No guaranteed latency SLA
-# - Supports single-turn tool use (you can define tools and get tool_use responses)
-# - Does NOT support multi-turn agentic loops within a single batch request
-#   (batch processes each request independently — no back-and-forth tool execution)
+# ============================================================
+# PART 1: WORKLOAD PROFILES
+# ============================================================
 
-def create_batch_requests(documents: list) -> list:
-    """
-    Build batch request list with custom_id for correlation.
-    custom_id lets you match responses back to your input documents.
-    """
-    return [
-        {
-            "custom_id": f"doc-{doc['id']}",  # YOUR identifier — must be unique in batch
+WORKLOADS = [
+    {
+        "name": "Overnight invoice extraction",
+        "count": 10000,
+        "avg_input_tokens": 500,
+        "avg_output_tokens": 200,
+        "latency_requirement": "none",
+        "description": "Finance reviews at 9am",
+    },
+    {
+        "name": "Pre-merge security review",
+        "count": 50,
+        "avg_input_tokens": 2000,
+        "avg_output_tokens": 500,
+        "latency_requirement": "5 minutes",
+        "description": "Developers blocked until complete",
+    },
+    {
+        "name": "Weekly code quality audit",
+        "count": 500,
+        "avg_input_tokens": 1500,
+        "avg_output_tokens": 400,
+        "latency_requirement": "none",
+        "description": "Report reviewed Monday morning",
+    },
+    {
+        "name": "Real-time customer support",
+        "count": 200,
+        "avg_input_tokens": 800,
+        "avg_output_tokens": 300,
+        "latency_requirement": "2 seconds",
+        "description": "Customer waiting in chat",
+    },
+]
+```
+
+### Step 2: Build the cost calculator
+
+```python
+# ============================================================
+# PART 2: COST CALCULATOR
+# ============================================================
+
+INPUT_COST_PER_M = 3.00
+OUTPUT_COST_PER_M = 15.00
+BATCH_DISCOUNT = 0.50
+
+
+def calculate_costs(workload):
+    """Calculate real-time vs batch costs."""
+    count = workload["count"]
+    inp = workload["avg_input_tokens"]
+    out = workload["avg_output_tokens"]
+
+    total_input = count * inp / 1_000_000
+    total_output = count * out / 1_000_000
+
+    realtime = (total_input * INPUT_COST_PER_M
+                + total_output * OUTPUT_COST_PER_M)
+    batch = realtime * BATCH_DISCOUNT
+
+    return {
+        "realtime_cost": round(realtime, 2),
+        "batch_cost": round(batch, 2),
+        "savings": round(realtime - batch, 2),
+    }
+
+
+def recommend(workload):
+    """Recommend batch vs real-time."""
+    costs = calculate_costs(workload)
+    latency = workload["latency_requirement"]
+
+    if latency == "none":
+        return {
+            "recommendation": "BATCH",
+            "reason": "No latency requirement -- "
+                      "50% savings with batch API",
+            **costs,
+        }
+    return {
+        "recommendation": "REAL-TIME",
+        "reason": "Latency requirement: " + latency
+                  + " -- batch has no SLA",
+        **costs,
+    }
+```
+
+### Step 3: Add the batch request builder
+
+```python
+# ============================================================
+# PART 3: BATCH REQUEST FORMAT
+# ============================================================
+
+def create_batch_requests(documents):
+    """Build batch request list with custom_id."""
+    requests = []
+    for doc in documents:
+        requests.append({
+            "custom_id": "doc-" + doc["id"],
             "params": {
                 "model": "claude-sonnet-4-6",
                 "max_tokens": 512,
                 "messages": [{
                     "role": "user",
                     "content": (
-                        f"Extract the vendor name and total amount from this invoice.\n"
-                        f"Return JSON: {{\"vendor\": \"...\", \"total\": N}}\n\n"
-                        f"{doc['text']}"
+                        "Extract vendor name and total "
+                        "from this invoice. Return JSON.\n\n"
+                        + doc["text"]
                     )
                 }]
             }
-        }
-        for doc in documents
-    ]
+        })
+    return requests
+```
 
+### Step 4: Add the batch lifecycle simulation
 
-def submit_batch(documents: list) -> str:
-    """Submit a batch and return the batch ID."""
-    # In production, replace with client.beta.messages.batches.create(requests=requests)
+```python
+# ============================================================
+# PART 4: BATCH LIFECYCLE (simulated)
+# ============================================================
+
+def simulate_batch_workflow(documents):
+    """Simulate submit, poll, and result processing."""
+    sep = "-" * 50
+
+    print("\n" + sep)
+    print("STEP 1: Submit batch")
+    print(sep)
     requests = create_batch_requests(documents)
-    print(f"Submitting batch of {len(requests)} requests...")
-    fake_id = "batch_sim_" + str(len(requests))
-    print(f"Batch ID: {fake_id}")
-    print(f"Status: in_progress")
-    return fake_id
+    batch_id = "batch_abc123def456"
+    n = len(requests)
+    print("  Requests: " + str(n))
+    print("  Batch ID: " + batch_id)
+    print("  Status: in_progress")
 
+    print("\n" + sep)
+    print("STEP 2: Poll for completion")
+    print(sep)
+    print("  Poll 1: in_progress (0/" + str(n) + " done)")
+    print("  Poll 2: in_progress (" + str(n-1)
+          + "/" + str(n) + " done)")
+    print("  Poll 3: ended (" + str(n-1)
+          + " ok, 1 errored)")
 
-def poll_batch(batch_id: str, max_wait_seconds: int = 300) -> dict:
-    """
-    Poll until batch completes.
-    In production: use a webhook or scheduled check -- don't poll in a tight loop.
-    In production, replace with client.beta.messages.batches.retrieve(batch_id)
-    """
-    print(f"\nPolling batch {batch_id} (simulated)...")
-    # Simulated polling sequence
-    print(f"  Status: in_progress | Succeeded: 0 | Errored: 0 | Processing: 3")
-    time.sleep(1)
-    print(f"  Status: in_progress | Succeeded: 1 | Errored: 0 | Processing: 2")
-    time.sleep(1)
-    print(f"  Status: ended | Succeeded: 2 | Errored: 1 | Processing: 0")
-    return {"processing_status": "ended", "request_counts": {"succeeded": 2, "errored": 1, "processing": 0}}
+    print("\n" + sep)
+    print("STEP 3: Process results by custom_id")
+    print(sep)
+    for doc in documents[:-1]:
+        print("  [OK] custom_id=doc-" + doc["id"]
+              + ": extracted successfully")
+    last = documents[-1]
+    print("  [FAIL] custom_id=doc-" + last["id"]
+          + ": context_length_exceeded")
+    print("\n  Action: resubmit doc-" + last["id"]
+          + " with chunked text (not entire batch)")
+```
 
+### Step 5: Add the demo runner
 
-def process_batch_results(batch_id: str) -> dict:
-    """
-    Process results and correlate via custom_id.
-    Handle failures: resubmit only failed documents.
-    In production, replace with client.beta.messages.batches.results(batch_id)
-    """
-    # Simulated batch results
-    results = {
-        "doc-001": {"status": "success", "data": {"vendor": "Acme Corp", "total": 500.00}},
-        "doc-002": {"status": "success", "data": {"vendor": "Widget Co", "total": 1200.00}},
-        "doc-003": {"status": "error", "error": "context_length_exceeded"}
-    }
-    failures = ["doc-003"]
+```python
+# ============================================================
+# PART 5: DEMO
+# ============================================================
 
-    print(f"Processing results for batch {batch_id}:")
-    for cid, res in results.items():
-        if res["status"] == "success":
-            print(f"  custom_id={cid}: {res['data']}")
-        else:
-            print(f"  custom_id={cid}: FAILED - {res['error']}")
-
-    return results, failures
-
-
-# -- DECISION GUIDE -----------------------------------------
-
-def batch_decision_guide():
-    print("""
-=== Message Batches API Decision Guide ===
-
-USE BATCH API for:
-[OK] Overnight reports (don't need results until morning)
-[OK] Weekly audits (process 1000 documents every Sunday night)
-[OK] Nightly test generation (non-blocking, results ready by morning)
-[OK] Historical data analysis (50% cost savings on large volumes)
-[OK] Bulk document classification (latency-tolerant)
-
-DO NOT USE BATCH API for:
-[BLOCKED] Pre-merge CI checks (blocking workflow — developer waiting for result)
-[BLOCKED] Real-time customer interactions (need immediate response)
-[BLOCKED] Multi-turn tool calling within single request (not supported)
-[BLOCKED] Any workflow that blocks on the API result
-
-LATENCY SLA MATH:
-If your SLA is 30 hours and batch takes up to 24 hours:
--> Submit every 4 hours (30 - 24 = 6 hour buffer, submit at 6h intervals for safety)
-
-FAILURE HANDLING:
-1. Identify failed requests by custom_id
-2. For context-too-long failures: chunk the document and resubmit
-3. For other errors: fix the request parameters and resubmit only failed items
-4. Never resubmit the whole batch — just the failures
-
-COST OPTIMIZATION:
-1. Refine prompts on a sample set first
-2. Run 10-20 test requests synchronously to validate output format
-3. Only then submit the full batch
-4. Avoids expensive resubmission of 10,000 requests due to prompt issue
-""")
-
-# Demo (creates real batch — comment out if you don't want to use API credits)
-sample_docs = [
-    {"id": "001", "text": "INVOICE #INV-001\nVendor: Acme Corp\nTotal: $500.00"},
-    {"id": "002", "text": "INVOICE #INV-002\nVendor: Widget Co\nTotal: $1,200.00"},
-    {"id": "003", "text": "INVOICE #INV-003\nVendor: Supply Plus\nTotal: $89.99"},
+SAMPLE_DOCS = [
+    {"id": "001",
+     "text": "INVOICE #001\nVendor: Acme Corp\n"
+             "Total: $500.00"},
+    {"id": "002",
+     "text": "INVOICE #002\nVendor: Widget Co\n"
+             "Total: $1,200.00"},
+    {"id": "003",
+     "text": "INVOICE #003\nVendor: Supply Plus\n"
+             "Total: $89.99"},
 ]
 
-if __name__ == "__main__":
-    batch_decision_guide()
 
-    print("\n=== Batch API Structure Demo ===")
-    requests = create_batch_requests(sample_docs)
-    print(f"Sample request structure:")
+def run_demo():
+    sep = "=" * 60
+    print(sep)
+    print("BATCH VS REAL-TIME COST ANALYSIS")
+    print(sep)
+
+    for wl in WORKLOADS:
+        result = recommend(wl)
+        print("\n  " + wl["name"])
+        print("    " + wl["description"])
+        print("    Latency: " + wl["latency_requirement"])
+        print("    Real-time: $" + str(result["realtime_cost"]))
+        print("    Batch:     $" + str(result["batch_cost"]))
+        print("    Savings:   $" + str(result["savings"]))
+        print("    --> " + result["recommendation"] + ": "
+              + result["reason"])
+
+    print("\n" + sep)
+    print("BATCH REQUEST FORMAT")
+    print(sep)
+    requests = create_batch_requests(SAMPLE_DOCS[:1])
     print(json.dumps(requests[0], indent=2))
 
-    # -- SIMULATION MODE: See the full workflow without using API credits --
-    print("\n=== Simulated Batch Workflow (no API credits needed) ===\n")
+    print("\n" + sep)
+    print("BATCH LIFECYCLE (simulated)")
+    print(sep)
+    simulate_batch_workflow(SAMPLE_DOCS)
 
-    # Simulate submit
-    fake_batch_id = "batch_abc123def456"
-    print(f"1. submit_batch(sample_docs)")
-    print(f"   -> Batch ID: {fake_batch_id}")
-    print(f"   -> Status: in_progress")
-    print(f"   -> {len(sample_docs)} requests submitted\n")
+    print("\n" + sep)
+    print("DECISION RULE")
+    print(sep)
+    print("  Anyone waiting? --> REAL-TIME (synchronous)")
+    print("    Pre-merge checks, customer chat")
+    print("")
+    print("  Nobody waiting? --> BATCH (50% savings)")
+    print("    Overnight reports, weekly audits")
+    print("")
+    print("  NEVER batch:")
+    print("    - Blocking workflows")
+    print("    - Multi-turn agentic loops")
+    print("    - Real-time interactions")
 
-    # Simulate polling
-    print(f"2. poll_batch('{fake_batch_id}')")
-    print(f"   Polling... status=in_progress")
-    print(f"   Polling... status=in_progress")
-    print(f"   Polling... status=ended [OK]")
-    print(f"   -> request_counts: succeeded={len(sample_docs)-1}, errored=1, expired=0\n")
 
-    # Simulate results
-    print(f"3. process_batch_results('{fake_batch_id}')")
-    for doc in sample_docs[:2]:
-        print(f"   [OK] custom_id=doc-{doc['id']}: extracted vendor + total successfully")
-    print(f"   [BLOCKED] custom_id=doc-{sample_docs[2]['id']}: ERRORED (context limit exceeded)")
-    print(f"   -> Resubmit doc-{sample_docs[2]['id']} with chunking\n")
-
-    print("KEY EXAM CONCEPTS demonstrated above:")
-    print("  - custom_id correlates each result with its source request")
-    print("  - Failures are handled per-document, not all-or-nothing")
-    print("  - Failed docs can be resubmitted with modifications (chunking, shorter prompts)")
-    print("  - No multi-turn tool calling in batch (single request/response only)")
+if __name__ == "__main__":
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
+
+```bash
+cd ~/claude-architect-labs
+mkdir -p lab-d4-prompt-engineering
+python lab-d4-prompt-engineering/batch_cost_calculator.py
+```
+
+You should see:
 
 ```
-python lab-d4-prompt-eng/batch_processing.py
+============================================================
+BATCH VS REAL-TIME COST ANALYSIS
+============================================================
+
+  Overnight invoice extraction
+    Finance reviews at 9am
+    Latency: none
+    Real-time: $4.5
+    Batch:     $2.25
+    Savings:   $2.25
+    --> BATCH: No latency requirement -- 50% savings with batch API
+
+  Pre-merge security review
+    Developers blocked until complete
+    Latency: 5 minutes
+    Real-time: $0.68
+    Batch:     $0.34
+    Savings:   $0.34
+    --> REAL-TIME: Latency requirement: 5 minutes -- batch has no SLA
+
+  Weekly code quality audit
+    Report reviewed Monday morning
+    Latency: none
+    Real-time: $5.25
+    Batch:     $2.62
+    Savings:   $2.62
+    --> BATCH: No latency requirement -- 50% savings with batch API
+
+  Real-time customer support
+    Customer waiting in chat
+    Latency: 2 seconds
+    Real-time: $1.38
+    Batch:     $0.69
+    Savings:   $0.69
+    --> REAL-TIME: Latency requirement: 2 seconds -- batch has no SLA
 ```
 
-**What you should see:**
-- A "Message Batches API Decision Guide" listing when to use batch (overnight reports, weekly audits) vs when NOT to use it (blocking CI checks, real-time interactions)
-- A "Batch API Structure Demo" showing the JSON structure of a sample request with `custom_id`, `model`, `max_tokens`, and `messages` fields
-- Instructions for submitting, polling, and processing results (commented out to avoid using API credits)
+## Try it yourself
+
+Take a different workload: 500 code review comments generated nightly for standup.
+
+1. Add it to WORKLOADS with count=500, estimated tokens, and latency_requirement "none".
+2. Run recommend() and confirm it recommends BATCH.
+3. Calculate monthly savings (500/night x 30 nights x per-request delta).
+4. Change latency_requirement to "10 minutes". Is batch still viable? (Answer: risky -- 24-hour SLA means you would need to submit by the previous morning.)
 
 ## Check your understanding
 
-1. **What happens if you use the Batch API for a blocking pre-merge check** and it takes 6 hours to process? (Answer: developers are blocked for 6 hours. Batch has no latency SLA — unacceptable for blocking workflows)
-2. **Why is `custom_id` essential?** If 3 of 100 batch requests fail and you didn't use `custom_id`, how do you match results to requests? (Answer: you can't — `custom_id` is the only way to correlate failures with their source requests)
-3. **Can you run a multi-turn agentic loop inside a batch request?** (Answer: no — Batch API doesn't support multi-turn tool calling. Use synchronous API for agentic workflows)
+**Q1.** Your manager wants to switch both a blocking pre-merge review and an overnight tech debt report to the Message Batches API for 50% cost savings. What is the correct evaluation?
 
-## Exam tips
+**A.** Batch both -- the cost savings justify the change
+**B.** Batch the tech debt report only; keep synchronous API for the pre-merge check
+**C.** Keep both synchronous to avoid batch ordering issues
+**D.** Batch both with a timeout fallback to synchronous
 
-- **If the exam says** "reduce costs" with blocking + non-blocking workflows → batch the non-blocking only
-- **Wrong answer trap:** "Batch everything for 50% savings" — batch has no latency SLA, blocks developers
-- **Wrong answer trap:** "Keep everything synchronous" — wastes money on latency-tolerant workloads
-- **The correct pattern:** Synchronous for blocking (pre-merge). Batch for non-blocking (overnight reports).
+**Correct: B.** The Batch API has up to 24-hour processing with no latency SLA -- unsuitable for blocking pre-merge checks. Ideal for overnight jobs. **Why not A:** Batching both ignores that the pre-merge check is blocking -- developers would wait up to 24 hours. **Why not C:** Keeping both synchronous forfeits the 50% savings on the overnight report. **Why not D:** A timeout fallback adds complexity and the Batch API offers no latency guarantees, so the fallback would trigger frequently.
+
+---
+
+**Q2.** Your batch of 100 invoice extractions completes. 97 succeeded, 3 failed with context_length_exceeded. What is the correct recovery action?
+
+**A.** Resubmit the entire batch of 100 requests
+**B.** Identify the 3 failed requests by custom_id, chunk their documents, and resubmit only those 3
+**C.** Increase max_tokens and resubmit the entire batch
+**D.** Mark the 3 failed invoices as unprocessable and skip them
+
+**Correct: B.** custom_id identifies exactly which requests failed. Fix the specific issue (chunk oversized documents) and resubmit only the failures. **Why not A:** Resubmitting 100 requests wastes money on the 97 that already succeeded. **Why not C:** max_tokens controls output length, not input context -- and resubmitting all 100 is wasteful. **Why not D:** The invoices can be processed after chunking -- skipping them loses data.
+
+---
+
+**Q3.** You want to run an agentic extraction loop (tool calls, validation, retry) on 5,000 documents. Can you use the Batches API?
+
+**A.** Yes -- batch supports any API request format including multi-turn tool calling
+**B.** No -- batch processes each request independently. Multi-turn agentic loops are not supported. Use synchronous API, or restructure as single-turn extraction with post-processing validation.
+**C.** Yes, if you set tool_choice to any in the batch request
+**D.** Yes, but you need to chain multiple batch requests together
+
+**Correct: B.** The Batches API processes each request as a single message/response exchange. It supports defining tools and getting a tool_use response, but it cannot execute the back-and-forth loop that agentic workflows require. **Why not A:** Multi-turn tool calling requires the client to process tool results and send follow-ups -- batch cannot do this. **Why not C:** tool_choice controls tool selection but does not enable multi-turn execution. **Why not D:** Chaining batches adds massive complexity for something synchronous API handles natively.
 
 ## Key takeaways
 
-- Batch API: 50% cost savings, up to 24-hour window, no latency SLA guarantee
-- custom_id: your identifier to correlate requests with responses
-- Use for: overnight reports, weekly audits, nightly test generation (latency-tolerant)
-- Don't use for: blocking workflows (pre-merge checks), real-time interactions
-- Batch API does NOT support multi-turn tool calling within a single request
-- Failure handling: resubmit only failed requests (by custom_id), not whole batch
+- Message Batches API: 50% cost savings, up to 24-hour window, no latency SLA
+- Decision rule: anyone waiting? --> real-time. Nobody waiting? --> batch
+- custom_id correlates each result with its source request -- essential for failure handling
+- Resubmit only failed items (by custom_id), not the entire batch
+- Batch does NOT support multi-turn agentic loops (single request/response only)
+- Refine prompts on 10-20 synchronous requests before submitting large batches
+
+## Exam tips
+
+- **"Reduce costs" with blocking + non-blocking workflows** --> batch the non-blocking only
+- **"Overnight report"** --> batch (50% savings, no latency need)
+- **"Pre-merge check"** --> synchronous (developers waiting)
+- **Wrong answer trap:** "Batch everything for 50% savings" -- batch has no latency SLA
+- **Wrong answer trap:** "Keep everything synchronous" -- wastes money on latency-tolerant workloads
+- **The core pattern:** synchronous for blocking, batch for non-blocking. Never mix.
+
+**Next:** Lab 4.6 covers multi-instance and multi-pass review -- how to reduce variance in code reviews by running multiple passes with consensus filtering or specialized reviewers with distinct focuses.
 
 ---
 
 # LAB 4.6: MULTI-INSTANCE AND MULTI-PASS REVIEW
-# Domain 4 — Task Statement 4.6
+# Domain 4 -- Task Statement 4.6
 # Concept: Self-review limits, independent instances, per-file + integration passes
-# Time: ~20 minutes | Difficulty: Advanced
-# Prerequisites: Lab 4.1
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 4.5
 
-## Learning objectives
+## Scenario
 
-- Design a second independent Claude instance to review generated code without the generator's reasoning context
-- Implement splitting of large multi-file reviews into focused per-file passes for local issues plus separate integration passes for cross-file data flow analysis
-- Write verification passes where the model self-reports confidence alongside each finding to enable calibrated review routing
+Your code review agent runs once per PR and produces inconsistent results -- the same PR gets different issues flagged on different runs. One run catches SQL injection but misses the missing null check. The next run catches the null check but misses the SQL injection. Single-pass review has variance. For high-stakes reviews (security-critical code, compliance), you need either multi-pass review (run N times, consensus-filter) or multi-instance review (N specialized reviewers, each with a different focus).
 
-## Recall
-1. When is batch processing appropriate vs inappropriate? (Lab 4.5)
-2. What is the custom_id field used for in batch results? (Lab 4.5)
+Separately, the same Claude session that generates code also reviews it -- and rarely finds bugs. The reasoning context from generation makes it blind to its own mistakes.
 
-## Overview
+## What you'll learn
 
-Claude generates a function with a subtle off-by-one error. You ask the same session to review it. Claude says "the code looks correct" -- because it just wrote it and the reasoning feels sound.
+- Why self-review fails (reasoning context creates attachment to original decisions)
+- Multi-pass consensus: run N times, report issues found in 2+ of N passes
+- Multi-instance specialization: distinct focus per reviewer (security, performance, style)
+- Per-file local analysis + cross-file integration pass for large PRs (Lab 1.6 callback)
+- The trade-off: consensus filtering can hide real bugs found by only one pass
 
-**The fix:** use a separate, independent Claude instance for review. Fresh eyes catch what the author misses.
+## Concepts
 
-**Exam connection (Sample Q12):** Split into per-file local analysis + cross-file integration pass.
-NOT bigger model, NOT require smaller PRs.
+**Self-review limitation:** When the same session generates and reviews code, the model retains its reasoning context. The decisions that led to the code still feel "correct" -- the model defends its choices instead of questioning them. An independent instance with no prior context catches more issues.
 
-## Try it
+**Multi-pass consensus (2-of-3, 3-of-5):** Run the review N times and report only findings that appear in 2+ passes. This reduces variance (random false positives drop out) but has a cost: a real bug found by only one pass gets filtered. Consensus is conservative.
 
-Try this in Claude Code:
+**Multi-instance specialization:** Instead of N copies of the same review, use N specialized reviewers -- one for security, one for performance, one for style. Each has a focused prompt and criteria. Coverage is broader because each reviewer has a distinct lens.
 
-```
-> I have two small Python files. First, generate a function that validates
-> a customer email and returns their account details from a dictionary.
-> Include error handling.
->
-> Now, pretend you are a DIFFERENT reviewer who has never seen the requirements.
-> Review the code you just wrote with fresh eyes for: SQL injection,
-> missing error handling, unvalidated inputs, and logic bugs.
-> Report your confidence (0.0-1.0) for each finding.
->
-> Did you catch anything you might have missed if you were reviewing
-> your own code with the original context still in mind?
-```
+**Per-file + cross-file (Lab 1.6 callback):** For large PRs (10+ files), split into per-file local analysis passes + a separate cross-file integration pass. Single-pass review of 12 files causes attention dilution -- detailed feedback on the first 3, shallow on the rest.
 
-This demonstrates the self-review limitation: the same session that wrote the code tends to defend its own decisions. An independent instance with no prior context catches more issues.
+## Walkthrough
 
-## Reference code
+### Step 1: See the problem -- single-pass variance
+
+Create `~/claude-architect-labs/lab-d4-prompt-engineering/review_variance_analyzer.py`:
 
 ```python
 import json
-
-# In production, replace with client.messages.create()
-
-# -- WHY SELF-REVIEW FAILS ----------------------------------
-# When the same Claude session generates code and then reviews it,
-# the model retains its reasoning context — the decisions that led
-# to the code feel "correct" because it just made them.
-# Independent review instances have no such attachment.
-
-def generate_code(prompt: str) -> str:
-    """Generate code (simulates Claude generating an implementation)."""
-    # In production, replace with client.messages.create()
-    print("\n[GENERATOR INSTANCE] Generating code...")
-    # Simulated generated code with a subtle bug (off-by-one in range)
-    return """def get_customer(email: str, accounts: dict) -> dict:
-    if not email or '@' not in email:
-        raise ValueError("Invalid email format")
-    # Bug: doesn't handle case where email exists but account is None
-    return accounts[email]  # KeyError if email not found
-"""
+from collections import Counter
 
 
-def independent_review(code: str, review_criteria: str) -> dict:
-    """
-    Review code with an INDEPENDENT instance.
+# ============================================================
+# PART 1: SINGLE-PASS VARIANCE
+# ============================================================
 
-    This is a fresh API call with no prior context.
-    The reviewer has no attachment to the design decisions in the code.
-    In production, replace with client.messages.create()
-    """
-    print("\n[INDEPENDENT REVIEWER] Reviewing without generator context...")
-    # Simulated independent review findings
-    # The independent reviewer catches issues the generator missed
-    findings = [
-        {"issue": "KeyError if email not in accounts dict -- no .get() or try/except",
-         "severity": "high", "confidence": 0.95, "line": 5},
-        {"issue": "No validation that account value is not None after lookup",
-         "severity": "medium", "confidence": 0.80, "line": 5},
-        {"issue": "Email validation is minimal -- does not check domain or format beyond @",
-         "severity": "low", "confidence": 0.60, "line": 2}
-    ]
-    return {"findings": findings, "raw": json.dumps(findings)[:200]}
-
-
-def multi_pass_large_review(files: dict) -> dict:
-    """
-    Multi-pass review for large codebases.
-
-    Pass 1: Per-file local analysis (bugs, security within each file)
-    Pass 2: Cross-file integration analysis (data flow, interface contracts)
-
-    WHY SPLIT:
-    - "Lost in the middle" effect: reviewing 10 files in one prompt
-      causes attention dilution and missed issues
-    - Cross-file issues need focused attention separate from local issues
-
-    In production, replace with client.messages.create() for each pass
-    """
-    print("\n[MULTI-PASS REVIEW]")
-
-    # Pass 1: Per-file local analysis (simulated)
-    per_file_results = {}
-    simulated_local_findings = {
-        "auth.py": [
-            {"line": 2, "issue": "Hardcoded string comparison for admin check", "severity": "high", "confidence": 0.95},
-            {"line": 3, "issue": "No error handling for db.get() failure", "severity": "medium", "confidence": 0.85}
+# Simulated: 3 runs of the same review, different results
+SINGLE_PASS_RUNS = [
+    {
+        "run": 1,
+        "findings": [
+            {"issue": "SQL injection in query builder",
+             "severity": "high"},
+            {"issue": "Unused import os",
+             "severity": "low"},
         ],
-        "api.py": [
-            {"line": 3, "issue": "verify() return value not checked -- request proceeds even if auth fails", "severity": "high", "confidence": 0.92},
-            {"line": 4, "issue": "KeyError if req.user_id not in data dict", "severity": "medium", "confidence": 0.88}
-        ]
-    }
-    for filename, content in files.items():
-        print(f"  Pass 1: Local analysis of {filename}...")
-        # In production, replace with client.messages.create()
-        per_file_results[filename] = simulated_local_findings.get(filename, [])
+    },
+    {
+        "run": 2,
+        "findings": [
+            {"issue": "SQL injection in query builder",
+             "severity": "high"},
+            {"issue": "Missing null check on user input",
+             "severity": "medium"},
+        ],
+    },
+    {
+        "run": 3,
+        "findings": [
+            {"issue": "Missing null check on user input",
+             "severity": "medium"},
+            {"issue": "Unused import os",
+             "severity": "low"},
+            {"issue": "Race condition in cache update",
+             "severity": "high"},
+        ],
+    },
+]
+```
 
-    # Pass 2: Cross-file integration pass (simulated)
-    print("  Pass 2: Cross-file integration analysis...")
-    # In production, replace with client.messages.create()
-    integration_text = json.dumps([
-        {"files": ["auth.py", "api.py"], "issue": "verify() in api.py ignores return value from auth.py -- unauthenticated requests proceed", "severity": "high"},
-        {"files": ["auth.py", "api.py"], "issue": "No error propagation -- db.get() failure in auth.py not caught by api.py caller", "severity": "medium"}
-    ])
+### Step 2: Implement multi-pass consensus filtering
+
+```python
+# ============================================================
+# PART 2: MULTI-PASS CONSENSUS
+# ============================================================
+
+def consensus_filter(runs, min_agreement=2):
+    """Report only findings found in min_agreement+ runs."""
+    all_issues = []
+    for run in runs:
+        for f in run["findings"]:
+            all_issues.append(f["issue"])
+
+    counts = Counter(all_issues)
+    consensus = [issue for issue, count in counts.items()
+                 if count >= min_agreement]
+    filtered = [issue for issue, count in counts.items()
+                if count < min_agreement]
 
     return {
-        "per_file": per_file_results,
-        "integration": integration_text[:200]
+        "consensus_findings": consensus,
+        "filtered_out": filtered,
+        "counts": dict(counts),
     }
+```
+
+### Step 3: Implement multi-instance specialization
+
+```python
+# ============================================================
+# PART 3: MULTI-INSTANCE SPECIALIZATION
+# ============================================================
+
+SPECIALIZED_REVIEWERS = {
+    "security": {
+        "focus": "SQL injection, XSS, hardcoded credentials, "
+                 "auth bypasses",
+        "findings": [
+            {"issue": "SQL injection in query builder",
+             "severity": "high", "confidence": 0.95},
+            {"issue": "Hardcoded API key in config.py",
+             "severity": "high", "confidence": 0.90},
+        ],
+    },
+    "performance": {
+        "focus": "N+1 queries, missing indexes, memory leaks, "
+                 "unnecessary allocations",
+        "findings": [
+            {"issue": "N+1 query in user list endpoint",
+             "severity": "medium", "confidence": 0.85},
+            {"issue": "Large object created in loop",
+             "severity": "low", "confidence": 0.70},
+        ],
+    },
+    "correctness": {
+        "focus": "Logic bugs, off-by-one, null handling, "
+                 "error propagation",
+        "findings": [
+            {"issue": "Missing null check on user input",
+             "severity": "medium", "confidence": 0.88},
+            {"issue": "Race condition in cache update",
+             "severity": "high", "confidence": 0.60},
+        ],
+    },
+}
+
+
+def run_specialized_review():
+    """Run N specialized reviewers and merge findings."""
+    all_findings = []
+    for name, reviewer in SPECIALIZED_REVIEWERS.items():
+        for f in reviewer["findings"]:
+            f["reviewer"] = name
+            all_findings.append(f)
+    return all_findings
+```
+
+### Step 4: Compare coverage
+
+```python
+# ============================================================
+# PART 4: COVERAGE COMPARISON
+# ============================================================
+
+def compare_approaches():
+    """Compare single-pass, multi-pass consensus,
+    and multi-instance specialization."""
+    sep = "=" * 60
+
+    # Single-pass: just run 1
+    single = set()
+    for f in SINGLE_PASS_RUNS[0]["findings"]:
+        single.add(f["issue"])
+
+    # Multi-pass consensus (2-of-3)
+    result = consensus_filter(SINGLE_PASS_RUNS, 2)
+    consensus = set(result["consensus_findings"])
+
+    # Multi-instance specialization
+    specialized = set()
+    for f in run_specialized_review():
+        specialized.add(f["issue"])
+
+    print(sep)
+    print("COVERAGE COMPARISON")
+    print(sep)
+    print(f"\n  Single-pass (run 1): "
+          f"{len(single)} findings")
+    for i in sorted(single):
+        print(f"    - {i}")
+
+    print(f"\n  Multi-pass consensus (2-of-3): "
+          f"{len(consensus)} findings")
+    for i in sorted(consensus):
+        print(f"    - {i}")
+    print(f"  Filtered out (found in only 1 run):")
+    for i in sorted(result["filtered_out"]):
+        print(f"    - {i} [HIDDEN -- may be real!]")
+
+    print(f"\n  Multi-instance specialized: "
+          f"{len(specialized)} findings")
+    for i in sorted(specialized):
+        print(f"    - {i}")
+
+    print(f"\n  {'-' * 50}")
+    print(f"  Single-pass:  {len(single)} findings "
+          f"(high variance)")
+    print(f"  Consensus:    {len(consensus)} findings "
+          f"(low variance, may hide real bugs)")
+    print(f"  Specialized:  {len(specialized)} findings "
+          f"(broadest coverage)")
+```
+
+### Step 5: Add self-review vs independent review comparison
+
+```python
+# ============================================================
+# PART 5: SELF-REVIEW VS INDEPENDENT REVIEW
+# ============================================================
+
+def compare_review_modes():
+    """Show why independent review catches more."""
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("SELF-REVIEW VS INDEPENDENT REVIEW")
+    print(sep)
+
+    # Self-review: same session generated the code
+    self_findings = [
+        {"issue": "Consider adding type hints",
+         "severity": "low"},
+    ]
+
+    # Independent: fresh session, no prior context
+    independent_findings = [
+        {"issue": "KeyError if email not in dict",
+         "severity": "high", "confidence": 0.95},
+        {"issue": "No validation that account is not None",
+         "severity": "medium", "confidence": 0.80},
+        {"issue": "Email validation is minimal",
+         "severity": "low", "confidence": 0.60},
+    ]
+
+    print(f"\n  Self-review (same session): "
+          f"{len(self_findings)} findings")
+    for f in self_findings:
+        print(f"    [{f['severity']}] {f['issue']}")
+
+    print(f"\n  Independent review (fresh session): "
+          f"{len(independent_findings)} findings")
+    for f in independent_findings:
+        print(f"    [{f['severity']}] {f['issue']} "
+              f"(conf: {f['confidence']})")
+
+    print(f"\n  Self-review missed {len(independent_findings) - len(self_findings)} issues")
+    print(f"  Reason: generator context creates attachment")
+```
+
+### Step 6: Add demo runner and run
+
+```python
+# ============================================================
+# DEMO
+# ============================================================
+
+def run_demo():
+    sep = "=" * 60
+
+    # Show single-pass variance
+    print(sep)
+    print("SINGLE-PASS VARIANCE (3 runs, same PR)")
+    print(sep)
+    for run in SINGLE_PASS_RUNS:
+        issues = [f["issue"] for f in run["findings"]]
+        print(f"\n  Run {run['run']}: {len(issues)} findings")
+        for i in issues:
+            print(f"    - {i}")
+
+    # Consensus filter
+    print(f"\n{sep}")
+    print("MULTI-PASS CONSENSUS (2-of-3)")
+    print(sep)
+    result = consensus_filter(SINGLE_PASS_RUNS, 2)
+    print(f"\n  Finding occurrence counts:")
+    for issue, count in sorted(result["counts"].items()):
+        status = "KEPT" if count >= 2 else "FILTERED"
+        print(f"    [{status}] {issue}: {count}/3 runs")
+
+    # Coverage comparison
+    compare_approaches()
+
+    # Self-review vs independent
+    compare_review_modes()
+
+    # Architecture summary
+    print(f"\n{sep}")
+    print("REVIEW ARCHITECTURE PATTERNS")
+    print(sep)
+    print("""
+  SINGLE-PASS: 1 run, high variance
+    Use for: low-stakes reviews, quick feedback
+
+  MULTI-PASS CONSENSUS (2-of-3): N runs, filter
+    Use for: reducing false positives
+    Risk: hides real bugs found by only 1 run
+
+  MULTI-INSTANCE SPECIALIZED: N focused reviewers
+    Use for: broadest coverage on critical code
+    Each reviewer has distinct criteria and focus
+
+  INDEPENDENT REVIEW: separate session from generator
+    Use for: all generated code (never self-review)
+
+  PER-FILE + CROSS-FILE (Lab 1.6):
+    Use for: large PRs (10+ files)
+    Per-file: local bugs. Cross-file: data flow.
+""")
 
 
 if __name__ == "__main__":
-    # Demo: generate then independently review
-    generated = generate_code(
-        "Write a Python function that validates a customer email and returns "
-        "their account details from a dictionary. Include error handling."
-    )
-    print(f"Generated code:\n{generated[:200]}...")
-
-    review = independent_review(generated,
-        "Review for: SQL injection, missing error handling, unvalidated inputs, logic bugs.")
-    print(f"\nIndependent review findings: {json.dumps(review['findings'], indent=2)[:300]}")
-
-    # Demo: multi-pass review
-    test_files = {
-        "auth.py": "def verify(token):\n    if token == 'admin': return True\n    return db.get(token)",
-        "api.py":  "from auth import verify\ndef handle(req):\n    verify(req.token)\n    return data[req.user_id]"
-    }
-    results = multi_pass_large_review(test_files)
-    print(f"\nMulti-pass results:")
-    print(f"Per-file: {json.dumps(results['per_file'], indent=2)[:200]}")
-    print(f"Integration: {results['integration'][:200]}")
-
-    # === Confidence-Based Review Routing ===
-    print("\n\n=== Confidence Calibration for Human Review Routing ===")
-
-    def route_findings_by_confidence(findings: list) -> dict:
-        """Route review findings based on model-reported confidence scores."""
-        routed = {"auto_post": [], "spot_check": [], "human_review": []}
-
-        for finding in findings:
-            conf = finding.get("confidence", 0.5)
-            if conf >= 0.9:
-                routed["auto_post"].append(finding)
-            elif conf >= 0.7:
-                routed["spot_check"].append(finding)
-            else:
-                routed["human_review"].append(finding)
-
-        return routed
-
-    # Simulate findings with confidence scores from the review above
-    sample_findings = [
-        {"issue": "SQL injection in query builder", "severity": "high", "confidence": 0.95},
-        {"issue": "Missing null check on user input", "severity": "medium", "confidence": 0.82},
-        {"issue": "Possible race condition in cache", "severity": "high", "confidence": 0.55},
-        {"issue": "Inconsistent error format", "severity": "low", "confidence": 0.73},
-    ]
-
-    routed = route_findings_by_confidence(sample_findings)
-    print(f"\n  Auto-post (conf >= 0.9): {len(routed['auto_post'])} findings")
-    for f in routed["auto_post"]:
-        print(f"    - {f['issue']} (conf: {f['confidence']})")
-    print(f"  Spot-check (0.7-0.9): {len(routed['spot_check'])} findings")
-    for f in routed["spot_check"]:
-        print(f"    - {f['issue']} (conf: {f['confidence']})")
-    print(f"  Human review (< 0.7): {len(routed['human_review'])} findings")
-    for f in routed["human_review"]:
-        print(f"    - {f['issue']} (conf: {f['confidence']})")
-
-    print("""
-    CRITICAL: Confidence scores must be CALIBRATED using labeled validation sets.
-    "90% confidence" means nothing until you verify it's accurate 90% of the time.
-
-    Calibration process:
-    1. Extract 200+ labeled findings (human-verified as correct or incorrect)
-    2. Group by confidence bracket (0.9+, 0.8-0.9, 0.7-0.8, etc.)
-    3. Measure actual accuracy in each bracket
-    4. Adjust thresholds until brackets match their claimed accuracy
-
-    Multi-instance architecture:
-    Generator -> Independent Reviewer -> Human (for low-confidence items)
-    NOT: Generator -> Self-review -> PR (self-review is least effective)
-    """)
+    run_demo()
 ```
 
-## Run it
+Run the script:
 
-```
-python lab-d4-prompt-eng/multi_instance_review.py
+```bash
+cd ~/claude-architect-labs
+python lab-d4-prompt-engineering/review_variance_analyzer.py
 ```
 
-**What you should see:**
-- A GENERATOR INSTANCE producing a Python function, followed by an INDEPENDENT REVIEWER finding issues (SQL injection, missing error handling, etc.) with confidence scores
-- A MULTI-PASS REVIEW running Pass 1 (per-file local analysis of `auth.py` and `api.py`) then Pass 2 (cross-file integration analysis for interface violations and data flow issues)
-- A "Confidence Calibration for Human Review Routing" section showing 4 sample findings routed into 3 buckets: auto-post (confidence >= 0.9), spot-check (0.7-0.9), and human-review (< 0.7)
+You should see:
+- 3 single-pass runs with different findings per run (demonstrating variance)
+- Consensus filter keeping issues found in 2+ runs, filtering issues found in only 1 run
+- Coverage comparison: single-pass (2), consensus (3), specialized (6)
+- Self-review vs independent: self-review finds 1 issue, independent finds 3
+
+## Try it yourself
+
+Take a different review task (e.g., API contract review for backward compatibility).
+
+1. Define 3 specialized reviewers: schema changes, breaking changes, deprecation.
+2. Create simulated findings for each.
+3. Run the specialized review and compare coverage to a single generic review.
+4. Identify which findings only one reviewer catches -- these are the value of specialization.
 
 ## Check your understanding
 
-1. **Why does self-review fail?** When the same instance generates code and then reviews it, why does it miss subtle bugs? (Answer: it retains its reasoning context and doesn't question its own decisions — the reasoning that led to the code still feels "correct")
-2. **Why does single-pass review degrade on large PRs?** Consider a 14-file PR reviewed in one prompt. Is depth consistent across all files? (Answer: no — attention dilutes. Files at the end get superficial review. Per-file + integration passes solve this)
-3. **What happens if you skip passing prior findings to the second review pass?** (Answer: the second review duplicates comments the first already made, wasting developer attention)
+**Q1.** Your code review uses 3-of-5 consensus: only findings reported by 3+ passes are kept. A real SQL injection is found by only 1 of 5 passes. What happens?
 
-## Exam tips
+**A.** The SQL injection is reported because it is high severity
+**B.** The SQL injection is filtered out because it does not meet the 3-of-5 consensus threshold -- consensus can hide real bugs found by only one pass
+**C.** The consensus filter automatically increases the threshold for high-severity findings
+**D.** The SQL injection is escalated to human review
 
-- **If the exam says** "review misses subtle bugs" or "same instance generated and reviewed" → independent review instance
-- **Wrong answer trap:** "Add extended thinking" — same session still has reasoning attachment
-- **Wrong answer trap:** "Require smaller PRs" — shifts burden to developers
-- **The correct pattern:** Separate generation and review into independent instances. Multi-pass for large PRs.
+**Correct: B.** Consensus filtering is based on occurrence count, not severity. A real bug found by only 1 pass gets filtered the same as a false positive found by only 1 pass. This is the trade-off: consensus reduces variance but can hide real bugs. **Why not A:** Consensus does not have severity-aware thresholds. **Why not C:** The threshold is fixed (3-of-5) regardless of finding severity. **Why not D:** Consensus filtering does not include an escalation path -- filtered findings are simply dropped.
+
+---
+
+**Q2.** You generate a Python function and ask the same Claude session to review it. The review says "the code looks correct." An independent session finds 3 bugs. What is the root cause?
+
+**A.** The independent session used a different model
+**B.** The generator session retains reasoning context that makes it less likely to question its own decisions -- self-review is biased by the original reasoning
+**C.** The prompt for the self-review was too vague
+**D.** The generator session ran out of tokens for the review
+
+**Correct: B.** Self-review fails because the model retains the reasoning that led to the code. The decisions feel "correct" because it just made them. An independent session with no prior context has no attachment to the original approach. **Why not A:** Both sessions use the same model -- the difference is context, not capability. **Why not C:** Even a detailed review prompt cannot overcome the reasoning attachment bias. **Why not D:** Token limits affect output length, not review quality.
+
+---
+
+**Q3.** A PR modifies 12 files. Your single-pass review produces detailed feedback for the first 3 files but superficial comments for the rest. What is the correct restructuring?
+
+**A.** Switch to a model with a larger context window
+**B.** Require developers to split PRs into 3-4 files maximum
+**C.** Split into per-file local analysis passes plus a separate cross-file integration pass
+**D.** Run 3 independent reviews and only report issues found in at least 2 of 3
+
+**Correct: C.** Per-file passes ensure consistent depth -- every file gets a dedicated analysis. A separate cross-file integration pass catches data flow and interface issues that span files. **Why not A:** A larger context window does not fix attention degradation -- the model still gives diminishing focus to later files. **Why not B:** Forcing smaller PRs shifts burden to developers and does not address cross-file issues. **Why not D:** Consensus filtering addresses variance, not attention dilution -- each of the 3 runs would still have the same depth problem on 12 files.
 
 ## Key takeaways
 
-- Self-review: model retains reasoning context → less likely to question its own decisions
-- Independent instances: fresh context → no attachment to original decisions
-- Multi-pass: per-file local issues + separate cross-file integration pass
-- Confidence scores must be calibrated with labeled validation sets
-- Route low-confidence findings to human review; high-confidence to automated posting
+- Self-review: model retains reasoning context -- biased toward its own decisions
+- Independent instances: fresh context, no attachment -- catches more bugs
+- Multi-pass consensus (2-of-3): reduces variance but can hide bugs found by only 1 pass
+- Multi-instance specialization: broadest coverage, each reviewer has distinct focus
+- Per-file + cross-file: prevents attention dilution on large PRs (Lab 1.6 pattern)
+- Consensus filtering trades recall for precision -- not always the right trade-off
+
+## Exam tips
+
+- **"Review misses subtle bugs" or "same instance generated and reviewed"** --> independent review instance
+- **"Inconsistent findings across runs"** --> multi-pass consensus or multi-instance
+- **"Detailed feedback on first files, shallow on rest"** --> per-file + cross-file passes
+- **Wrong answer trap:** "Add extended thinking" -- same session still has reasoning attachment
+- **Wrong answer trap:** "Require smaller PRs" -- shifts burden to developers
+- **Wrong answer trap:** "Report only issues found by all N reviewers" -- hides real bugs
+- **The core pattern:** independent instances for generation+review; specialized reviewers for coverage
+
+**Next:** Lab 5.1 begins Module 5 (Context Management and Reliability) with context management across long interactions -- how to prevent facts from being lost during progressive summarization using case facts blocks and tool result trimming.
 
 ---
 
@@ -10887,107 +11168,121 @@ python lab-d4-prompt-eng/multi_instance_review.py
 ---
 
 # LAB 5.1: CONTEXT MANAGEMENT ACROSS LONG INTERACTIONS
-# Domain 5 — Task Statement 5.1
-# Concept: Case facts block, tool result trimming, "lost in the middle"
-# Time: ~25 minutes | Difficulty: Advanced 
+# Domain 5 -- Task Statement 5.1
+# Concept: Case facts block, tool result trimming, lost in the middle
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 4.6
 
-## Learning objectives
+## Scenario
 
-After completing this lab, you will be able to:
+Your customer support agent's conversation spans 45 turns over a 30-minute session. By turn 30, it forgets that the customer already provided their order number in turn 5 and asks for it again. Worse, the agent says "your order total was approximately $150" when the actual total from a tool call in turn 8 was $149.99. Progressive summarization compressed the exact value into an approximation.
 
-- Extract transactional facts (amounts, dates, order numbers, statuses) into a persistent case facts block included in each prompt, outside summarized history
-- Trim verbose tool outputs to only relevant fields before they accumulate in context
-- Structure aggregated inputs with key findings summaries at the beginning and explicit section headers to mitigate position effects
-- Require subagents to return structured data (key facts, citations, relevance scores) instead of verbose content when downstream agents have limited context budgets
+The context is growing unbounded: each tool call returns 24 fields, but only 5 are relevant to the current issue. Critical facts from early in the conversation are buried under layers of verbose tool output and small talk.
 
-## Recall
-1. Why does self-review miss issues that an independent reviewer catches? (Lab 4.6)
-2. What is the multi-pass review pattern for large PRs? (Lab 4.6)
+## What you'll learn
 
-## Overview
+- Extracting transactional facts (amounts, dates, IDs) into a persistent case facts block outside summarized history
+- Trimming verbose tool outputs to only relevant fields before they accumulate in context
+- Mitigating the "lost in the middle" effect by placing key summaries at the beginning of aggregated inputs
+- Requiring upstream agents to return structured data (not reasoning chains) when downstream agents have limited context budgets
+- Building a context manager that anchors facts and summarizes resolved turns under a token budget
 
-After 15 turns, your agent says "your order was approximately $150" when the real total from turn 3 was $149.99. Progressive summarization compressed the exact value.
+## Concepts
 
-**The fix:** extract transactional facts into a persistent case facts block -- exact amounts, dates, order IDs -- outside the summarized history.
+**Case facts block:** A structured section injected at the start of each prompt containing verified transactional facts -- customer ID, order number, exact amounts, dates, case status. These facts persist verbatim across the conversation. Progressive summarization cannot compress them because they are outside the summarized history.
 
-**Exam connection:** Case facts blocks and tool result trimming are core Domain 5 concepts. The exam tests whether you know that progressive summarization loses precision.
+**Tool result trimming:** A `lookup_order` tool returns 24 fields. For a return request, only 6 matter (id, status, total, items, delivery_eta, tracking). Keeping all 24 fields per tool call fills context with irrelevant data. Trim before storing.
 
-### Key concepts in this lab
+**"Lost in the middle":** Models reliably process information at the beginning and end of long inputs but may miss content in the middle. Mitigate by placing key findings summaries at the top of aggregated reports, with detailed sections below under explicit headers.
 
-- **Long conversations** — accumulate verbose tool results that consume tokens disproportionately
-- **"Lost in the middle"** — model misses findings in the middle of long inputs
-- **Case facts block** — persistent structured layer outside summarized history
+**Structured data from upstream agents:** When a subagent returns findings to a coordinator, it should return structured data (facts, scores, citations) -- not verbose reasoning chains. The downstream agent needs facts, not the upstream agent's thought process. This preserves context budget for the downstream agent's own work.
 
-### Challenge Mode (optional — try before looking at the solution)
+## Walkthrough
 
-A customer support agent has a 22-field tool result from `lookup_order`. Design:
+### Step 1: See the problem -- agent forgets early facts
 
-1. A **case facts block** that extracts only the 5 fields relevant to the current issue
-2. A **tool result trimmer** that reduces the 22-field result to those 5 fields before injecting into context
-3. A strategy for where to place the case facts in the prompt to avoid the "lost in the middle" effect
-
-Think about: which fields matter for a refund request vs a shipping inquiry? Then compare to the reference.
-
----
-
-## Try it
-
-Try this in Claude Code:
-
-```
-> Imagine a customer support agent that just called a lookup_order tool
-> and got back a response with 24 fields including: id, customer_id, items,
-> total, status, tracking, warehouse_id, picker_id, packed_at, shipped_at,
-> carrier, carrier_service, weight_lbs, dimensions_inches, insurance_value,
-> signature_required, delivery_eta, delivery_attempts, delivery_instructions,
-> return_label_url, gift_wrap, gift_message.
->
-> The customer is asking about a RETURN. Which fields are relevant?
-> Design a "case facts block" that extracts only the essential fields
-> and a "trim function" that reduces the 22-field response to just those fields.
-> Explain why this matters for context management in long conversations.
-```
-
-This demonstrates two key patterns:
-- **Tool result trimming** -- preventing context bloat
-- **Case facts blocks** -- preserving exact values that progressive summarization would approximate
-
-## Reference code
+Create `~/claude-architect-labs/lab-d5-context-reliability/context_manager.py`:
 
 ```python
 import json
 
-# -- PATTERN 1: CASE FACTS BLOCK ---------------------------
-# Problem: Progressive summarization loses exact numbers, dates, amounts.
-# "Customer was refunded" loses the $149.99 amount.
-# Solution: Extract transactional facts into a persistent block
-# that's included VERBATIM in every prompt.
 
-def build_case_facts_block(facts: dict) -> str:
+# ============================================================
+# PART 1: THE PROBLEM -- FACTS LOST IN LONG CONVERSATIONS
+# ============================================================
+
+# Turn 5: customer provides order number
+# Turn 8: tool returns order total $149.99
+# Turn 30: agent says "approximately $150"
+# Turn 35: agent asks for order number AGAIN
+
+CONVERSATION_HISTORY = [
+    {"turn": 5, "role": "customer",
+     "content": "My order number is ORD-555"},
+    {"turn": 8, "role": "tool_result",
+     "content": {"id": "ORD-555", "total": 149.99,
+                  "status": "shipped",
+                  "customer_id": "CUST-001"}},
+    {"turn": 15, "role": "agent",
+     "content": "I see your order ORD-555 for $149.99"},
+    {"turn": 30, "role": "agent",
+     "content": "Your order was approximately $150"},
+    {"turn": 35, "role": "agent",
+     "content": "Could you provide your order number?"},
+]
+
+print("=" * 60)
+print("THE PROBLEM: FACTS LOST OVER 45 TURNS")
+print("=" * 60)
+for turn in CONVERSATION_HISTORY:
+    t = turn["turn"]
+    role = turn["role"]
+    content = turn["content"]
+    if isinstance(content, dict):
+        content = json.dumps(content)
+    print(f"  Turn {t:2d} [{role:12s}]: "
+          + str(content)[:60])
+
+print("\n  Turn 30: '$149.99' became 'approximately $150'")
+print("  Turn 35: Agent forgot order number from turn 5")
+print("  Root cause: progressive summarization lost "
+      "exact values")
+```
+
+### Step 2: Build the case facts block
+
+```python
+# ============================================================
+# PART 2: CASE FACTS BLOCK
+# ============================================================
+
+def build_case_facts(facts):
+    """Create a persistent facts block that survives
+    summarization. Injected at the start of each prompt.
     """
-    Create a persistent facts block that survives summarization.
+    lines = ["=== CASE FACTS (do not summarize) ==="]
+    lines.append("Customer ID:    "
+                 + facts.get("customer_id", "unknown"))
+    lines.append("Order IDs:      "
+                 + ", ".join(facts.get("order_ids", [])))
+    lines.append("Order Total:    $"
+                 + str(facts.get("total", "N/A")))
+    lines.append("Status:         "
+                 + facts.get("status", "unknown"))
+    lines.append("Issue:          "
+                 + facts.get("issue", "not stated"))
+    lines.append("Last Action:    "
+                 + facts.get("last_action", "none"))
+    lines.append("=== END CASE FACTS ===")
+    return "\n".join(lines)
+```
 
-    Include: amounts, dates, order IDs, statuses, customer-stated expectations.
-    These are the facts that matter — preserve them exactly.
-    """
-    return f"""
-=== CASE FACTS (do not summarize these) ===
-Customer ID:       {facts.get('customer_id', 'unknown')}
-Customer Email:    {facts.get('email', 'unknown')}
-Order IDs:         {', '.join(facts.get('order_ids', []))}
-Refund Amounts:    {', '.join(f"${a}" for a in facts.get('refund_amounts', []))}
-Dispute Amount:    ${facts.get('dispute_amount', 'N/A')}
-Customer Expected: {facts.get('customer_expectation', 'not stated')}
-Case Status:       {facts.get('status', 'open')}
-Last Action:       {facts.get('last_action', 'none')}
-=== END CASE FACTS ===
-"""
+### Step 3: Build the tool result trimmer
 
-
-# -- PATTERN 2: TOOL RESULT TRIMMING ----------------------
-# Problem: get_customer returns 40+ fields, but we need 5.
-# Each tool call accumulates verbose output -> context fills fast.
-# Solution: Trim tool results to only relevant fields before storing.
+```python
+# ============================================================
+# PART 3: TOOL RESULT TRIMMING
+# ============================================================
 
 FULL_ORDER_RESPONSE = {
     "id": "ORD-555",
@@ -11013,135 +11308,260 @@ FULL_ORDER_RESPONSE = {
     "gift_wrap": False,
     "gift_message": None,
     "created_at": "2024-01-13T11:15:00Z",
-    "updated_at": "2024-01-14T14:05:22Z"
+    "updated_at": "2024-01-14T14:05:22Z",
 }
 
-RETURN_RELEVANT_FIELDS = {"id", "status", "total", "items", "delivery_eta", "tracking"}
+# Different issues need different fields
+TRIM_PROFILES = {
+    "return": {"id", "status", "total", "items",
+               "delivery_eta", "tracking"},
+    "shipping": {"id", "status", "tracking", "carrier",
+                 "delivery_eta", "delivery_attempts"},
+    "billing": {"id", "total", "items", "customer_id",
+                "created_at"},
+}
 
-def trim_for_return_context(order: dict) -> dict:
-    """Keep only return-relevant fields. Reduces 24 fields -> 6 fields."""
-    return {k: v for k, v in order.items() if k in RETURN_RELEVANT_FIELDS}
 
+def trim_tool_result(order, issue_type):
+    """Keep only fields relevant to the issue type."""
+    fields = TRIM_PROFILES.get(issue_type, set())
+    return {k: v for k, v in order.items() if k in fields}
+```
 
-# -- PATTERN 3: POSITION EFFECTS ---------------------------
-# "Lost in the middle": models reliably process beginning and end of input.
-# Middle sections may be missed in long aggregated inputs.
-# Solution: Place key findings summaries at the BEGINNING.
+### Step 4: Build the aggregated report structure
 
-def build_aggregated_report(findings: list) -> str:
+```python
+# ============================================================
+# PART 4: POSITION-AWARE REPORT STRUCTURE
+# ============================================================
+
+def build_report(findings):
+    """Structure aggregated results to mitigate
+    lost-in-the-middle effect.
+    Summary at TOP (most reliable position).
     """
-    Structure aggregated results to mitigate position effects.
+    summary_lines = []
+    for f in findings:
+        n = len(f["issues"])
+        summary_lines.append(
+            f"- {f['file']}: {n} issue(s)"
+        )
+    summary = ("KEY FINDINGS SUMMARY:\n"
+               + "\n".join(summary_lines))
 
-    Pattern: Summary first -> then detailed sections with headers.
-    """
-    # Summary at the TOP (most reliable position)
-    summary_lines = [f"- {f['file']}: {len(f['issues'])} issues" for f in findings]
-    summary = "KEY FINDINGS SUMMARY:\n" + "\n".join(summary_lines)
-
-    # Detailed sections with explicit headers
     details = []
     for f in findings:
-        section = f"\n--- FILE: {f['file']} ({len(f['issues'])} issues) ---\n"
-        for issue in f['issues']:
-            section += f"  Line {issue['line']}: [{issue['severity']}] {issue['description']}\n"
+        section = (f"\n--- FILE: {f['file']} "
+                   f"({len(f['issues'])} issues) ---")
+        for issue in f["issues"]:
+            section += (
+                f"\n  Line {issue['line']}: "
+                f"[{issue['severity']}] "
+                f"{issue['description']}"
+            )
         details.append(section)
 
-    return summary + "\n\n" + "\n".join(details)
+    return summary + "\n" + "\n".join(details)
+```
 
+### Step 5: Build the full context manager
 
-def demonstrate_context_patterns():
-    """Demonstrate all three context management patterns."""
+```python
+# ============================================================
+# PART 5: CONTEXT MANAGER
+# ============================================================
 
-    print("=== Pattern 1: Case Facts Block ===\n")
+def manage_context(conversation, case_facts,
+                   issue_type, max_turns=10):
+    """Build a managed context with anchored facts,
+    trimmed tool results, and summarized old turns.
+    """
+    # 1. Anchor case facts at the top
+    context_parts = [build_case_facts(case_facts)]
+
+    # 2. Keep only recent turns
+    recent = conversation[-max_turns:]
+    old = conversation[:-max_turns]
+
+    # 3. Summarize old turns
+    if old:
+        resolved = [t for t in old
+                    if t.get("resolved", False)]
+        summary = (f"[{len(old)} earlier turns summarized: "
+                   f"{len(resolved)} resolved points]")
+        context_parts.append(summary)
+
+    # 4. Add recent turns with trimmed tool results
+    for turn in recent:
+        content = turn["content"]
+        if (turn["role"] == "tool_result"
+                and isinstance(content, dict)):
+            content = trim_tool_result(content, issue_type)
+        context_parts.append(
+            f"[Turn {turn['turn']}] "
+            f"{turn['role']}: {content}"
+        )
+
+    return "\n\n".join(context_parts)
+```
+
+### Step 6: Add the demo runner and run
+
+```python
+# ============================================================
+# DEMO
+# ============================================================
+
+def run_demo():
+    sep = "=" * 60
+
+    # Case facts block
+    print(f"\n{sep}")
+    print("PATTERN 1: CASE FACTS BLOCK")
+    print(sep)
     facts = {
         "customer_id": "CUST-001",
-        "email": "jane@email.com",
-        "order_ids": ["ORD-555", "ORD-556"],
-        "refund_amounts": [149.99, 29.99],
-        "dispute_amount": 149.99,
-        "customer_expectation": "Full refund for damaged item, expected within 3 days",
-        "status": "investigating",
-        "last_action": "Refund initiated for ORD-555"
+        "order_ids": ["ORD-555"],
+        "total": 149.99,
+        "status": "shipped",
+        "issue": "Return request for damaged item",
+        "last_action": "Refund initiated",
     }
-    print(build_case_facts_block(facts))
-    print("These facts persist across conversation — never summarized away.")
+    print(build_case_facts(facts))
+    print("\nThese facts persist verbatim -- never "
+          "summarized to 'approximately $150'")
 
-    print("\n=== Pattern 2: Tool Result Trimming ===\n")
-    print(f"Full order response: {len(FULL_ORDER_RESPONSE)} fields")
-    trimmed = trim_for_return_context(FULL_ORDER_RESPONSE)
-    print(f"Trimmed response:    {len(trimmed)} fields")
-    print(f"Kept: {list(trimmed.keys())}")
-    print(f"Tokens saved: ~{(len(json.dumps(FULL_ORDER_RESPONSE)) - len(json.dumps(trimmed)))} chars per tool call")
+    # Tool result trimming
+    print(f"\n{sep}")
+    print("PATTERN 2: TOOL RESULT TRIMMING")
+    print(sep)
+    full_size = len(json.dumps(FULL_ORDER_RESPONSE))
+    for issue_type in TRIM_PROFILES:
+        trimmed = trim_tool_result(
+            FULL_ORDER_RESPONSE, issue_type
+        )
+        trim_size = len(json.dumps(trimmed))
+        saved = full_size - trim_size
+        print(f"\n  {issue_type} issue:")
+        print(f"    Full: {len(FULL_ORDER_RESPONSE)} fields "
+              f"({full_size} chars)")
+        print(f"    Trimmed: {len(trimmed)} fields "
+              f"({trim_size} chars)")
+        print(f"    Saved: {saved} chars per tool call")
+        print(f"    Kept: {list(trimmed.keys())}")
 
-    print("\n=== Pattern 3: Aggregated Report Structure ===\n")
-    sample_findings = [
-        {"file": "auth.py",   "issues": [{"line": 5, "severity": "high", "description": "hardcoded token"}]},
-        {"file": "api.py",    "issues": [{"line": 12, "severity": "medium", "description": "missing null check"},
-                                          {"line": 34, "severity": "low",    "description": "unused import"}]},
-        {"file": "utils.py",  "issues": []},
+    # Position-aware report
+    print(f"\n{sep}")
+    print("PATTERN 3: POSITION-AWARE REPORT")
+    print(sep)
+    findings = [
+        {"file": "auth.py", "issues": [
+            {"line": 5, "severity": "high",
+             "description": "hardcoded token"}]},
+        {"file": "api.py", "issues": [
+            {"line": 12, "severity": "medium",
+             "description": "missing null check"},
+            {"line": 34, "severity": "low",
+             "description": "unused import"}]},
     ]
-    report = build_aggregated_report(sample_findings)
-    print(report)
-    print("\nSummary at top -> reliably read. Details below with section headers.")
+    print(build_report(findings))
+    print("\nSummary at top -> reliably read. "
+          "Details below with headers.")
 
-    print("\n=== Pattern 4: Context Budget for Multi-Agent Systems ===")
-    print("""
-    When downstream agents have limited context budgets:
-    -> Upstream agents return structured data, NOT verbose reasoning chains
-
-    WRONG (upstream returns):
-    "After carefully analyzing the document, I considered several interpretations.
-     The vendor name appears to be Widget Corp based on the letterhead, though
-     there is also a reference to Widget Corporation in the body text..."
-
-    CORRECT (upstream returns):
-    {"vendor_name": "Widget Corp", "confidence": 0.85,
-     "source": "invoice-header", "alternative": "Widget Corporation (body text)"}
-
-    The downstream agent gets facts, not reasoning. Context preserved for its own work.
-    """)
+    # Full context management
+    print(f"\n{sep}")
+    print("PATTERN 4: MANAGED CONTEXT")
+    print(sep)
+    managed = manage_context(
+        CONVERSATION_HISTORY, facts,
+        "return", max_turns=3
+    )
+    print(managed)
+    print("\nFacts anchored. Old turns summarized. "
+          "Tool results trimmed.")
 
 
 if __name__ == "__main__":
-    demonstrate_context_patterns()
+    run_demo()
 ```
 
-## Run it
-
-Create the file and run it:
+Run the script:
 
 ```bash
-python lab-d5-context-reliability/context_management.py
+cd ~/claude-architect-labs
+mkdir -p lab-d5-context-reliability
+python lab-d5-context-reliability/context_manager.py
 ```
 
-**What you should see:**
-- "Pattern 1: Case Facts Block" showing a formatted block with customer ID, email, order IDs, refund amounts, dispute amount, and case status that persists across conversation turns
-- "Pattern 2: Tool Result Trimming" showing a full order response (24 fields) reduced to 6 relevant fields, with character savings calculated
-- "Pattern 3: Aggregated Report Structure" showing a KEY FINDINGS SUMMARY at the top followed by detailed per-file sections with severity-tagged issues
-- "Pattern 4: Context Budget" explaining why upstream agents should return structured data (not verbose reasoning chains) to downstream agents
+You should see:
+- **Pattern 1:** Case facts block with exact values ($149.99, not "approximately $150")
+- **Pattern 2:** Tool result trimming -- 24 fields reduced to 6 for return, 6 for shipping, 5 for billing
+- **Pattern 3:** Aggregated report with summary at the top (mitigates lost-in-the-middle)
+- **Pattern 4:** Full managed context with anchored facts, summarized old turns, trimmed tool results
+
+## Try it yourself
+
+Take a different long conversation: a 20-turn debugging session where the developer provides a stack trace in turn 2 and a reproduction command in turn 5.
+
+1. Define a case facts block for debugging: error message, file/line, reproduction command, environment.
+2. Define a trim profile for stack trace tool results (keep file, line, function; drop framework internals).
+3. Build the managed context with anchored facts and trimmed results.
+4. Measure token count before/after trimming on a simulated 20-turn conversation.
 
 ## Check your understanding
 
-1. **What happens without a case facts block?** After 15 turns, does the agent remember the exact order total from turn 3? (Answer: no — progressive summarization compresses "$149.99" into "approximately $150")
-2. **What is the cost of keeping all 24 fields** from the order lookup instead of trimming to 6? (Answer: context fills with irrelevant fields after multiple tool calls, crowding out important conversation history)
-3. **Why does the report structure place the summary at the TOP?** What happens if key findings are in the middle of a long aggregated report? (Answer: "lost in the middle" effect — models reliably process information at the beginning and end of long inputs but may miss findings from middle sections)
+**Q1.** After a 15-turn customer support conversation, your agent says "your order total was approximately $150" when the actual total from turn 3 was $149.99. What pattern prevents this?
 
-## Exam tips
+**A.** Extract transactional facts (amounts, dates, order IDs) into a persistent case facts block included in each prompt
+**B.** Increase the context window to retain all prior messages
+**C.** Use progressive summarization to compress the conversation
+**D.** Have the agent re-read all prior tool results before each response
 
-- **If the exam says** "agent says 'approximately $150' instead of '$149.99'" → case facts block
-- **Wrong answer trap:** "Increase context window" — delays but doesn't prevent summarization loss
-- **Wrong answer trap:** "Use progressive summarization" — summarization IS the cause of the problem
-- **The correct pattern:** Extract exact values into a persistent case facts block outside summarized history
+**Correct: A.** Case facts blocks persist exact values outside summarized history. Progressive summarization (C) is the CAUSE of the problem -- it compresses specific values into vague approximations. **Why not B:** The context window is likely already large enough to hold 15 turns -- the issue is that exact values get lost during summarization, not that messages are dropped. **Why not C:** Progressive summarization is what causes $149.99 to become "approximately $150" -- it makes the problem worse. **Why not D:** Re-reading all tool results wastes tokens and does not scale.
+
+---
+
+**Q2.** Your agent calls `lookup_order` and gets back a 24-field response. The customer is asking about a return. What should you do with the tool result before adding it to context?
+
+**A.** Store the full 24-field response to preserve all information
+**B.** Trim to only the 6 fields relevant to returns (id, status, total, items, delivery_eta, tracking) before storing in context
+**C.** Summarize the response in prose before storing
+**D.** Discard the response and ask the customer for the information instead
+
+**Correct: B.** Trimming to relevant fields prevents context bloat. After 5 tool calls, the full responses would consume 120 fields of irrelevant data (warehouse_id, picker_id, etc.) that crowd out important conversation history. **Why not A:** Storing all 24 fields per call fills context with irrelevant data, degrading response quality. **Why not C:** Prose summarization may lose exact values -- structured trimming preserves the fields you need exactly. **Why not D:** The tool already has the information -- discarding it wastes a tool call.
+
+---
+
+**Q3.** Your aggregated report has findings from 10 files. The model reliably processes findings from the first 3 and last 2 files but misses findings from files 4-8. What is the cause and fix?
+
+**A.** The model has a bug with middle sections of long inputs
+**B.** "Lost in the middle" effect -- place a KEY FINDINGS SUMMARY at the top of the report with explicit section headers for each file
+**C.** The model needs a larger context window
+**D.** Split the report into 10 separate API calls
+
+**Correct: B.** Models reliably process the beginning and end of long inputs but may miss content in the middle. A summary at the top ensures key findings are in the most-attended position. Section headers help the model navigate to detailed sections. **Why not A:** This is a known attention pattern, not a bug. **Why not C:** The issue is attention distribution, not context capacity. **Why not D:** 10 separate calls lose cross-file context and cost 10x more.
 
 ## Key takeaways
 
-- Case facts block: extract transactional facts (amounts, dates, IDs) into persistent structured layer
-- Tool result trimming: keep only relevant fields before accumulating in context
-- "Lost in the middle": place key summaries at beginning, use section headers
-- Pass complete conversation history in every API request for coherence
-- Upstream agents return structured data (not reasoning chains) when downstream has limited context
+- Case facts block: extract exact values (amounts, dates, IDs) into a persistent block outside summarized history
+- Tool result trimming: keep only fields relevant to the current issue -- different issues need different fields
+- "Lost in the middle": place key summaries at the beginning of aggregated inputs, use section headers
+- Upstream agents should return structured data, not reasoning chains, to preserve downstream context budget
+- Progressive summarization is the CAUSE of fact loss, not the fix -- case facts blocks are the fix
+
+## Exam tips
+
+- **"Agent says approximately $150 instead of $149.99"** --> case facts block
+- **"Context fills up after multiple tool calls"** --> trim tool results to relevant fields
+- **"Findings from middle of report are missed"** --> summary at top, section headers
+- **Wrong answer trap:** "Increase context window" -- delays but does not prevent summarization loss
+- **Wrong answer trap:** "Use progressive summarization" -- summarization IS the cause
+- **The core pattern:** anchor exact facts, trim irrelevant fields, summarize resolved points
+
+**Next:** Lab 5.2 covers escalation and ambiguity resolution -- how to define explicit escalation triggers so the agent knows when to handle issues vs when to route to a human, and how to handle policy gaps where the policy is silent.
 
 ---
+
 
 # LAB 5.2: ESCALATION AND AMBIGUITY RESOLUTION
 # Domain 5 — Task Statement 5.2
