@@ -6446,71 +6446,52 @@ Create a profile with `allowed_tools: ["Read", "Grep", "Glob", "Bash"]` (no Writ
 # LAB 3.1: CLAUDE.MD HIERARCHY AND MODULAR ORGANIZATION
 # Domain 3 — Task Statement 3.1
 # Concept: User/project/directory hierarchy, @import, .claude/rules/
-# Time: ~20 minutes | Difficulty: Guided
+# Time: ~20 minutes | Difficulty: Intermediate
+# Prerequisites: Lab 2.5
 
-## Learning objectives
+## Scenario
 
-- Diagnose configuration hierarchy issues (e.g., a new team member not receiving instructions because they are in user-level rather than project-level configuration)
-- Use @import to selectively include relevant standards files in each package's CLAUDE.md
-- Split large CLAUDE.md files into focused topic-specific files in .claude/rules/
-- Use the /memory command to verify which memory files are loaded and diagnose inconsistent behavior across sessions
+Your team's CLAUDE.md has grown to 800 lines. Nobody reads it. A junior developer added "I prefer tabs over spaces" to the project-level file, and now every teammate's Claude Code session enforces tabs. Meanwhile, the `src/api/` subdirectory has its own CLAUDE.md that says "use 2-space indentation" -- contradicting the root file. New hires run Claude Code and get inconsistent behavior depending on which directory they're in, and nobody can figure out why.
 
-## Recall
-1. When should you use Grep vs Glob? (Lab 2.5)
-2. What is the incremental codebase exploration pattern? (Lab 2.5)
+You need to understand the three-level hierarchy (user, project, directory), split the monolith with `@import`, and use `/memory` to diagnose which configs are actually loaded.
 
-## Overview
+## What you'll learn
 
-**The problem:** Your team has coding standards — "use async/await for API handlers, use
-functional components in React, always write tests." You put them all in one giant CLAUDE.md.
-It works, but:
-- New devs add personal preferences that apply to everyone
-- The file grows to 500 lines and Claude starts ignoring parts of it ("lost in the middle")
-- Some rules only apply to `/src/api/` but Claude applies them everywhere
+- The three-level CLAUDE.md hierarchy (user, project, directory) and what belongs at each level
+- Why personal preferences in project CLAUDE.md break the whole team's experience
+- Using `@import` to split a monolithic CLAUDE.md into modular topic files
+- Creating `.claude/rules/` files for topic-specific conventions
+- Using `/memory` to verify which config files are loaded and diagnose inconsistencies
 
-**The solution: a hierarchy.**
-- **User-level** (`~/.claude/CLAUDE.md`) — your personal preferences. NOT in git. Only you see it.
-- **Project-level** (root `CLAUDE.md`) — team standards. In git. Everyone shares it.
-- **Directory-level** — subdirectory-specific overrides. A `/src/api/CLAUDE.md` with async rules.
-- **`@import`** — splits a huge CLAUDE.md into modular files (`@import ./standards/testing.md`)
-- **`.claude/rules/`** — auto-loaded rules with glob patterns for path-specific conventions
+## Concepts
 
-**Exam connection (Sample Q6):** "Test files spread throughout the codebase need the same
-conventions" → `.claude/rules/` with `paths: ["**/*.test.*"]`. NOT directory-level CLAUDE.md
-(can't cover files scattered across dirs).
+**Three-level hierarchy:**
 
-### What you will learn
+| Level | File | In git? | Use for |
+|-------|------|---------|---------|
+| **User** | `~/.claude/CLAUDE.md` | No | Personal preferences (tab width, verbosity) |
+| **Project** | Root `CLAUDE.md` or `.claude/CLAUDE.md` | Yes | Team standards (coding style, architecture patterns) |
+| **Directory** | Subdirectory `CLAUDE.md` | Yes | Local overrides for specific packages |
 
-- The 3-level hierarchy and what belongs at each level (personal vs team vs directory)
-- `@import` for modular configuration that doesn't hit context limits
-- `.claude/rules/` with YAML frontmatter for path-scoped auto-loading
-- How to verify what's loaded with `/memory`
+All three levels merge at session start. Directory-level overrides project-level for files in that directory. User-level applies to all projects on your machine.
 
-## Try it
+**`@import`** loads rules from another file into CLAUDE.md. Instead of one 800-line file, you write `@import .claude/rules/testing.md` and keep each topic in its own file. Claude Code resolves imports at load time.
 
-Run this in Claude Code to see what configuration is currently loaded:
+**`.claude/rules/`** is the directory for topic-specific rule files. Files here are always loaded (unless they have path-specific YAML frontmatter, which Lab 3.3 covers). This is the alternative to a monolithic CLAUDE.md.
 
-```
-/memory
-```
+**`/memory`** shows which CLAUDE.md files and rule files are currently loaded. Use it to diagnose "why isn't my teammate getting the conventions?" -- usually the answer is the rules are in `~/.claude/` (personal) instead of project-level.
 
-You'll see which CLAUDE.md files and rules are active. Right now it may be empty or minimal.
+## Walkthrough
 
-By the end of this lab, you'll have a full hierarchy -- user-level, project-level, and path-specific rules -- and /memory will show all of them.
+### Step 1: Create project CLAUDE.md with coding standards
 
-**Now try it:** Run `/memory` in Claude Code to see what's currently loaded. Note which files appear. After creating the CLAUDE.md hierarchy in this lab, run `/memory` again to see the difference.
-
-### Step 1: Create the full CLAUDE.md hierarchy
-
-Ask Claude Code to create the project-level CLAUDE.md and directory structure:
-
-> "Create the directories `.claude/rules`, `.claude/commands`, and `.claude/skills`. Then create a project-level `CLAUDE.md` with the content below."
+In your project root, create `CLAUDE.md`:
 
 ```markdown
-# Claude Architect Labs — Project Configuration
+# Project Configuration
 
 ## Project Overview
-This is a hands-on lab project for the Claude Certified Architect exam.
+Hands-on lab project for the Claude Certified Architect exam.
 All Python files use the anthropic library with model claude-sonnet-4-6.
 
 ## Standards
@@ -6523,11 +6504,29 @@ All Python files use the anthropic library with model claude-sonnet-4-6.
 - Error responses always include: isError, errorCategory, isRetryable
 ```
 
-### Step 2: Create modular rule files
+This is **project-level** -- committed to git, shared with all teammates. The `@import` directives pull in modular rule files instead of putting everything in one giant file.
 
-Ask Claude Code to create these two rule files:
+### Step 2: Create a directory-level CLAUDE.md override
 
-> "Create the file `.claude/rules/testing.md` with the content below."
+Create `src/api/CLAUDE.md` for API-specific overrides:
+
+```markdown
+# API Directory Overrides
+
+## All handlers in this directory must:
+- Use async/await for request handlers
+- Validate input at the entry point before any processing
+- Return structured JSON error responses (same format as MCP tools)
+- Include rate limiting headers in all responses
+```
+
+This only applies to files in `src/api/`. It overrides or supplements the project-level CLAUDE.md for that directory. Files outside `src/api/` never see these rules.
+
+### Step 3: Use @import to modularize
+
+Create the rule files that CLAUDE.md imports:
+
+Create `.claude/rules/testing.md`:
 
 ```markdown
 # Testing Standards
@@ -6538,7 +6537,7 @@ Ask Claude Code to create these two rule files:
 ## Test gate blocking: verify prerequisite gates block unauthorized calls
 ```
 
-> "Create the file `.claude/rules/api-conventions.md` with the content below."
+Create `.claude/rules/api-conventions.md`:
 
 ```markdown
 # API Conventions
@@ -6549,316 +6548,285 @@ Ask Claude Code to create these two rule files:
 ## Tool definitions: include purpose, input format, output, when-to-use, when-NOT-to-use
 ```
 
-### Step 3: Create path-specific rules (Task Statement 3.3)
+Now CLAUDE.md is short (under 15 lines) and each topic is in its own file. When testing standards change, you edit `testing.md` -- not a 800-line monolith.
 
-Path-specific rules load ONLY when editing matching files.
-This is better than directory-level CLAUDE.md when conventions span multiple dirs.
+### Step 4: Create a user-level CLAUDE.md (personal, not shared)
 
-Ask Claude Code to create these two path-specific rule files:
-
-> "Create the file `.claude/rules/python-agents.md` with the content below."
-
-```markdown
----
-paths:
-  - "lab-d1-agentic-arch/**/*.py"
-  - "lab-d5-context-reliability/**/*.py"
----
-# Agentic Python Rules (loads only for agent lab files)
-
-## Always include: while True loop, stop_reason check, tool result appending
-## Error handling: structured errors with isError, errorCategory, isRetryable
-## Client: always anthropic.Anthropic() (not OpenAI client)
-```
-
-> "Create the file `.claude/rules/config-files.md` with the content below."
-
-```markdown
----
-paths:
-  - "**/*.json"
-  - ".mcp.json"
----
-# Config File Rules (loads only when editing JSON/config files)
-
-## MCP configs: use ${ENV_VAR} syntax for all credentials
-## Never commit actual API tokens or secrets
-## Include both project-scoped (.mcp.json) and note user-scoped (~/.claude.json)
-```
-
-### Step 4: Verify the hierarchy with /memory
-
-In Claude Code, run:
-```
-/memory
-```
-
-Expected output (example):
-```
-┌─────────────────────────────────────────────────────────┐
-│ Memory files loaded:                                     │
-│   ~/.claude/CLAUDE.md               (user-level)         │
-│   ./CLAUDE.md                       (project-level)      │
-│   ./.claude/rules/testing.md        (path-scoped rule)   │
-│   ./.claude/rules/api-conventions.md (path-scoped rule)  │
-└─────────────────────────────────────────────────────────┘
-```
-
-**How to interpret /memory output:**
-- See which files are actually loaded (vs which you expected)
-- If a teammate isn't getting conventions → check if rules are in user-level `~/.claude/CLAUDE.md` (not shared) vs project-level `CLAUDE.md` (shared via git)
-- If a path-specific rule isn't loading → verify the glob pattern matches the file being edited
-- If rules load inconsistently across sessions → use `/memory` to diagnose which config files the session sees
-
-### Step 5: Create a user-level CLAUDE.md (personal, not shared)
-
-This file is NOT committed to version control. Ask Claude Code to create it:
-
-> "Create the file `~/.claude/CLAUDE.md` with the content below."
+Create `~/.claude/CLAUDE.md`:
 
 ```markdown
 # Personal Claude Configuration
 
 ## My preferences (not shared with team):
-## - Prefer concise responses
-## - Use my personal shortcuts
-## - My development machine has Python 3.13 at /usr/local/bin/python3
+- Prefer concise responses
+- Use 4-space indentation in my editor
+- My development machine has Python 3.13
 ```
 
-**Key insight**: If a new team member isn't getting project conventions,
-it's because the instructions are in their user-level `~/.claude/CLAUDE.md`
-instead of the project-level `CLAUDE.md`.
+This file is NOT in git. Only you see it. If a teammate puts "I prefer tabs" in the project CLAUDE.md, every developer's session enforces tabs. Personal preferences belong here.
 
-### Step 6: Verify your setup
+### Step 5: Run /memory to verify which files are loaded
 
-Ask Claude Code to create and run this verification script:
+In Claude Code, run:
 
-> "Create the file `lab-d3-claude-code/verify_config.py` with the code below and run it."
+```
+/memory
+```
+
+You should see your project CLAUDE.md, the imported rule files, and your user-level CLAUDE.md listed. If a file is missing, it's either not in the right location or has a syntax error in the `@import` path.
+
+**How to interpret /memory:**
+- If a teammate isn't getting conventions -- check if rules are in `~/.claude/` (personal) vs project-level (shared)
+- If a rule isn't loading -- verify the `@import` path is correct relative to the CLAUDE.md file
+- If behavior is inconsistent across sessions -- `/memory` shows exactly which files each session sees
+
+### Step 6: Build the config validator
+
+Create `~/claude-architect-labs/lab-d3-claude-code/claude_config_validator.py`:
 
 ```python
 import os
 import re
 import glob as glob_module
 
-def check_file(path, label, required_content=None):
-    """Check if a config file exists and contains expected content."""
-    if os.path.exists(path):
-        with open(path) as f:
+
+def validate_hierarchy():
+    """Validate CLAUDE.md hierarchy for common mistakes."""
+    print("=" * 60)
+    print("CLAUDE.MD HIERARCHY VALIDATOR")
+    print("=" * 60)
+    issues = []
+
+    # Check 1: Project CLAUDE.md
+    print("\n--- Project-level CLAUDE.md ---")
+    if os.path.exists("CLAUDE.md"):
+        with open("CLAUDE.md") as f:
             content = f.read()
-        size = len(content)
-        print(f"  [OK] {label}: {path} ({size} chars)")
-        if required_content:
-            for item in required_content:
-                if item in content:
-                    print(f"    [OK] Contains: {item}")
+        lines = len(content.splitlines())
+        print(f"  [OK] Found CLAUDE.md ({lines} lines)")
+
+        # Check for @import
+        imports = re.findall(r'@import\s+(.+)', content)
+        if imports:
+            print(f"  [OK] Uses @import ({len(imports)} imports)")
+            for imp in imports:
+                imp_path = imp.strip()
+                if os.path.exists(imp_path):
+                    print(f"    [OK] {imp_path} exists")
                 else:
-                    print(f"    [BLOCKED] Missing: {item}")
-        return True
+                    msg = f"@import target NOT FOUND: {imp_path}"
+                    issues.append(msg)
+                    print(f"    [WARNING] {msg}")
+        elif lines > 100:
+            msg = ("CLAUDE.md is over 100 lines with no "
+                   "@import -- consider modularizing")
+            issues.append(msg)
+            print(f"  [WARNING] {msg}")
+
+        # Check for personal preferences in project config
+        personal_indicators = [
+            "my preferences", "my machine", "i prefer",
+            "my shortcuts", "personal", "my dev",
+        ]
+        for indicator in personal_indicators:
+            if indicator in content.lower():
+                msg = (f"Project CLAUDE.md contains "
+                       f"'{indicator}' -- move personal "
+                       f"prefs to ~/.claude/CLAUDE.md")
+                issues.append(msg)
+                print(f"  [WARNING] {msg}")
+                break
     else:
-        print(f"  [BLOCKED] {label}: {path} — NOT FOUND (create it first)")
-        return False
+        msg = "No project CLAUDE.md found"
+        issues.append(msg)
+        print(f"  [WARNING] {msg}")
 
-
-def verify_lab_3_1():
-    """Verify CLAUDE.md hierarchy and modular organization."""
-    print("\n=== Lab 3.1: CLAUDE.md Hierarchy ===\n")
-
-    # Project-level CLAUDE.md
-    check_file("CLAUDE.md", "Project CLAUDE.md",
-               ["@import"])
-
-    # Rules directory
+    # Check 2: .claude/rules/ directory
+    print("\n--- .claude/rules/ ---")
     rules = glob_module.glob(".claude/rules/*.md")
     if rules:
-        print(f"  [OK] .claude/rules/: {len(rules)} rule file(s)")
+        print(f"  [OK] Found {len(rules)} rule file(s)")
         for r in rules:
-            check_file(r, f"  Rule file", None)
+            print(f"    - {os.path.basename(r)}")
     else:
-        print("  [BLOCKED] .claude/rules/: No rule files found")
+        print(f"  [INFO] No .claude/rules/ files (optional)")
 
-    # User-level
+    # Check 3: User-level CLAUDE.md
+    print("\n--- User-level ~/.claude/CLAUDE.md ---")
     home = os.path.expanduser("~")
-    check_file(os.path.join(home, ".claude", "CLAUDE.md"), "User-level CLAUDE.md")
-
-
-def verify_lab_3_2():
-    """Verify custom commands and skills."""
-    print("\n=== Lab 3.2: Commands & Skills ===\n")
-
-    # Commands
-    cmds = glob_module.glob(".claude/commands/*.md")
-    if cmds:
-        print(f"  [OK] .claude/commands/: {len(cmds)} command(s)")
-        for c in cmds:
-            print(f"    - {os.path.basename(c)}")
+    user_path = os.path.join(home, ".claude", "CLAUDE.md")
+    if os.path.exists(user_path):
+        with open(user_path) as f:
+            user_content = f.read()
+        print(f"  [OK] Found "
+              f"({len(user_content.splitlines())} lines)")
+        # Check if team content leaked into user file
+        team_indicators = [
+            "team standard", "all developers",
+            "project-wide", "everyone must",
+        ]
+        for indicator in team_indicators:
+            if indicator in user_content.lower():
+                msg = (f"User CLAUDE.md contains "
+                       f"'{indicator}' -- team rules "
+                       f"belong in project CLAUDE.md")
+                issues.append(msg)
+                print(f"  [WARNING] {msg}")
+                break
     else:
-        print("  [BLOCKED] .claude/commands/: No commands found")
+        print(f"  [INFO] No user-level CLAUDE.md (optional)")
 
-    # Skills
-    skills = glob_module.glob(".claude/skills/*.md")
-    if skills:
-        print(f"  [OK] .claude/skills/: {len(skills)} skill(s)")
-        for s in skills:
-            with open(s) as f:
-                content = f.read()
-            has_fork = "context: fork" in content
-            has_tools = "allowed-tools:" in content
-            has_hint = "argument-hint:" in content
-            features = []
-            if has_fork: features.append("context:fork")
-            if has_tools: features.append("allowed-tools")
-            if has_hint: features.append("argument-hint")
-            feat_str = ", ".join(features) if features else "no frontmatter"
-            print(f"    - {os.path.basename(s)} [{feat_str}]")
+    # Check 4: Directory-level overrides
+    print("\n--- Directory-level CLAUDE.md files ---")
+    dir_configs = glob_module.glob(
+        "**/CLAUDE.md", recursive=True
+    )
+    dir_configs = [d for d in dir_configs
+                   if d != "CLAUDE.md"
+                   and ".claude" not in d]
+    if dir_configs:
+        print(f"  [OK] Found {len(dir_configs)} override(s)")
+        for d in dir_configs:
+            print(f"    - {d}")
     else:
-        print("  [BLOCKED] .claude/skills/: No skills found")
+        print(f"  [INFO] No directory-level overrides")
 
-
-def verify_lab_3_3():
-    """Verify path-specific rules with YAML frontmatter."""
-    print("\n=== Lab 3.3: Path-Specific Rules ===\n")
-
-    rules = glob_module.glob(".claude/rules/*.md")
-    path_rules = 0
-    for r in rules:
-        with open(r) as f:
-            content = f.read()
-        if content.startswith("---"):
-            # Extract YAML frontmatter
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                if "paths:" in frontmatter:
-                    path_rules += 1
-                    patterns = re.findall(r'- "([^"]+)"', frontmatter)
-                    print(f"  [OK] {os.path.basename(r)}: paths = {patterns}")
-
-    if path_rules == 0:
-        print("  [BLOCKED] No path-specific rules found (need YAML frontmatter with 'paths:' field)")
+    # Summary
+    print(f"\n{'=' * 60}")
+    print(f"SUMMARY: {len(issues)} issue(s) found")
+    print("=" * 60)
+    if issues:
+        for i in issues:
+            print(f"  - {i}")
     else:
-        print(f"\n  Total path-specific rules: {path_rules}")
+        print("  Hierarchy looks good!")
+    return issues
 
 
 if __name__ == "__main__":
-    print("Claude Code Configuration Verifier")
-    print("=" * 45)
-    verify_lab_3_1()
-    verify_lab_3_2()
-    verify_lab_3_3()
-    print("\n[OK] Verification complete. Fix any [BLOCKED] items above, then run /memory in Claude Code to confirm loading.")
+    validate_hierarchy()
 ```
 
-## Run it
+Run the validator:
 
-If Claude Code created the file but did not run it, ask:
+```bash
+cd ~/claude-architect-labs
+mkdir -p lab-d3-claude-code
+python lab-d3-claude-code/claude_config_validator.py
+```
 
-> "Run the verify_config.py script you just created."
+You should see validation results for each level of the hierarchy, with warnings for any missing `@import` targets, personal preferences in project config, or oversized monolithic CLAUDE.md files.
 
-**What you should see:**
-- Lab 3.1: ✓/✗ for project CLAUDE.md, rule files, user-level CLAUDE.md, @import directives
-- Lab 3.2: List of commands and skills with their frontmatter features (fork, tools, hint)
-- Lab 3.3: Path-specific rules with their glob patterns extracted from YAML frontmatter
+## Break it / Debug it
+
+**1. Put personal preferences in project CLAUDE.md:**
+
+Add "I prefer tabs over spaces" to the project-level CLAUDE.md. Run the validator -- it flags the personal language. Every teammate now gets tab enforcement. Fix: move to `~/.claude/CLAUDE.md`.
+
+**2. Create contradicting instructions at two levels:**
+
+Put "use 4-space indentation" in root CLAUDE.md and "use 2-space indentation" in `src/api/CLAUDE.md`. Open a file in `src/api/` -- Claude Code follows the directory-level override (2-space). Open a file outside -- Claude follows root (4-space). The contradiction is silent and confusing. Fix: make the directory-level file explicitly state it overrides the project standard, or remove the contradiction.
+
+**3. Forget the @import path:**
+
+Change `@import .claude/rules/testing.md` to `@import .claude/rules/tsting.md` (typo). Run the validator -- it flags the missing target. Claude Code silently ignores the broken import, and testing standards stop loading. Fix: correct the path and verify with `/memory`.
 
 ## Check your understanding
 
-1. **Put team conventions in `~/.claude/CLAUDE.md` instead of project CLAUDE.md** — new team members don't get them.
-2. **Remove `@import` and put everything in one giant CLAUDE.md** — context fills up, Claude ignores rules at the bottom.
-3. **Create `.claude/rules/` without YAML frontmatter `paths:` field** — rule loads for ALL files, not just matching ones.
+**Q1.** A new developer joins your team and runs Claude Code. They don't get any of the team's coding conventions. You check and find the conventions are in `~/.claude/CLAUDE.md` on the senior developer's machine. What is the fix?
 
-## Exam tips
+**A.** Copy the senior developer's `~/.claude/CLAUDE.md` to every team member's home directory
+**B.** Move the team conventions from `~/.claude/CLAUDE.md` to the project-level `CLAUDE.md` (root of repo) so they're shared via git
+**C.** Add the conventions to each subdirectory's CLAUDE.md
+**D.** Email the conventions to the new developer and have them paste into their own `~/.claude/CLAUDE.md`
 
-- **If the exam says** "new teammate doesn't get conventions" → check if rules are in ~/.claude/ (personal) vs project-level (shared)
-- **Wrong answer trap:** "Add rules to each directory's CLAUDE.md" — doesn't scale for cross-directory patterns
-- **Wrong answer trap:** "Copy the user-level CLAUDE.md to each teammate's machine" — manual, error-prone, and drifts over time
-- **The correct pattern:** Project-level CLAUDE.md + .claude/rules/ with glob patterns for shared conventions
+**Correct: B.** Project-level CLAUDE.md is committed to git and shared with all teammates automatically. User-level `~/.claude/CLAUDE.md` is personal and never shared. **Why not A:** Copying files manually is error-prone and drifts out of sync when conventions change. **Why not C:** Directory-level files only apply to that directory -- conventions need to be project-wide. **Why not D:** Same problem as A -- manual distribution doesn't stay in sync.
+
+---
+
+**Q2.** Your team's CLAUDE.md has grown to 500 lines. Claude Code starts ignoring rules near the bottom of the file. What is the correct fix?
+
+**A.** Move the most important rules to the top of the file
+**B.** Split the file using `@import` directives to load modular topic files from `.claude/rules/`
+**C.** Increase Claude Code's context window setting
+**D.** Duplicate the important rules at both the top and bottom
+
+**Correct: B.** `@import` splits a monolithic file into focused topic files. Each file is loaded independently, avoiding the "lost in the middle" attention problem. **Why not A:** Moving rules to the top is a band-aid -- the file is still too long and rules at the bottom are still ignored. **Why not C:** Claude Code doesn't have a user-configurable context window setting for CLAUDE.md. **Why not D:** Duplicating rules wastes tokens and creates maintenance burden when rules change.
+
+---
+
+**Q3.** You run `/memory` in Claude Code and see that `.claude/rules/testing.md` is NOT loaded, even though the file exists. What is the most likely cause?
+
+**A.** The file needs to be in `.claude/commands/` instead of `.claude/rules/`
+**B.** The `@import .claude/rules/testing.md` path in CLAUDE.md has a typo or the directive is missing
+**C.** Rule files only load on the first session, not subsequent ones
+**D.** The file is too large for Claude Code to load
+
+**Correct: B.** If the `@import` path has a typo or the directive is missing entirely, Claude Code silently skips the file. Check the exact path in CLAUDE.md against the actual file location. **Why not A:** `.claude/commands/` is for slash commands, not rule files. **Why not C:** Claude Code loads configs at the start of every session. **Why not D:** Claude Code can load rule files of any reasonable size.
 
 ## Key takeaways
 
-- CLAUDE.md hierarchy: user-level → project-level → directory-level
-- User-level (`~/.claude/CLAUDE.md`) is NOT shared via version control
-- @import keeps CLAUDE.md modular — imports topic-specific rule files
-- .claude/rules/ with path-specific YAML frontmatter for conditional loading
-- /memory shows which config files are currently loaded
+- CLAUDE.md hierarchy: user-level (personal) -> project-level (team) -> directory-level (local overrides)
+- User-level `~/.claude/CLAUDE.md` is NOT shared via git -- personal preferences only
+- `@import` keeps CLAUDE.md modular -- splits monoliths into topic-specific rule files
+- `.claude/rules/` holds modular rule files loaded via `@import` or automatically
+- `/memory` shows which config files are loaded -- use it to diagnose missing conventions
+
+## Exam tips
+
+- **"New teammate doesn't get conventions"** --> rules are in `~/.claude/` (personal) instead of project-level (shared)
+- **"CLAUDE.md is too long, rules ignored"** --> split with `@import` into `.claude/rules/`
+- **Wrong answer trap:** "Add rules to each directory's CLAUDE.md" -- doesn't scale for cross-directory patterns
+- **Wrong answer trap:** "Copy user config to each machine"** -- manual, drifts out of sync
+- **The correct pattern:** project-level CLAUDE.md with `@import` for team conventions, `~/.claude/` for personal
+
+**Next:** Lab 3.2 covers custom slash commands and skills -- reusable workflows stored in `.claude/commands/` and `.claude/skills/` with frontmatter for context isolation and tool restrictions.
 
 ---
 
 # LAB 3.2: CUSTOM SLASH COMMANDS AND SKILLS
 # Domain 3 — Task Statement 3.2
 # Concept: Project vs user commands, skills with frontmatter, context:fork
-# Time: ~20 minutes | Difficulty: Guided
+# Time: ~20 minutes | Difficulty: Intermediate
 # Prerequisites: Lab 3.1
 
-> **Prerequisite:** Complete Lab 3.1 first (CLAUDE.md hierarchy).
+## Scenario
 
-## Learning objectives
+Your team has repetitive workflows: generate tests for a file, review an agent's loop structure, explore an unfamiliar module. Developers keep re-typing the same multi-step prompts. One developer builds a `/review` command that runs a checklist -- but it generates 2,000 tokens of verbose output that clutter the main conversation. Next question, Claude is distracted by the review output still in context. Worse, someone modifies the command to call `Bash rm -rf` as a cleanup step. Now every `/review` invocation can delete files.
 
-- Create project-scoped slash commands in .claude/commands/ for team-wide availability via version control
-- Use context: fork to isolate skills that produce verbose output from the main session
-- Configure allowed-tools in skill frontmatter to restrict tool access during skill execution
-- Choose between skills (on-demand invocation for task-specific workflows) and CLAUDE.md (always-loaded universal standards)
+You need reusable slash commands for simple prompts and skills with `context: fork` for isolation and `allowed-tools` for security boundaries.
 
-## Recall
-1. What are the three levels of the CLAUDE.md hierarchy? (Lab 3.1)
-2. Why don't teammates see your ~/.claude/CLAUDE.md settings? (Lab 3.1)
+## What you'll learn
 
-## Overview
+- Creating project-scoped slash commands in `.claude/commands/` for team-wide reuse via git
+- Creating skills in `.claude/skills/` with YAML frontmatter for context isolation and tool restrictions
+- Using `context: fork` to prevent verbose skill output from polluting the main conversation
+- Using `allowed-tools` to restrict which tools a skill can access (security boundary)
+- Choosing between commands (simple prompts) and skills (isolation + restrictions)
 
-**The problem:** Your team builds a `/review` command that runs a standard code review checklist.
-It works great — but it generates 2,000 tokens of output that clutter your main conversation.
-Next time you ask Claude a question, it's distracted by the review output still in context.
+## Concepts
 
-**Worse:** The review command calls `Bash` to run tests, but someone modifies it to also run
-`rm -rf` as a cleanup step. Now every `/review` invocation can delete files.
+| Feature | Command (`.claude/commands/`) | Skill (`.claude/skills/`) |
+|---------|-------------------------------|---------------------------|
+| Content | Simple prompt text | Prompt with YAML frontmatter |
+| `context: fork` | No | Yes -- runs in isolated sub-session |
+| `allowed-tools` | No | Yes -- restricts available tools |
+| `argument-hint` | No | Yes -- prompts user for input |
+| Best for | Simple reusable prompts | Workflows needing isolation or restrictions |
 
-**The solutions:**
-- **Commands** (`.claude/commands/`) — simple reusable prompts, shared via git. No isolation.
-- **Skills** (`.claude/skills/`) — prompts with superpowers: `context: fork` runs in isolated
-  context (output doesn't pollute your session), `allowed-tools` restricts which tools it can use
-  (no accidental `rm -rf`), `argument-hint` prompts the user for input.
+**Scoping:** Project commands go in `.claude/commands/` (shared via git). Personal commands go in `~/.claude/commands/` (not shared). Same pattern as CLAUDE.md in Lab 3.1.
 
-**Exam connection (Sample Q4):** "Where should you create a shared `/review` command?"
-→ `.claude/commands/` (project-scoped, version-controlled). NOT `~/.claude/commands/` (personal).
+**`context: fork`** runs the skill in an isolated sub-session. Verbose output (dozens of file reads during exploration) stays in the fork -- only the summary returns to your main conversation. Without fork, all that output floods your context.
 
-### What you will learn
+**`allowed-tools`** restricts which tools the skill can use. A test generation skill with `allowed-tools: Read, Write, Glob` can read source and write tests but cannot run `Bash` -- no accidental `rm -rf` or `pip install`.
 
-- **Commands vs Skills:** When to use each, and why skills have capabilities commands don't
-- **`context: fork`:** Run in isolation so output doesn't pollute your main session
-- **`allowed-tools`:** Restrict which tools a skill can access (security boundary)
-- **Project vs personal scope:** `.claude/` (shared via git) vs `~/. claude/` (personal only)
+**`$ARGUMENTS`** is replaced with whatever the user types after the command name. `/review-agent basic_loop.py` passes `basic_loop.py` as `$ARGUMENTS`.
 
-## Try it
-
-Try listing what commands are already available:
-
-```
-/commands
-```
-
-You'll see built-in commands like /help, /memory, /compact.
-
-After this lab, your custom project commands and skills will appear here too -- shared with your team through version control.
-
-### Commands vs Skills — What's the Difference?
-
-Both are invoked with `/name` in Claude Code. The difference is in capabilities:
-
-| Feature | Command (.claude/commands/) | Skill (.claude/skills/) |
-|---------|---------------------------|------------------------|
-| Invocation | `/command-name` | `/skill-name` |
-| Content | Simple prompt text | Prompt text with YAML frontmatter |
-| context:fork | No | Yes — runs in isolated context |
-| allowed-tools | No | Yes — restricts available tools |
-| argument-hint | No | Yes — prompts user for input |
-| Best for | Simple reusable prompts | Complex workflows needing isolation/restrictions |
-
-**Exam concept (Sample Q4):** Project-scoped commands go in `.claude/commands/` (shared via git).
-Personal commands go in `~/.claude/commands/` (not shared). Skills go in `.claude/skills/`.
+## Walkthrough
 
 ### Step 1: Create a project-scoped slash command
 
-Ask Claude Code to create this command file:
-
-> "Create the file `.claude/commands/review-agent.md` with the content below."
+Create `.claude/commands/review-agent.md`:
 
 ```markdown
 Review the Python agent file at $ARGUMENTS for:
@@ -6870,13 +6838,24 @@ Review the Python agent file at $ARGUMENTS for:
 Report: PASS or FAIL for each check, with specific line numbers for failures.
 ```
 
-Usage in Claude Code: `/review-agent lab-d1-agentic-arch/basic_loop.py`
+Usage: `/review-agent lab-d1-agentic-arch/basic_loop.py`
 
-### Step 2: Create a skill with frontmatter
+This is **project-scoped** -- committed to git, available to all teammates. No isolation or tool restrictions (it's a simple command).
 
-Ask Claude Code to create this skill file:
+### Step 2: Create a personal command
 
-> "Create the file `.claude/skills/explore-codebase.md` with the content below."
+Create `~/.claude/commands/my-shortcut.md`:
+
+```markdown
+Explain the code at $ARGUMENTS in plain language. Keep it under 5 sentences.
+Be concise -- I already know the codebase.
+```
+
+This is **user-scoped** -- not in git, not shared. Only you see `/my-shortcut` in your Claude Code session. Personal preferences belong here, not in project commands.
+
+### Step 3: Create a skill with SKILL.md frontmatter
+
+Create `.claude/skills/explore-codebase.md`:
 
 ```markdown
 ---
@@ -6887,20 +6866,17 @@ argument-hint: "Enter the module name or question to explore"
 Explore the codebase to answer: $ARGUMENTS
 
 Use Grep to find relevant code, Read to examine files, Glob to discover structure.
-Return a concise summary of findings — do not modify any files.
+Return a concise summary of findings -- do not modify any files.
 ```
 
-**Why `context: fork`?**
-- Exploration produces verbose output (dozens of file reads)
-- Without fork: all that output floods your main conversation context
-- With fork: runs in isolated sub-agent, returns only the summary
-- Use for: codebase exploration, brainstorming, verbose analysis
+This skill has all three frontmatter features:
+- `context: fork` -- exploration produces verbose output; the fork isolates it
+- `allowed-tools: Read, Grep, Glob` -- read-only, cannot modify files or run commands
+- `argument-hint` -- prompts the user to specify what to explore
 
-### Step 3: Create a skill with allowed-tools restriction
+### Step 4: Create a skill with restricted tools
 
-Ask Claude Code to create this skill file:
-
-> "Create the file `.claude/skills/generate-tests.md` with the content below."
+Create `.claude/skills/generate-tests.md`:
 
 ```markdown
 ---
@@ -6916,112 +6892,286 @@ in the same directory.
 Do NOT run tests. Do NOT install packages. Do NOT modify source files.
 ```
 
-The `allowed-tools: Read, Write, Glob` prevents the skill from running Bash
-commands during test generation — no accidental `pip install` or `rm`.
+`allowed-tools: Read, Write, Glob` means no Bash -- the skill cannot execute commands during test generation. This is the security boundary.
 
-### Step 4: Create a personal variant
-
-Ask Claude Code to create this personal skill (not shared with team):
-
-> "Create the file `~/.claude/skills/my-explore.md` with the content below."
-
-```markdown
----
-context: fork
-allowed-tools: Read, Grep, Glob
-argument-hint: "What do you want to explore?"
----
-Personal exploration skill (not shared with team).
-Explore: $ARGUMENTS
-
-Return findings as a bulleted list. Be concise.
-```
-
-This won't affect teammates — it's in ~/.claude/skills/, not .claude/skills/.
-
-### Step 5: Understand skills vs CLAUDE.md
+### Step 5: Understand when to use commands vs skills vs CLAUDE.md
 
 ```
-CLAUDE.md: Always-loaded universal standards
-  → Use for: project-wide conventions, always-on rules
+CLAUDE.md:  Always-loaded universal standards
+  Use for:  project-wide conventions, always-on rules
 
-Skills: On-demand invocation for specific workflows
-  → Use for: tasks you run sometimes (not always)
-  → Example: /generate-tests, /review-agent, /explore-codebase
+Commands:   Simple reusable prompts (no isolation)
+  Use for:  quick checklists, simple workflows
+
+Skills:     Prompts with isolation + restrictions
+  Use for:  verbose workflows, security-sensitive tasks
 ```
 
-## Run it
+### Step 6: Build the command audit script
 
-Run `verify_config.py` from Lab 3.1. **What you should see:** Your commands listed under ".claude/commands/" and skills listed with their frontmatter features ([context:fork], [allowed-tools], [argument-hint]).
+Create `~/claude-architect-labs/lab-d3-claude-code/command_audit.py`:
+
+```python
+import os
+import re
+import glob as glob_module
+
+
+def audit_commands_and_skills():
+    """List all commands/skills and validate frontmatter."""
+    print("=" * 60)
+    print("COMMAND AND SKILL AUDIT")
+    print("=" * 60)
+    issues = []
+
+    # Check 1: Project commands
+    print("\n--- Project commands (.claude/commands/) ---")
+    proj_cmds = glob_module.glob(".claude/commands/*.md")
+    if proj_cmds:
+        print(f"  [OK] Found {len(proj_cmds)} command(s)")
+        for c in proj_cmds:
+            name = os.path.basename(c).replace(".md", "")
+            with open(c) as f:
+                content = f.read()
+            has_args = "$ARGUMENTS" in content
+            arg_str = " [uses $ARGUMENTS]" if has_args else ""
+            print(f"    /{name}{arg_str}")
+    else:
+        print(f"  [INFO] No project commands found")
+
+    # Check 2: Personal commands
+    print("\n--- Personal commands (~/.claude/commands/) ---")
+    home = os.path.expanduser("~")
+    personal_path = os.path.join(
+        home, ".claude", "commands", "*.md"
+    )
+    personal_cmds = glob_module.glob(personal_path)
+    if personal_cmds:
+        print(f"  [OK] Found {len(personal_cmds)} "
+              f"personal command(s)")
+        for c in personal_cmds:
+            name = os.path.basename(c).replace(".md", "")
+            print(f"    /{name} (personal)")
+    else:
+        print(f"  [INFO] No personal commands")
+
+    # Check 3: Project skills
+    print("\n--- Project skills (.claude/skills/) ---")
+    proj_skills = glob_module.glob(".claude/skills/*.md")
+    if proj_skills:
+        print(f"  [OK] Found {len(proj_skills)} skill(s)")
+        for s in proj_skills:
+            name = os.path.basename(s).replace(".md", "")
+            with open(s) as f:
+                content = f.read()
+
+            has_fork = False
+            has_tools = False
+            has_hint = False
+            tool_list = ""
+
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    fm = parts[1]
+                    has_fork = "context: fork" in fm
+                    has_hint = "argument-hint:" in fm
+                    match = re.search(
+                        r'allowed-tools:\s*(.+)', fm
+                    )
+                    if match:
+                        has_tools = True
+                        tool_list = match.group(1).strip()
+
+            features = []
+            if has_fork:
+                features.append("fork")
+            if has_tools:
+                features.append(
+                    f"tools:[{tool_list}]"
+                )
+            if has_hint:
+                features.append("hint")
+
+            feat_str = (", ".join(features)
+                        if features else "no frontmatter")
+            print(f"    /{name} [{feat_str}]")
+
+            if not has_fork:
+                msg = (f"Skill '{name}': no context:fork "
+                       f"-- output pollutes main context")
+                issues.append(msg)
+                print(f"      [WARNING] {msg}")
+            if not has_tools:
+                msg = (f"Skill '{name}': no allowed-tools "
+                       f"-- unrestricted tool access")
+                issues.append(msg)
+                print(f"      [WARNING] {msg}")
+    else:
+        print(f"  [INFO] No project skills found")
+
+    # Check 4: Personal commands in project scope
+    print("\n--- Scope check ---")
+    for c in proj_cmds:
+        with open(c) as f:
+            content = f.read().lower()
+        personal_words = [
+            "personal", "my preference", "just for me",
+        ]
+        for word in personal_words:
+            if word in content:
+                msg = (f"Command "
+                       f"'{os.path.basename(c)}' "
+                       f"looks personal -- move to "
+                       f"~/.claude/commands/")
+                issues.append(msg)
+                print(f"  [WARNING] {msg}")
+                break
+
+    # Summary
+    print(f"\n{'=' * 60}")
+    print(f"SUMMARY: {len(issues)} issue(s) found")
+    print("=" * 60)
+    if issues:
+        for i in issues:
+            print(f"  - {i}")
+    else:
+        print("  All commands and skills look good!")
+    return issues
+
+
+if __name__ == "__main__":
+    audit_commands_and_skills()
+```
+
+Run the audit:
+
+```bash
+cd ~/claude-architect-labs
+python lab-d3-claude-code/command_audit.py
+```
+
+You should see all your commands and skills listed with their frontmatter features and any warnings about missing `context:fork` or `allowed-tools`.
+
+## Break it / Debug it
+
+**1. Missing $ARGUMENTS in a skill:**
+
+Create a skill that references `$ARGUMENTS` in the `argument-hint` but forgets to include `$ARGUMENTS` in the body. When you invoke `/skill-name my-file.py`, the argument is silently ignored and the skill runs without knowing what file to target. Fix: always include `$ARGUMENTS` in the skill body.
+
+**2. Skill without context:fork pollutes main context:**
+
+Remove `context: fork` from `explore-codebase.md`. Run `/explore-codebase "how does the agent loop work?"`. The exploration reads 15 files -- all 15 file contents flood your main conversation. Your next question has degraded quality because Claude is distracted by the exploration output. Fix: add `context: fork` back.
+
+**3. Personal command in project scope:**
+
+Put `my-shortcut.md` (with "just for me" language) in `.claude/commands/` instead of `~/.claude/commands/`. Run the audit -- it flags the personal language. The command is now committed to git and every teammate sees it. Fix: move to `~/.claude/commands/`.
 
 ## Check your understanding
 
-1. **Run a skill WITHOUT `context: fork`.** Does its output appear in your main conversation? (Answer: yes — without fork, all the skill's verbose output pollutes your context)
-2. **Remove `allowed-tools` from the skill.** Can it now call Bash, Write, and other tools? (Answer: yes — without restrictions, the skill has full access, which is a security risk)
-3. **Put a personal command in `.claude/commands/` instead of `~/.claude/commands/`.** Does it get committed to git? (Answer: yes — personal commands should go in `~/.claude/commands/` to stay out of version control)
+**Q1.** Your team needs a shared `/review` command for code review checklists. Where should you create it?
 
-## Exam tips
+**A.** `~/.claude/commands/review.md` -- personal directory
+**B.** `.claude/commands/review.md` -- project directory, version-controlled
+**C.** `.claude/skills/review.md` -- skill directory
+**D.** Add the checklist to the project CLAUDE.md
 
-- **If the exam says** "share a command with the team" → .claude/commands/ (project, version-controlled)
-- **Wrong answer trap:** "Put it in ~/.claude/commands/" — personal, not shared via git
-- **Wrong answer trap:** "Add it to CLAUDE.md" — CLAUDE.md is for instructions, not command definitions
-- **The correct pattern:** Commands in .claude/commands/ (shared). Skills in .claude/skills/ with frontmatter (isolation, tool restrictions).
+**Correct: B.** Project-scoped commands in `.claude/commands/` are shared via git. All teammates get the command automatically. **Why not A:** `~/.claude/commands/` is personal -- only you see it, teammates don't get the command. **Why not C:** Skills are for workflows needing isolation or tool restrictions -- a simple checklist doesn't need frontmatter. **Why not D:** CLAUDE.md is for always-on conventions, not on-demand command workflows.
+
+---
+
+**Q2.** Your `/explore-codebase` skill reads 20 files during exploration. After running it, your next question to Claude Code gets a poor response. What is the cause and fix?
+
+**A.** The skill consumed too many API tokens -- wait for the rate limit to reset
+**B.** The skill's verbose output is still in the main conversation context, distracting Claude. Add `context: fork` to the skill's frontmatter.
+**C.** Claude Code has a bug with skills that read many files
+**D.** The skill needs `allowed-tools: Read` to limit file access
+
+**Correct: B.** Without `context: fork`, all the skill's output (20 file reads) remains in the main conversation context. Claude is "distracted" by the exploration output when answering your next question. `context: fork` runs the skill in an isolated sub-session -- only the summary returns. **Why not A:** Token consumption doesn't affect response quality for subsequent questions. **Why not C:** Skills reading many files work correctly -- the issue is context pollution. **Why not D:** `allowed-tools` restricts which tools are available, not how many files are read.
+
+---
+
+**Q3.** A skill has `allowed-tools: Read, Write, Glob` in its frontmatter. A developer modifies the skill body to include "run `pytest` to verify the tests." What happens?
+
+**A.** The skill runs pytest successfully because the body instruction overrides frontmatter
+**B.** The skill fails to run pytest because Bash is not in `allowed-tools` -- the tool restriction is enforced regardless of the body text
+**C.** Claude Code prompts the user to approve Bash access
+**D.** The skill ignores frontmatter when the body explicitly requests a tool
+
+**Correct: B.** `allowed-tools` is a hard restriction enforced by Claude Code. Even if the skill body says "run pytest," the Bash tool is not available. The skill can only use Read, Write, and Glob. **Why not A:** Frontmatter restrictions are enforced by the runtime, not overridden by body text. **Why not C:** There is no approval prompt -- blocked tools are simply unavailable. **Why not D:** Frontmatter is always enforced regardless of body content.
 
 ## Key takeaways
 
-- .claude/commands/ → project-scoped, version-controlled, team-shared
-- ~/.claude/commands/ → user-scoped, personal, not shared
-- context: fork → isolated sub-agent, prevents context pollution
-- allowed-tools → restricts skill's tool access (security boundary)
-- argument-hint → prompts user for required parameters
+- `.claude/commands/` = project-scoped, version-controlled, team-shared slash commands
+- `~/.claude/commands/` = personal commands, not shared via git
+- `context: fork` = isolated sub-session, prevents verbose output from polluting main context
+- `allowed-tools` = hard restriction on which tools a skill can use (security boundary)
+- `argument-hint` + `$ARGUMENTS` = parameterized skills that accept user input
+- Commands for simple prompts; skills for workflows needing isolation or restrictions
+
+## Exam tips
+
+- **"Share a command with the team"** --> `.claude/commands/` (project, version-controlled)
+- **"Skill output clutters conversation"** --> add `context: fork`
+- **"Skill runs destructive Bash commands"** --> add `allowed-tools` without Bash
+- **Wrong answer trap:** "Put it in ~/.claude/commands/" -- personal, not shared via git
+- **Wrong answer trap:** "Add it to CLAUDE.md" -- CLAUDE.md is for always-on conventions, not on-demand commands
+- **The core pattern:** commands = simple shared prompts, skills = isolation + restrictions
+
+**Next:** Lab 3.3 covers path-specific rules -- `.claude/rules/` files with YAML frontmatter glob patterns that load conventions only when editing matching files.
 
 ---
 
 # LAB 3.3: PATH-SPECIFIC RULES
 # Domain 3 — Task Statement 3.3
 # Concept: YAML frontmatter paths, glob patterns, conditional loading
-# Time: ~15 minutes | Difficulty: Guided
-# Prerequisites: Lab 3.1
+# Time: ~20 minutes | Difficulty: Intermediate
+# Prerequisites: Lab 3.2
 
-> **Prerequisite:** Complete Labs 3.1-3.2 first.
+## Scenario
 
-## Learning objectives
+Your test files are scattered across 40 directories -- `Button.test.tsx` next to `Button.tsx`, `api.test.py` next to `api.py`. You want all tests to follow the same Arrange-Act-Assert convention regardless of location. You tried putting conventions in the root CLAUDE.md, but they apply to every file -- source files get test conventions cluttering their context, and test files get API conventions they don’t need. You tried directory-level CLAUDE.md files, but you need 40 copies and they drift out of sync when conventions change.
 
-- Create .claude/rules/ files with YAML frontmatter path scoping (e.g., paths: ["terraform/**/*"]) so rules load only when editing matching files
-- Use glob patterns in path-specific rules to apply conventions to files by type regardless of directory location (e.g., **/*.test.tsx for all test files)
-- Choose path-specific rules over subdirectory CLAUDE.md files when conventions must apply to files spread across the codebase
+You need rules that load automatically based on the file you’re editing, not the directory you’re in.
 
-## Recall
-1. What does context:fork do in a skill's frontmatter? (Lab 3.2)
-2. Where do project-scoped commands go vs personal commands? (Lab 3.2)
+## What you’ll learn
 
-## Overview
+- Creating `.claude/rules/` files with YAML frontmatter `paths:` field for conditional loading
+- Using glob patterns (`**/*.test.tsx`) to match files by type regardless of directory
+- When to use path-specific rules vs directory-level CLAUDE.md
+- Validating rule files for correct frontmatter and glob patterns
+- How path-specific rules reduce irrelevant context and token usage
 
-Your test files are scattered across 12 directories. You put test conventions in a directory-level CLAUDE.md -- but now you need 12 copies. When conventions change, you update one and forget the others.
+## Concepts
 
-**Path-specific rules** with glob patterns (`paths: [**/*.test.*]`) apply automatically regardless of directory.
+**Path-specific rules** are `.claude/rules/` files with YAML frontmatter containing a `paths:` field. The `paths:` field lists glob patterns. The rule loads ONLY when you’re editing a file that matches one of the patterns.
 
-**Exam connection (Sample Q6):** Test files spread throughout the codebase → .claude/rules/ with glob patterns. NOT directory-level CLAUDE.md.
-
-Path-specific rules load ONLY when editing matching files. Better than directory-level CLAUDE.md when conventions apply to files spread across dirs.
-
-## Try it
-
-Open a test file in your project and ask Claude Code:
-
-```
-What conventions or rules apply to this file?
+```yaml
+---
+paths:
+  - "**/*.test.py"
+  - "**/*_test.py"
+---
+# This content loads only when editing test files
 ```
 
-Then open a non-test source file and ask the same question. Right now, the answer is the same for both.
+**Glob patterns** use `**` to match any directory depth. `**/*.test.py` matches `src/api/test_users.test.py` and `lib/utils/helpers.test.py`. Without `**/`, the pattern `*.test.py` only matches files in the root directory.
 
-After this lab, path-specific rules will automatically load different conventions based on the file you're editing -- test files get testing rules, API files get API conventions.
+**Path-specific rules vs directory-level CLAUDE.md:**
 
-### Step 1: Create path-scoped rule files
+| | Path-specific rules | Directory CLAUDE.md |
+|---|---|---|
+| **Scope** | Files matching glob pattern anywhere | Files in that one directory |
+| **Maintenance** | Single file | One copy per directory |
+| **Best for** | Conventions by file type (tests, configs, routes) | Conventions for one package |
 
-Ask Claude Code to create these three path-scoped rule files:
+**The exam tests this distinction directly** (Sample Q6): "Test files spread throughout the codebase" --> `.claude/rules/` with glob patterns. NOT directory-level CLAUDE.md.
 
-> "Create the file `.claude/rules/test-conventions.md` with the content below."
+## Walkthrough
+
+### Step 1: Create a path-specific rule for test files
+
+Create `.claude/rules/test-conventions.md`:
 
 ```markdown
 ---
@@ -7031,33 +7181,30 @@ paths:
   - "**/test_*.py"
 ---
 # Test File Conventions
-# (Only loads when editing test files — not loaded for source files)
+# (Only loads when editing test files)
 
 ## Test structure: Arrange-Act-Assert pattern
 ## Each test function tests exactly ONE behavior
 ## Test names: test_<method>_<condition>_<expected_result>
 ## For agent tests: always reset gate state between tests
-## Mock at system boundaries only — don't mock internal functions
+## Mock at system boundaries only -- don’t mock internal functions
 ```
 
-> "Create the file `.claude/rules/terraform-conventions.md` with the content below."
+The three glob patterns cover Python’s common test naming conventions. This single file replaces 40 directory-level copies.
 
-```markdown
----
-paths:
-  - "terraform/**/*"
-  - "**/*.tf"
-  - "**/*.tfvars"
----
-# Terraform Conventions
-# (Only loads when editing Terraform files)
+### Step 2: Verify it loads with /memory
 
-## Always use remote state backend
-## Tag all resources with: environment, team, cost-center
-## Never hardcode credentials — use variables
+In Claude Code, open a test file (e.g., `test_basic.py`) and run:
+
+```
+/memory
 ```
 
-> "Create the file `.claude/rules/api-routes.md` with the content below."
+You should see `test-conventions.md` listed as a loaded rule. Now open a non-test source file and run `/memory` again -- `test-conventions.md` should NOT appear. The rule only loads for matching files.
+
+### Step 3: Create a second rule file for API conventions
+
+Create `.claude/rules/api-routes.md`:
 
 ```markdown
 ---
@@ -7071,61 +7218,208 @@ paths:
 ## Always validate input at entry point
 ## Return structured error responses (same format as MCP tools)
 ## Authentication check before any data access
+## Include rate limiting headers in all responses
 ```
 
-### Step 2: Compare to directory-level CLAUDE.md
+And create `.claude/rules/terraform-conventions.md`:
 
-```
-Path-specific rules (.claude/rules/test-conventions.md with paths: ["**/*.test.py"]):
-✓ Applies to ALL test files regardless of directory
-✓ Single file to maintain
-✓ Doesn't load for non-test files (saves tokens)
-✗ Requires YAML frontmatter syntax
+```markdown
+---
+paths:
+  - "terraform/**/*"
+  - "**/*.tf"
+  - "**/*.tfvars"
+---
+# Terraform Conventions
+# (Only loads when editing Terraform files)
 
-Directory-level CLAUDE.md (in src/tests/CLAUDE.md):
-✓ Simple — just a file in the directory
-✗ Only applies to files IN that directory
-✗ Test files scattered across the repo don't get the rules
-✗ Multiple copies needed for multiple test directories
-
-EXAM RULE: When conventions apply to files spread across the codebase
-(e.g., test files, config files, API routes) → use path-specific rules.
-When conventions apply to one specific directory → use directory CLAUDE.md.
+## Always use remote state backend
+## Tag all resources with: environment, team, cost-center
+## Never hardcode credentials -- use variables
 ```
 
-## Run it
+Now you have three rule files, each loading only for relevant file types. A developer editing a test file sees test conventions; editing a Terraform file sees Terraform conventions; editing a route sees API conventions. No cross-contamination.
 
-### Step 3: Verify rules load correctly
+### Step 4: Build the rules validator
 
-In Claude Code, open a test file and ask:
+Create `~/claude-architect-labs/lab-d3-claude-code/rules_validator.py`:
+
+```python
+import os
+import re
+import glob as glob_module
+
+
+def validate_rules():
+    """Scan .claude/rules/ for valid frontmatter and patterns."""
+    print("=" * 60)
+    print("PATH-SPECIFIC RULES VALIDATOR")
+    print("=" * 60)
+    issues = []
+
+    rules_dir = ".claude/rules"
+    if not os.path.isdir(rules_dir):
+        print(f"\n  [WARNING] {rules_dir}/ not found")
+        return ["No .claude/rules/ directory"]
+
+    rules = glob_module.glob(
+        os.path.join(rules_dir, "*.md")
+    )
+    if not rules:
+        print(f"\n  [WARNING] No .md files in {rules_dir}/")
+        return ["No rule files found"]
+
+    print(f"\n  Found {len(rules)} rule file(s)")
+
+    path_specific = 0
+    always_loaded = 0
+
+    for rule_path in sorted(rules):
+        name = os.path.basename(rule_path)
+        with open(rule_path) as f:
+            content = f.read()
+
+        print(f"\n  --- {name} ---")
+
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                frontmatter = parts[1]
+
+                if "paths:" in frontmatter:
+                    path_specific += 1
+                    patterns = re.findall(
+                        r’-\s*["\’]([^"\’]+)["\’]’,
+                        frontmatter
+                    )
+                    if patterns:
+                        print(f"    [OK] Path-specific rule")
+                        print(f"    Patterns: {patterns}")
+
+                        for p in patterns:
+                            if ("**" not in p
+                                    and "/" not in p):
+                                msg = (
+                                    f"{name}: pattern "
+                                    f"’{p}’ has no **/ "
+                                    f"-- may not match "
+                                    f"subdirectories"
+                                )
+                                issues.append(msg)
+                                print(
+                                    f"    [WARNING] {msg}"
+                                )
+                    else:
+                        msg = (f"{name}: has paths: but "
+                               f"no patterns found")
+                        issues.append(msg)
+                        print(f"    [WARNING] {msg}")
+                else:
+                    always_loaded += 1
+                    print(f"    [OK] Always-loaded rule "
+                          f"(no paths: field)")
+            else:
+                msg = (f"{name}: malformed YAML "
+                       f"frontmatter")
+                issues.append(msg)
+                print(f"    [WARNING] {msg}")
+        else:
+            always_loaded += 1
+            print(f"    [OK] Always-loaded rule "
+                  f"(no frontmatter)")
+
+    # Summary
+    print(f"\n{‘=’ * 60}")
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"  Path-specific rules: {path_specific}")
+    print(f"  Always-loaded rules: {always_loaded}")
+    print(f"  Issues: {len(issues)}")
+    if issues:
+        for i in issues:
+            print(f"    - {i}")
+    else:
+        print("  All rules look good!")
+    return issues
+
+
+if __name__ == "__main__":
+    validate_rules()
 ```
-> What testing conventions apply to this file?
-```
-Claude should mention the test-conventions.md rules.
-Then open a regular source file and ask the same — those rules should NOT appear.
 
-**What you should see:** When editing a test file (e.g., test_basic.py), Claude cites the Arrange-Act-Assert pattern and naming convention from test-conventions.md. When editing a regular source file (e.g., basic_loop.py), those test rules do NOT appear — only rules matching that file’s path load.
+Run the validator:
+
+```bash
+cd ~/claude-architect-labs
+python lab-d3-claude-code/rules_validator.py
+```
+
+You should see each rule file listed with its glob patterns and any warnings about missing `**/` prefixes or malformed frontmatter.
+
+## Break it / Debug it
+
+**1. Invalid glob pattern -- missing `**/`:**
+
+Change `paths: ["**/*.test.py"]` to `paths: ["*.test.py"]`. The rule now only matches test files in the root directory -- files in `src/api/test_users.test.py` are missed. Run the validator -- it flags patterns without `**/`. Fix: always include `**/` for recursive matching.
+
+**2. Missing paths: field:**
+
+Remove the entire YAML frontmatter from `test-conventions.md`. The rule now loads for ALL files, not just test files. Every source file gets test conventions in its context, wasting tokens and creating noise. Run the validator -- it reports the file as "always-loaded." Fix: add the `paths:` frontmatter back.
+
+**3. Rule file outside `.claude/rules/` directory:**
+
+Create a rule file at `rules/testing.md` instead of `.claude/rules/testing.md`. Claude Code doesn’t find it -- rules must be in `.claude/rules/`. The file exists but has no effect. Fix: move to `.claude/rules/`.
 
 ## Check your understanding
 
-1. **Remove the paths: frontmatter** from test-conventions.md. Now the rule loads for ALL files, not just test files. You’ve lost the scoping benefit — every file gets test conventions cluttering its context.
-2. **Use directory CLAUDE.md for scattered test files** — put test conventions in src/tests/CLAUDE.md. Files in src/api/tests/, src/models/tests/, etc. don’t get the rules. You need 12 copies.
-3. **Use wrong glob pattern** (e.g., paths: ["*.test.py"] without **/) — rule never loads because glob doesn’t match files in subdirectories.
+**Q1.** Your codebase has test files spread throughout (e.g., `Button.test.tsx` next to `Button.tsx`). You want all tests to follow the same conventions regardless of location. What is the most maintainable approach?
 
-## Exam tips
+**A.** Create `.claude/rules/` files with YAML frontmatter glob patterns like `paths: ["**/*.test.tsx"]`
+**B.** Put conventions in the root CLAUDE.md under a "Testing" header
+**C.** Create a `.claude/skills/` skill for test generation with the conventions embedded
+**D.** Place a CLAUDE.md file in every directory that contains test files
 
-- **If the exam says** "conventions for files spread across directories" → .claude/rules/ with glob patterns
-- **Wrong answer trap:** "Put a CLAUDE.md in each directory" — doesn't handle files spread throughout the codebase
-- **Wrong answer trap:** "Add all conventions to the project-level CLAUDE.md" — loads unnecessary rules for every file, wasting tokens
-- **The correct pattern:** paths: ["**/*.test.tsx"] in YAML frontmatter loads rules for matching files regardless of location
+**Correct: A.** Path-specific rules with glob patterns automatically apply when editing matching files regardless of directory location. This is the only option that handles files spread across the codebase. **Why not B:** Root CLAUDE.md applies globally to all files, not specifically to test files -- it lacks the targeted activation that glob patterns provide. **Why not C:** Skills are invoked on-demand for specific tasks, not automatically applied when editing test files, so conventions would only apply when the skill is explicitly triggered. **Why not D:** Placing CLAUDE.md in every directory containing test files is unmaintainable and creates duplication that drifts out of sync as the codebase grows.
+
+---
+
+**Q2.** You create `.claude/rules/terraform.md` with `paths: ["*.tf"]` (no `**/` prefix). The rule loads when you edit `main.tf` in the root directory but NOT when you edit `modules/vpc/main.tf`. What is the fix?
+
+**A.** Move the rule file to `modules/vpc/.claude/rules/terraform.md`
+**B.** Change the pattern to `paths: ["**/*.tf"]` so it matches files in subdirectories
+**C.** Add a separate `paths:` entry for each subdirectory
+**D.** Remove the `paths:` field so the rule always loads
+
+**Correct: B.** `**/*.tf` matches `.tf` files at any directory depth. Without `**/`, the glob `*.tf` only matches in the root directory. **Why not A:** Rules must be in the project’s `.claude/rules/` directory, not nested in subdirectories. **Why not C:** Adding a separate entry per subdirectory defeats the purpose of glob patterns and doesn’t handle new subdirectories. **Why not D:** Removing `paths:` makes the rule load for all files, not just Terraform files -- the opposite of what you want.
+
+---
+
+**Q3.** Your project CLAUDE.md includes all coding conventions for every file type. A developer editing a React component sees Python testing conventions, API route standards, and Terraform rules -- none of which are relevant. What is the impact and fix?
+
+**A.** No impact -- Claude Code ignores irrelevant conventions automatically
+**B.** The irrelevant conventions waste context tokens and may confuse Claude’s responses. Move file-type-specific conventions to path-specific rules in `.claude/rules/` with appropriate glob patterns.
+**C.** Remove all conventions from CLAUDE.md entirely
+**D.** Create a separate CLAUDE.md for each programming language
+
+**Correct: B.** Irrelevant conventions consume context space and can influence Claude’s behavior even when they don’t apply to the current file. Path-specific rules with glob patterns load only when editing matching files, keeping context focused. **Why not A:** Claude does not automatically filter irrelevant conventions -- everything in loaded config files is part of the context. **Why not C:** Removing all conventions leaves no guidance -- the fix is scoping, not removal. **Why not D:** Language-based CLAUDE.md files are a poor proxy for file-type rules and don’t handle cross-language patterns.
 
 ## Key takeaways
 
-- .claude/rules/ files with `paths:` frontmatter = path-specific rules
+- `.claude/rules/` files with `paths:` YAML frontmatter = path-specific rules
 - Rules load ONLY when editing files matching the glob patterns
-- glob patterns apply regardless of directory (e.g., `**/*.test.py`)
-- Better than directory CLAUDE.md for cross-directory conventions
-- Reduces irrelevant context and token usage
+- Always use `**/` in glob patterns for recursive directory matching
+- Better than directory CLAUDE.md for cross-directory conventions (tests, configs, routes)
+- Reduces irrelevant context -- each file type sees only its relevant conventions
+
+## Exam tips
+
+- **"Conventions for files spread across directories"** --> `.claude/rules/` with glob patterns
+- **"Test files need same conventions everywhere"** --> `paths: ["**/*.test.tsx"]`
+- **Wrong answer trap:** "Put a CLAUDE.md in each directory" -- doesn’t handle scattered files, creates maintenance burden
+- **Wrong answer trap:** "Add all conventions to project CLAUDE.md" -- loads irrelevant rules for every file type
+- **The core pattern:** path-specific rules for by-type conventions, directory CLAUDE.md for by-location conventions
+
+**Next:** Lab 3.4 covers plan mode vs direct execution -- when to explore and design before making changes, and when to act immediately on well-scoped tasks.
 
 ---
 
