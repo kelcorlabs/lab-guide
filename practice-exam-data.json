@@ -243,17 +243,17 @@
     "id": 16,
     "domain_code": "D1",
     "domain_name": "Agentic Architecture and Orchestration",
-    "task_statement": "1.1",
-    "question": "Your research coordinator agent's loop terminates after the first subagent completes, even when additional subagents need to run. Debugging reveals the loop checks if the response contains any text content and terminates if it does, because the coordinator sometimes includes a brief status update (\"Web search complete, now analyzing documents...\") alongside its tool_use calls. What should you change?",
+    "task_statement": "1.7",
+    "question": "Your team is investigating a performance bottleneck in a production API. After an initial Claude Code session that identified a full table scan in the database layer as the root cause, you want to evaluate two competing fix approaches — adding a Redis cache versus adding a database index — before committing to either one. Each approach involves different files, different trade-offs, and potentially different performance characteristics. How should you structure the investigation?",
     "choices": {
-      "A": "Check stop_reason instead of text content — continue the loop when stop_reason is \"tool_use\" (regardless of accompanying text) and terminate only when stop_reason is \"end_turn\".",
-      "B": "Instruct the coordinator to never include text alongside tool calls.",
-      "C": "Strip all text content from responses before checking for tool calls.",
-      "D": "Add a counter that ensures at least 4 iterations (one per subagent) before allowing termination."
+      "A": "Use --resume to continue the original session and investigate both approaches sequentially, documenting each one before moving to the next.",
+      "B": "Use --resume with --fork-session to create two independent branches from the shared root-cause analysis, exploring each approach in isolation so findings from one don’t influence the other.",
+      "C": "Start two completely new sessions from scratch, re-explaining the root cause analysis in each one so both have full context.",
+      "D": "Continue in the original session and ask Claude to compare both approaches theoretically without implementing either one."
     },
-    "correct_answer": "A",
-    "explanation": "**Correct: A.** The stop_reason field is the authoritative signal for loop control. A response with stop_reason \"tool_use\" means the model wants to execute tools, even if it also includes explanatory text. Checking for text content is an anti-pattern that breaks when the model includes status messages alongside tool calls. **Why not B:** Instructing the coordinator to suppress text is prompt-based and unreliable — models naturally include contextual text, and suppressing it reduces observability. **Why not C:** Stripping text content is a workaround that doesn't fix the root cause and destroys potentially useful coordination information. **Why not D:** A fixed iteration count is brittle — some research tasks may require 2 subagents while others require 6, and capping at 4 either wastes iterations or truncates necessary work.",
-    "lab_reference": "Lab 1.1"
+    "correct_answer": "B",
+    "explanation": "**Correct: B.** fork_session creates independent branches from a shared analysis baseline. Both forks inherit the root-cause findings (the full table scan discovery) but from the fork point forward, they are completely isolated — caching exploration in Fork A does not appear in Fork B's indexing exploration. This prevents cross-contamination where findings from one approach bias the evaluation of the other. **Why not A:** Sequential investigation in a single session causes cross-contamination — after exploring the caching approach, Claude's evaluation of the indexing approach is influenced by what it learned about caching, making the comparison unfair. **Why not C:** Starting fresh discards the shared root-cause analysis, forcing you to re-explain the problem context in both sessions. fork_session preserves this shared baseline automatically. **Why not D:** Theoretical comparison without implementation misses concrete trade-offs (memory overhead, migration complexity, cache invalidation) that only emerge during hands-on exploration.",
+    "lab_reference": "Lab 1.7"
   },
   {
     "id": 17,
@@ -417,6 +417,70 @@
   },
   {
     "id": 27,
+    "domain_code": "D2",
+    "domain_name": "Tool Design and MCP Integration",
+    "task_statement": "2.3",
+    "question": "Your document processing pipeline extracts metadata from uploaded files using a dedicated extract_metadata tool. The pipeline requires metadata extraction to complete before any enrichment tools run, because enrichment depends on the extracted document type and date. Currently, tool_choice is set to \"auto\" and approximately 15% of requests skip metadata extraction entirely — Claude returns a conversational summary instead of calling the tool, which crashes the downstream enrichment step. How should you fix this?",
+    "choices": {
+      "A": "Add explicit instructions to the system prompt: \"ALWAYS call extract_metadata before any other tool. This is mandatory.\"",
+      "B": "Set tool_choice to \"any\" so Claude is forced to call some tool on every request.",
+      "C": "Set tool_choice to {\"type\": \"tool\", \"name\": \"extract_metadata\"} for the first API call to guarantee this specific tool runs, then switch to \"auto\" for subsequent turns.",
+      "D": "Add a retry loop that detects when Claude returns text instead of a tool call and re-sends the request with a stronger prompt."
+    },
+    "correct_answer": "C",
+    "explanation": "**Correct: C.** Forced tool selection with {\"type\": \"tool\", \"name\": \"extract_metadata\"} guarantees Claude calls this specific tool on the first turn. This is the documented mechanism for ensuring a particular tool runs before others — you force it on the first API call, then process subsequent steps with \"auto\" or \"any\" in follow-up turns. **Why not A:** Prompt instructions provide probabilistic compliance, not deterministic guarantees. The 15% failure rate demonstrates that even explicit \"ALWAYS\" instructions fail under certain conditions — adding emphasis words does not materially improve compliance. **Why not B:** tool_choice \"any\" guarantees Claude calls some tool, but it could call an enrichment tool instead of extract_metadata. \"any\" ensures a tool call but does not control which tool is selected. **Why not D:** A retry loop adds latency and cost for every failed attempt, and still relies on the same probabilistic mechanism — the model may return text again on retry.",
+    "lab_reference": "Lab 2.3"
+  },
+  {
+    "id": 28,
+    "domain_code": "D2",
+    "domain_name": "Tool Design and MCP Integration",
+    "task_statement": "2.4",
+    "question": "Your support agent is connected to a Jira MCP server with tools like search_issues, create_issue, and update_issue. When a customer reports a bug, the agent makes 6–8 exploratory search_issues calls to discover what projects exist, what issue types are available, and what fields are required — before it can create a single ticket. This adds 30 seconds of latency and consumes significant tokens on every bug report. The Jira server could expose its project list, issue type catalog, and field schema as static data. What is the most effective way to reduce these exploratory round-trips?",
+    "choices": {
+      "A": "Cache the results of the first search_issues call and reuse them for subsequent requests in the same session.",
+      "B": "Increase the agent's context window so it can retain more information from prior exploratory calls across conversations.",
+      "C": "Pre-populate the system prompt with a hardcoded list of Jira projects, issue types, and fields.",
+      "D": "Expose the project list, issue type catalog, and field schema as MCP resources — read-only content catalogs the agent can browse without making exploratory tool calls."
+    },
+    "correct_answer": "D",
+    "explanation": "**Correct: D.** MCP resources are read-only content catalogs (like issue type lists, database schemas, documentation hierarchies) that give agents visibility into available data without requiring exploratory tool calls. The agent can browse the resource to learn what projects and fields exist, then make a single targeted create_issue call. This reduces round-trips from 6–8 to 1–2. **Why not A:** Session-level caching helps for repeated requests within one session but doesn't solve the cold-start problem — every new session still requires the exploratory calls, and the cached data can go stale between sessions. **Why not B:** Context window size is not the bottleneck — the agent makes exploratory calls because it doesn't know what data is available, not because it forgot prior results. A larger context window doesn't provide knowledge the agent never had. **Why not C:** Hardcoding Jira metadata in the system prompt creates a maintenance burden — every time a project is added or a field changes, someone must update the prompt. MCP resources are served live from the source system.",
+    "lab_reference": "Lab 2.4"
+  },
+  {
+    "id": 29,
+    "domain_code": "D2",
+    "domain_name": "Tool Design and MCP Integration",
+    "task_statement": "2.5",
+    "question": "Your agent needs to update a specific configuration value in a YAML file. It tries to use the Edit tool with old_string set to \"timeout: 30\" and new_string set to \"timeout: 60\", but Edit fails because \"timeout: 30\" appears in three different sections of the file. The Edit tool requires unique text matches to avoid ambiguous replacements. What is the correct fallback approach?",
+    "choices": {
+      "A": "Use the Bash tool to run a sed command that replaces the first occurrence: sed -i 's/timeout: 30/timeout: 60/' config.yaml.",
+      "B": "Use Read to load the full file contents, modify the correct occurrence in the loaded text, then use Write to replace the entire file with the corrected version.",
+      "C": "Retry Edit with a shorter old_string to make it more likely to match uniquely.",
+      "D": "Use Edit with a replace_all flag to change all three occurrences at once."
+    },
+    "correct_answer": "B",
+    "explanation": "**Correct: B.** When Edit fails due to non-unique text matches, the documented fallback is Read + Write. Read loads the full file so you can identify the exact occurrence that needs changing, then Write replaces the entire file with the corrected content. This is reliable because you have full control over which occurrence to modify. **Why not A:** Bash with sed spawns a shell process, costs 3–4x more tokens than built-in tools, and introduces security risks — particularly in CI/CD contexts where Bash may be restricted by allowed_tools. Built-in tools are always preferred over shell equivalents. **Why not C:** A shorter old_string is more likely to match in even more locations, making the ambiguity worse. The fix requires more context (a longer, more unique string) or the Read+Write fallback — not less context. **Why not D:** Replacing all three occurrences changes values that may be intentionally different across sections. The goal is to update one specific timeout, not all timeouts in the file.",
+    "lab_reference": "Lab 2.5"
+  },
+  {
+    "id": 30,
+    "domain_code": "D2",
+    "domain_name": "Tool Design and MCP Integration",
+    "task_statement": "2.1",
+    "question": "Your multi-agent research system has two well-described tools: fetch_web_results (for live web searches) and load_knowledge_base (for querying your internal document store). After applying the five-part description template from your team's tool design standards, keyword overlap between the descriptions dropped from 60% to 15% and misrouting dropped from 30% to under 5%. However, the agent still calls fetch_web_results unnecessarily for questions that could be answered from the knowledge base alone. Investigating further, you find the system prompt contains the instruction: \"Always search for the latest information before answering any question.\" What is the most likely cause and fix?",
+    "choices": {
+      "A": "The fetch_web_results tool description needs additional \"Do NOT use for\" boundary conditions listing internal knowledge base queries as an excluded use case.",
+      "B": "Remove the fetch_web_results tool entirely and route all queries through load_knowledge_base to eliminate the misrouting.",
+      "C": "The system prompt phrase \"always search\" creates a keyword association with fetch_web_results that overrides the tool descriptions. Reword the system prompt to remove the search-biased instruction, or make it explicit: \"Check the knowledge base first; only use web search when internal sources are insufficient.\"",
+      "D": "Add few-shot examples to the system prompt showing the agent correctly choosing load_knowledge_base for internal questions."
+    },
+    "correct_answer": "C",
+    "explanation": "**Correct: C.** System prompt keywords can create unintended tool associations that override well-written descriptions. The phrase \"always search\" biases Claude toward the tool with \"search\" in its name (fetch_web_results), even when the knowledge base would be more appropriate. Rewording the system prompt to specify a preference order (\"check knowledge base first, web search only when needed\") removes the bias while preserving the intent. **Why not A:** The tool descriptions are already well-differentiated (15% overlap, under 5% misrouting from description quality alone). The remaining misrouting comes from the system prompt, not the descriptions — adding more description text won't fix a system prompt bias. **Why not B:** Removing a tool entirely eliminates the agent's ability to search the web when it genuinely needs current information. The goal is correct routing, not tool removal — this is an overreaction that sacrifices capability. **Why not D:** Few-shot examples add token overhead and address symptoms rather than the root cause. The system prompt instruction \"always search\" will continue to bias selection regardless of examples showing the alternative.",
+    "lab_reference": "Lab 2.1"
+  },
+  {
+    "id": 31,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.3",
@@ -432,7 +496,7 @@
     "lab_reference": "Lab 5.3"
   },
   {
-    "id": 28,
+    "id": 32,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.6",
@@ -448,23 +512,7 @@
     "lab_reference": "Lab 5.6"
   },
   {
-    "id": 29,
-    "domain_code": "D5",
-    "domain_name": "Context Management and Reliability",
-    "task_statement": "5.1",
-    "question": "Your coordinator collects findings from four subagents and passes them as a combined block to the synthesis subagent. The synthesis agent consistently produces thorough analysis of findings from the first and last subagents but provides superficial treatment of findings from the middle two subagents. All four subagents produced equally detailed outputs. What is the most likely cause and fix?",
-    "choices": {
-      "A": "This is the \"lost in the middle\" effect — models reliably process information at the beginning and end of long inputs but may miss middle sections. Place key findings summaries at the beginning and organize detailed results with explicit section headers.",
-      "B": "The synthesis agent has a context window limit and the middle findings are being truncated.",
-      "C": "The middle subagents' findings are less relevant, so the synthesis agent correctly deprioritizes them.",
-      "D": "The synthesis agent needs more detailed instructions about treating all findings equally."
-    },
-    "correct_answer": "A",
-    "explanation": "**Correct: A.** The \"lost in the middle\" effect is a well-documented phenomenon where models attend more strongly to information at the beginning and end of long contexts. Placing key findings summaries at the top and using explicit section headers with clear structure helps mitigate position-based attention bias. **Why not C:** All four subagents produced equally detailed outputs — the superficial treatment correlates with position, not relevance. **Why not B:** If findings were truncated, the synthesis would reference incomplete data or mention missing sections, not provide superficial but coherent analysis. **Why not D:** Adding instructions doesn't address the underlying attention bias — the model isn't choosing to deprioritize middle content; it's a limitation of how attention works over long inputs.",
-    "lab_reference": "Lab 5.1"
-  },
-  {
-    "id": 30,
+    "id": 33,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.6",
@@ -480,7 +528,7 @@
     "lab_reference": "Lab 5.6"
   },
   {
-    "id": 31,
+    "id": 34,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.1",
@@ -496,7 +544,7 @@
     "lab_reference": "Lab 3.1"
   },
   {
-    "id": 32,
+    "id": 35,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.1",
@@ -512,7 +560,7 @@
     "lab_reference": "Lab 3.1"
   },
   {
-    "id": 33,
+    "id": 36,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.2",
@@ -528,7 +576,7 @@
     "lab_reference": "Lab 3.2"
   },
   {
-    "id": 34,
+    "id": 37,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.3",
@@ -544,7 +592,7 @@
     "lab_reference": "Lab 3.3"
   },
   {
-    "id": 35,
+    "id": 38,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.4",
@@ -560,7 +608,7 @@
     "lab_reference": "Lab 3.4"
   },
   {
-    "id": 36,
+    "id": 39,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.5",
@@ -576,7 +624,7 @@
     "lab_reference": "Lab 3.5"
   },
   {
-    "id": 37,
+    "id": 40,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.5",
@@ -592,7 +640,7 @@
     "lab_reference": "Lab 3.5"
   },
   {
-    "id": 38,
+    "id": 41,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.6",
@@ -608,23 +656,7 @@
     "lab_reference": "Lab 3.6"
   },
   {
-    "id": 39,
-    "domain_code": "D3",
-    "domain_name": "Claude Code Configuration and Workflows",
-    "task_statement": "3.6",
-    "question": "Your CI pipeline runs automated code reviews on every PR. After a developer pushes a fix addressing review findings, the pipeline runs again and posts duplicate comments about issues that were already fixed. How should you prevent this?",
-    "choices": {
-      "A": "Skip the review on subsequent commits if the first review was already posted.",
-      "B": "Include prior review findings in context when re-running reviews after new commits, and instruct Claude to report only new or still-unaddressed issues.",
-      "C": "Compare the new findings against the previous findings and filter out duplicates in post-processing.",
-      "D": "Only run reviews on the first commit in a PR and skip all subsequent commits."
-    },
-    "correct_answer": "B",
-    "explanation": "**Correct: B.** Including prior review findings in context lets Claude see what was already flagged and determine whether those issues were addressed by the new commits. Instructing it to report only new or still-unaddressed issues prevents duplicates while still catching new problems. **Why not A:** Skipping reviews on subsequent commits means new issues introduced by the fix commit would go undetected. **Why not C:** Post-processing duplicate detection is fragile — findings may be worded differently even when describing the same issue, leading to missed deduplication. **Why not D:** Skipping reviews on later commits is even worse than option A — it ignores all new code pushed after the first commit.",
-    "lab_reference": "Lab 3.6"
-  },
-  {
-    "id": 40,
+    "id": 42,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.6",
@@ -640,7 +672,7 @@
     "lab_reference": "Lab 3.6"
   },
   {
-    "id": 41,
+    "id": 43,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.1",
@@ -656,23 +688,23 @@
     "lab_reference": "Lab 4.1"
   },
   {
-    "id": 42,
+    "id": 44,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.1",
-    "question": "Your code review prompt says \"Flag any issues you find, being conservative and only reporting high-confidence findings.\" Despite this instruction, the review still produces many false positives, particularly around intentional code patterns your team uses (like feature flags implemented as empty catch blocks). What change would most effectively improve precision?",
+    "question": "A developer on your team uses a custom Claude Code review command daily to check their work before committing. They report that the command flags too many false positives — particularly around intentional patterns like feature flags implemented as environment variable lookups and error boundaries that use empty catch blocks as a deliberate reset mechanism. The developer is starting to ignore all findings because the noise drowns out real issues. The current review prompt says \"Analyze this code for bugs and code quality issues, focusing on high-severity problems.\" What change would most effectively restore the developer's trust in the review output?",
     "choices": {
-      "A": "Change \"conservative\" to \"very conservative\" and add \"minimize false positives.\"",
-      "B": "Have developers rate each finding as correct or incorrect and fine-tune the model on the feedback.",
-      "C": "Add a post-processing filter that removes findings matching known false-positive patterns.",
-      "D": "Replace the vague instruction with specific criteria: define which issues to report (bugs with clear impact, security vulnerabilities) and which patterns to skip (empty catch blocks for feature flags, intentional no-ops marked with comments), using concrete code examples."
+      "A": "Switch to a more capable Claude model with better judgment about which patterns are intentional versus problematic.",
+      "B": "Add a post-processing filter that suppresses findings matching known false positive patterns from a curated allowlist.",
+      "C": "Add \"CRITICAL: Be very conservative and only flag issues you are extremely confident about\" to the prompt.",
+      "D": "Replace the vague instruction with specific review criteria that define which issues to report (bugs, security vulnerabilities, unhandled error paths) and which patterns to skip (feature flag lookups, intentional empty catch blocks, local naming conventions)."
     },
     "correct_answer": "D",
-    "explanation": "**Correct: D.** General instructions like \"be conservative\" fail to improve precision because they don't tell the model which specific patterns are acceptable. Writing specific review criteria with concrete code examples defining what to flag versus skip gives the model the judgment framework it needs. **Why not A:** Adding more emphasis to vague instructions doesn't improve precision — \"very conservative\" is no more actionable than \"conservative\" for the model. **Why not C:** Post-processing filters are reactive and require maintaining a growing list of patterns, rather than teaching the model to make correct judgments upfront. **Why not B:** Fine-tuning requires significant infrastructure, labeled data, and ongoing maintenance — it's a disproportionate response when prompt improvements haven't been tried.",
+    "explanation": "**Correct: D.** Explicit criteria with concrete DO/DO-NOT boundaries give Claude the judgment framework it needs. Listing specific patterns to skip (feature flags, intentional catch blocks) eliminates the false positives directly, while listing what to report (bugs, security, unhandled errors) focuses attention on high-value findings. **Why not A:** Switching models does not fix the prompt — a more capable model given the same vague instruction (\"focus on high-severity problems\") will still lack the context to distinguish intentional patterns from genuine issues. Model capability is not a substitute for clear criteria. **Why not B:** Post-processing filters are reactive and require maintaining a growing allowlist. They suppress findings after generation rather than preventing them, wasting tokens and still requiring someone to curate the list. **Why not C:** Adding emphasis words like \"CRITICAL\" and \"extremely confident\" does not materially change LLM precision — the model already understands the instruction; it lacks specific criteria for what constitutes a false positive in this codebase.",
     "lab_reference": "Lab 4.1"
   },
   {
-    "id": 43,
+    "id": 45,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.2",
@@ -688,7 +720,7 @@
     "lab_reference": "Lab 4.2"
   },
   {
-    "id": 44,
+    "id": 46,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.3",
@@ -704,7 +736,7 @@
     "lab_reference": "Lab 4.3"
   },
   {
-    "id": 45,
+    "id": 47,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.6",
@@ -720,7 +752,7 @@
     "lab_reference": "Lab 4.6"
   },
   {
-    "id": 46,
+    "id": 48,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.6",
@@ -736,7 +768,7 @@
     "lab_reference": "Lab 4.6"
   },
   {
-    "id": 47,
+    "id": 49,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.2",
@@ -752,7 +784,7 @@
     "lab_reference": "Lab 4.2"
   },
   {
-    "id": 48,
+    "id": 50,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.1",
@@ -768,7 +800,7 @@
     "lab_reference": "Lab 3.1"
   },
   {
-    "id": 49,
+    "id": 51,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.4",
@@ -784,23 +816,7 @@
     "lab_reference": "Lab 3.4"
   },
   {
-    "id": 50,
-    "domain_code": "D3",
-    "domain_name": "Claude Code Configuration and Workflows",
-    "task_statement": "3.6",
-    "question": "Your extraction system needs to process 5,000 invoices overnight for a weekly financial audit. The results are reviewed the next morning. Your manager proposes using real-time synchronous API calls for each invoice. How should you evaluate this proposal?",
-    "choices": {
-      "A": "Agree — synchronous calls ensure each extraction completes before the next begins, maintaining data integrity.",
-      "B": "Process invoices synchronously during the day when API rates are lower.",
-      "C": "Use synchronous calls but parallelize them across multiple threads for speed.",
-      "D": "Use the Message Batches API instead — it offers 50% cost savings and is designed for non-blocking, latency-tolerant workloads like overnight batch processing, while synchronous calls should be reserved for blocking workflows."
-    },
-    "correct_answer": "D",
-    "explanation": "**Correct: D.** The Message Batches API offers 50% cost savings and is designed for exactly this use case: non-blocking, latency-tolerant workloads with no immediate user waiting for results. Overnight processing with next-morning review is the ideal batch API scenario. Synchronous calls are appropriate for blocking workflows where users wait for results. **Why not A:** Sequential synchronous processing of 5,000 invoices is unnecessarily expensive and slow for a non-blocking overnight task. **Why not C:** Parallelized synchronous calls still cost twice as much as batch processing and add infrastructure complexity for managing threads and rate limits. **Why not B:** Time-of-day doesn't affect API pricing, and daytime processing contradicts the overnight use case.",
-    "lab_reference": "Lab 3.6"
-  },
-  {
-    "id": 51,
+    "id": 52,
     "domain_code": "D3",
     "domain_name": "Claude Code Configuration and Workflows",
     "task_statement": "3.2",
@@ -816,7 +832,7 @@
     "lab_reference": "Lab 3.2"
   },
   {
-    "id": 52,
+    "id": 53,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.3",
@@ -832,7 +848,7 @@
     "lab_reference": "Lab 4.3"
   },
   {
-    "id": 53,
+    "id": 54,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.3",
@@ -848,7 +864,7 @@
     "lab_reference": "Lab 4.3"
   },
   {
-    "id": 54,
+    "id": 55,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.4",
@@ -864,7 +880,7 @@
     "lab_reference": "Lab 4.4"
   },
   {
-    "id": 55,
+    "id": 56,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.4",
@@ -880,7 +896,7 @@
     "lab_reference": "Lab 4.4"
   },
   {
-    "id": 56,
+    "id": 57,
     "domain_code": "D4",
     "domain_name": "Prompt Engineering and Structured Output",
     "task_statement": "4.5",
@@ -896,7 +912,7 @@
     "lab_reference": "Lab 4.5"
   },
   {
-    "id": 57,
+    "id": 58,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.5",
@@ -912,7 +928,7 @@
     "lab_reference": "Lab 5.5"
   },
   {
-    "id": 58,
+    "id": 59,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.5",
@@ -928,7 +944,7 @@
     "lab_reference": "Lab 5.5"
   },
   {
-    "id": 59,
+    "id": 60,
     "domain_code": "D5",
     "domain_name": "Context Management and Reliability",
     "task_statement": "5.4",
@@ -942,21 +958,5 @@
     "correct_answer": "B",
     "explanation": "**Correct: B.** Context degradation in extended sessions causes models to lose specific findings discovered earlier and revert to generic pattern knowledge. Maintaining a scratchpad file that records key findings provides persistent state across context boundaries — the operator can reference it in subsequent questions to recall specific structural details without relying on the model's degraded context. **Why not A:** Restarting every 30 minutes loses all accumulated understanding and forces repeated re-exploration, making the process extremely inefficient. **Why not C:** Larger context windows are expensive and delay rather than prevent degradation — the underlying issue is attention quality over very long contexts, not capacity. **Why not D:** A database stores raw documents but doesn't capture the analytical findings (patterns, structural insights, field location mappings) that the operator needs to reference during ongoing exploration.",
     "lab_reference": "Lab 5.4"
-  },
-  {
-    "id": 60,
-    "domain_code": "D5",
-    "domain_name": "Context Management and Reliability",
-    "task_statement": "5.6",
-    "question": "Your extraction system processes financial documents from multiple sources. Two annual reports for the same company show different revenue figures: one says \"$4.2 billion\" and the other says \"$3.8 billion.\" Your synthesis step currently picks the figure from whichever source it processes last. How should you redesign this?",
-    "choices": {
-      "A": "Always use the figure from the most recent report.",
-      "B": "Flag the discrepancy and reject both values until a human resolves it.",
-      "C": "Complete the extraction with both values included, annotated with source attribution and publication dates, so the consuming system can determine whether the difference reflects a revision, different fiscal periods, or different accounting methods — rather than arbitrarily selecting one.",
-      "D": "Average the two values as the best estimate."
-    },
-    "correct_answer": "C",
-    "explanation": "**Correct: C.** Conflicting values from credible sources should be preserved with attribution rather than arbitrarily selected. Including both values with source names, publication dates, and context allows downstream systems or human reviewers to determine the reason for the discrepancy — it may reflect a restatement, different fiscal year definitions, or different accounting standards. **Why not A:** Recency doesn't determine accuracy — a more recent report might contain a revised figure, or it might report a different fiscal period. The system can't make this determination without context. **Why not B:** Rejecting both values blocks processing entirely and forces human intervention for every discrepancy, which is disproportionate when the discrepancy may have a simple explanation. **Why not D:** Averaging produces a meaningless number that no source supports and masks the actual data.",
-    "lab_reference": "Lab 5.6"
   }
 ]
