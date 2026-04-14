@@ -364,4 +364,56 @@ test.describe('Lab Guide E2E', () => {
     expect(detailText.length).toBeGreaterThan(50);
   });
 
+  test('Test 11: Bottom nav buttons advance to next section', async ({ page }) => {
+    await page.goto('/lab-guide.html');
+
+    // Navigate to Setup via sidebar
+    const setupHeader = page.locator('.nav-group-header', { hasText: /Setup/i });
+    await setupHeader.click();
+    await page.waitForTimeout(300);
+
+    // Verify Setup section is visible
+    const visibleBefore = page.locator('.content-section:visible');
+    await expect(visibleBefore).toHaveCount(1);
+    await expect(visibleBefore.first()).toContainText(/SETUP/i);
+
+    // Scroll to bottom and click the Next button (scoped to visible section)
+    const nextBtn = page.locator('.content-section:visible .lesson-nav-btn.lesson-nav-next');
+    await nextBtn.scrollIntoViewIfNeeded();
+    await nextBtn.click();
+    await page.waitForTimeout(300);
+
+    // (a) New section is visible and is NOT the Setup section
+    const visibleAfter = page.locator('.content-section:visible');
+    await expect(visibleAfter).toHaveCount(1);
+    const newH1 = await visibleAfter.first().locator('h1').first().textContent();
+    expect(newH1).not.toMatch(/SETUP/i);
+
+    // (b) Sidebar has an active entry
+    const activeLink = page.locator('#navList a.active');
+    await expect(activeLink).toHaveCount(1);
+
+    // (c) Scroll position is at the top (within 100px)
+    const scrollY = await page.evaluate(() => window.scrollY);
+    expect(scrollY).toBeLessThan(100);
+
+    // Now test cross-module: navigate to Lab 1.7 and click Next to go to Module 2
+    await openLab(page, '1.7');
+    await page.waitForTimeout(300);
+
+    const nextBtn2 = page.locator('.content-section:visible .lesson-nav-btn.lesson-nav-next');
+    await nextBtn2.scrollIntoViewIfNeeded();
+    await nextBtn2.click();
+    await page.waitForTimeout(300);
+
+    const visibleCross = page.locator('.content-section:visible');
+    await expect(visibleCross).toHaveCount(1);
+    const crossH1 = await visibleCross.first().locator('h1').first().textContent();
+    expect(crossH1).not.toMatch(/LAB 1\.7/i);
+
+    // Sidebar active state updated
+    const activeLink2 = page.locator('#navList a.active');
+    await expect(activeLink2).toHaveCount(1);
+  });
+
 });

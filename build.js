@@ -49,6 +49,8 @@ let processed = markdown
   .replace(/^# (Model: .+)$/gm, '<p class="subtitle model-tag">$1</p>')
   // "HANDS-ON LAB GUIDE" → subtitle (not a separate H1)
   .replace(/^# (HANDS-ON LAB GUIDE.+)$/gm, '<p class="hero-subtitle">$1</p>')
+  // "Powered by Claude Code" → subtitle (not a separate H1)
+  .replace(/^# (Powered by .+)$/gm, '<p class="subtitle">$1</p>')
   // Domain 5 — Task Statement 5.x → combined patterns
   .replace(/^# (Domains? reinforced:.+)$/gm, '<div class="lab-meta"><span class="badge badge-domain">$1</span></div>')
   // Final scenario metadata
@@ -1476,7 +1478,7 @@ const html = `<!DOCTYPE html>
       const target = sections.find(s => s.dataset.sectionId === sectionId);
       if (target) {
         target.style.display = '';
-        window.scrollTo({ top: 0 });
+        window.scrollTo({ top: 0, behavior: 'instant' });
 
         // Remove old nav bar
         const oldNav = target.querySelector('.lesson-nav');
@@ -1496,8 +1498,18 @@ const html = `<!DOCTYPE html>
           prevBtn.className = 'lesson-nav-btn lesson-nav-prev';
           prevBtn.innerHTML = '\\u2190 ' + prevShort;
           prevBtn.addEventListener('click', () => {
+            showSection(prevId);
+            navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
             const prevLink = navList.querySelector('a[href="#' + CSS.escape(prevId) + '"]');
-            if (prevLink) prevLink.click();
+            if (prevLink) {
+              prevLink.classList.add('active');
+              const pg = prevLink.closest('.nav-group');
+              if (pg) {
+                groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
+                pg.querySelector('.nav-group-header').classList.add('open');
+                pg.querySelector('.nav-group-children').classList.add('open');
+              }
+            }
           });
           nav.appendChild(prevBtn);
         } else {
@@ -1513,8 +1525,18 @@ const html = `<!DOCTYPE html>
           nextBtn.className = 'lesson-nav-btn lesson-nav-next';
           nextBtn.innerHTML = nextShort + ' \\u2192';
           nextBtn.addEventListener('click', () => {
+            showSection(nextId);
+            navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
             const nextLink = navList.querySelector('a[href="#' + CSS.escape(nextId) + '"]');
-            if (nextLink) nextLink.click();
+            if (nextLink) {
+              nextLink.classList.add('active');
+              const pg = nextLink.closest('.nav-group');
+              if (pg) {
+                groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
+                pg.querySelector('.nav-group-header').classList.add('open');
+                pg.querySelector('.nav-group-children').classList.add('open');
+              }
+            }
           });
           nav.appendChild(nextBtn);
         }
