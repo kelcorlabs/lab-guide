@@ -1,49 +1,64 @@
 #!/usr/bin/env node
 /**
- * Verify practice exam answer count and distribution.
- * Expects 60 questions in the Practice Exam with balanced A/B/C/D distribution.
+ * Verify practice exam data from practice-exam-data.json.
+ * Expects 60 questions with balanced A/B/C/D distribution.
  */
 const fs = require('fs');
 const path = require('path');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'Hands on Lab'), 'utf-8');
+const jsonPath = path.join(__dirname, '..', 'practice-exam-data.json');
 
-const EXAM_START = 'PRACTICE EXAM — FULL ASSESSMENT';
-
-function countAnswers(text) {
-  const matches = text.match(/\*\*Correct: ([A-D])\.\*\*/g) || [];
-  const dist = { A: 0, B: 0, C: 0, D: 0 };
-  matches.forEach(m => {
-    const letter = m.match(/Correct: ([A-D])/)[1];
-    dist[letter]++;
-  });
-  return { total: matches.length, dist };
-}
-
-let errors = 0;
-
-// Practice Exam: expect 60
-const examStart = source.indexOf(EXAM_START);
-if (examStart === -1) {
-  console.error('FAIL: could not find PRACTICE EXAM section');
+if (!fs.existsSync(jsonPath)) {
+  console.error('FAIL: practice-exam-data.json not found');
   process.exit(1);
 }
-const ex = countAnswers(source.slice(examStart));
-console.log(`Exam: ${ex.total} questions — A:${ex.dist.A} B:${ex.dist.B} C:${ex.dist.C} D:${ex.dist.D}`);
-if (ex.total !== 60) { console.error(`  FAIL: expected 60, got ${ex.total}`); errors++; }
 
-// Check exam distribution — no letter should have more than 20
-for (const [letter, count] of Object.entries(ex.dist)) {
-  if (count > 20) {
-    console.error(`  FAIL: exam has ${count} "${letter}" answers (max 20 for balanced distribution)`);
+const questions = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+let errors = 0;
+
+const dist = { A: 0, B: 0, C: 0, D: 0 };
+let missing = 0;
+
+questions.forEach(function(q) {
+  if (!q.correct_answer || ['A','B','C','D'].indexOf(q.correct_answer) < 0) {
+    console.error('  FAIL: Q' + q.id + ' has invalid correct_answer: ' + q.correct_answer);
+    missing++;
+  } else {
+    dist[q.correct_answer]++;
+  }
+  if (!q.choices || Object.keys(q.choices).length !== 4) {
+    console.error('  FAIL: Q' + q.id + ' does not have exactly 4 choices');
+    errors++;
+  }
+  if (!q.explanation || q.explanation.length < 10) {
+    console.error('  FAIL: Q' + q.id + ' has missing or short explanation');
+    errors++;
+  }
+});
+
+console.log('Exam: ' + questions.length + ' questions — A:' + dist.A + ' B:' + dist.B + ' C:' + dist.C + ' D:' + dist.D);
+
+if (questions.length !== 60) {
+  console.error('  FAIL: expected 60 questions, got ' + questions.length);
+  errors++;
+}
+
+if (missing > 0) {
+  console.error('  FAIL: ' + missing + ' question(s) with invalid correct_answer');
+  errors++;
+}
+
+for (var letter in dist) {
+  if (dist[letter] > 20) {
+    console.error('  FAIL: ' + dist[letter] + ' "' + letter + '" answers (max 20)');
     errors++;
   }
 }
 
-console.log(`\nTotal: ${ex.total} questions`);
+console.log('\nTotal: ' + questions.length + ' questions');
 
 if (errors > 0) {
-  console.error(`\nFAILED: ${errors} error(s)`);
+  console.error('\nFAILED: ' + errors + ' error(s)');
   process.exit(1);
 } else {
   console.log('\nPASS: All answer counts and distribution OK');

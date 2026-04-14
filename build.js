@@ -17,6 +17,9 @@ marked.setOptions({
 // Read the lab file
 const markdown = fs.readFileSync('./Hands on Lab', 'utf-8');
 
+// Read practice exam questions
+const examQuestions = JSON.parse(fs.readFileSync('./practice-exam-data.json', 'utf-8'));
+
 // ── Pre-process: Smart conversion of comment-style headers ──
 // The source uses # for both real headings AND metadata comments.
 // We need to convert metadata lines to styled HTML, not headings.
@@ -58,6 +61,183 @@ const content = marked.parse(processed);
 let finalContent = content
   // Merge consecutive lab-meta divs into single container
   .replace(/(<\/div>\n?<div class="lab-meta">)/g, ' ');
+
+// ── Inject interactive practice exam section ──
+const examJSON = JSON.stringify(examQuestions);
+finalContent += `
+<h1 id="practice-exam--full-assessment">PRACTICE EXAM</h1>
+<div id="exam-app">
+<style>
+#exam-app { font-family: var(--font-sans); }
+#exam-app .exam-screen { display: none; }
+#exam-app .exam-screen.exam-active { display: block; }
+#exam-app .exam-title { text-align: center; margin-top: 2rem; font-family: var(--font-serif); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.025em; }
+#exam-app .exam-desc { text-align: center; color: var(--text-muted); margin: 0.75rem auto 1.5rem; max-width: 560px; font-size: 0.95rem; }
+#exam-app .exam-mode-toggle { display: flex; justify-content: center; gap: 0; margin: 1.25rem 0; }
+#exam-app .exam-mode-toggle button { border-radius: 0; border: 1px solid var(--border-medium); padding: 0.5rem 1.25rem; font-size: 0.85rem; font-family: var(--font-sans); background: var(--surface); color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+#exam-app .exam-mode-toggle button:first-child { border-radius: 6px 0 0 6px; }
+#exam-app .exam-mode-toggle button:last-child { border-radius: 0 6px 6px 0; }
+#exam-app .exam-mode-toggle button.esel { background: var(--text); color: var(--bg); border-color: var(--text); }
+#exam-app .exam-metrics { display: flex; justify-content: center; gap: 1rem; margin: 1.5rem 0; flex-wrap: wrap; }
+#exam-app .em-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.5rem; text-align: center; min-width: 120px; }
+#exam-app .em-card .em-val { font-size: 1.5rem; font-weight: 700; color: var(--brand); }
+#exam-app .em-card .em-lbl { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15rem; }
+#exam-app .exam-start { display: block; margin: 2rem auto; padding: 0.65rem 2.5rem; font-size: 1rem; font-weight: 600; background: var(--text); color: var(--bg); border: 1px solid var(--text); border-radius: 6px; cursor: pointer; font-family: var(--font-sans); transition: background 0.15s; }
+#exam-app .exam-start:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+#exam-app .exam-timer { text-align: right; font-size: 0.95rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem; }
+#exam-app .exam-timer.ewarn { color: var(--red); }
+#exam-app .exam-prog-wrap { background: var(--border); border-radius: 100vw; height: 4px; margin-bottom: 1rem; }
+#exam-app .exam-prog-fill { background: var(--text); height: 4px; border-radius: 100vw; transition: width 0.3s; }
+#exam-app .eq-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+#exam-app .eq-num { font-size: 0.85rem; color: var(--text-muted); }
+#exam-app .eq-badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; background: #eef4f9; color: var(--blue); }
+#exam-app .eq-text { font-family: var(--font-serif); font-size: 1.05rem; line-height: 1.7; margin-bottom: 1.25rem; }
+#exam-app .eq-choices { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
+#exam-app .eq-choice { border: 2px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; font-size: 0.95rem; }
+#exam-app .eq-choice:hover { border-color: var(--text-light); background: var(--surface); }
+#exam-app .eq-choice:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+#exam-app .eq-choice.esel { border-color: var(--text); background: var(--surface); }
+#exam-app .eq-choice.ecorrect { border-color: var(--green); background: var(--surface); border-left: 4px solid var(--green); }
+#exam-app .eq-choice.ewrong { border-color: var(--red); background: var(--surface); border-left: 4px solid var(--red); }
+#exam-app .eq-choice .eq-letter { font-weight: 700; margin-right: 0.5rem; }
+#exam-app .eq-expl { background: var(--surface); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.9rem; line-height: 1.7; }
+#exam-app .eq-expl .eq-labref { display: block; margin-top: 0.5rem; font-size: 0.72rem; color: var(--text-light); }
+#exam-app .eq-nav { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+#exam-app .eq-nav button { border: 1px solid var(--border-medium); border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.85rem; font-family: var(--font-sans); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.15s; }
+#exam-app .eq-nav button:hover { background: var(--surface-raised); }
+#exam-app .eq-nav button:disabled { opacity: 0.35; cursor: default; }
+#exam-app .eq-revlink { display: block; text-align: center; margin-top: 1rem; color: var(--text-muted); text-decoration: underline; cursor: pointer; font-size: 0.85rem; }
+#exam-app .egrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; margin: 1rem 0; }
+#exam-app .egrid-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s; }
+#exam-app .egrid-cell:hover { transform: scale(1.1); }
+#exam-app .egrid-cell.eans { background: #eef4f9; color: var(--blue); border-color: var(--blue); }
+#exam-app .egrid-cell.eflag { background: #f5f0e6; color: var(--yellow); border-color: var(--yellow); }
+#exam-app .egrid-cell.eunans { background: var(--surface-raised); color: var(--text-light); }
+#exam-app .egrid-cell.eok { background: #eef3e8; color: var(--green); border-color: var(--green); }
+#exam-app .egrid-cell.eko { background: #fceee9; color: var(--red); border-color: var(--red); }
+#exam-app .egrid-legend { display: flex; gap: 1rem; justify-content: center; margin: 0.75rem 0; font-size: 0.72rem; color: var(--text-muted); }
+#exam-app .egrid-legend span { display: flex; align-items: center; gap: 0.3rem; }
+#exam-app .egrid-legend .el-dot { width: 10px; height: 10px; border-radius: 3px; }
+#exam-app .el-ans { background: #eef4f9; border: 1px solid var(--blue); }
+#exam-app .el-flag { background: #f5f0e6; border: 1px solid var(--yellow); }
+#exam-app .el-unans { background: var(--surface-raised); border: 1px solid var(--text-light); }
+#exam-app .el-ok { background: #eef3e8; border: 1px solid var(--green); }
+#exam-app .el-ko { background: #fceee9; border: 1px solid var(--red); }
+#exam-app .esubmit { text-align: center; margin-top: 1.5rem; }
+#exam-app .esubmit button { margin: 0 0.5rem; }
+#exam-app .ewarn-txt { color: var(--yellow); font-size: 0.85rem; margin-bottom: 0.75rem; text-align: center; }
+#exam-app .eres-badge { text-align: center; padding: 1.25rem; border-radius: 12px; margin: 1.25rem 0; font-size: 1.3rem; font-weight: 700; font-family: var(--font-serif); }
+#exam-app .eres-badge.epass { background: #eef3e8; color: var(--green); }
+#exam-app .eres-badge.efail { background: #fceee9; color: var(--red); }
+#exam-app .eres-time { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; }
+#exam-app .edom-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+#exam-app .edom-row .edom-name { flex: 1; font-size: 0.8rem; min-width: 180px; }
+#exam-app .edom-row .edom-bar-w { flex: 2; background: var(--border); border-radius: 100vw; height: 6px; }
+#exam-app .edom-row .edom-bar { height: 6px; border-radius: 100vw; transition: width 0.5s; }
+#exam-app .edom-row .edom-bar.ebgood { background: var(--green); }
+#exam-app .edom-row .edom-bar.ebmid { background: var(--yellow); }
+#exam-app .edom-row .edom-bar.eblow { background: var(--red); }
+#exam-app .edom-row .edom-sc { font-size: 0.8rem; color: var(--text-muted); min-width: 70px; text-align: right; }
+#exam-app .edetail { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-top: 1.25rem; }
+#exam-app .edetail .eq-text { font-size: 0.95rem; }
+#exam-app h2 { margin-top: 1.5rem; }
+#exam-app h3 { margin-top: 1.25rem; }
+@media (max-width: 600px) { #exam-app .egrid { grid-template-columns: repeat(6, 1fr); } #exam-app .exam-metrics { flex-direction: column; align-items: center; } #exam-app .edom-row { flex-wrap: wrap; } #exam-app .edom-row .edom-name { min-width: 100%; } }
+</style>
+
+<div id="exam-welcome" class="exam-screen exam-active">
+  <h2 class="exam-title" style="font-family:var(--font-serif);text-transform:none;font-size:1.75rem;letter-spacing:-0.025em;color:var(--text)">Practice Exam</h2>
+  <p class="exam-desc">60 scenario-based questions across 5 domains. Simulates the real CCA Foundations certification exam.</p>
+  <div class="exam-mode-toggle">
+    <button id="ebtn-exam" class="esel" onclick="window._exam.setMode('exam')">Exam Mode</button>
+    <button id="ebtn-study" onclick="window._exam.setMode('study')">Study Mode</button>
+  </div>
+  <div class="exam-metrics">
+    <div class="em-card"><div class="em-val">60</div><div class="em-lbl">Questions</div></div>
+    <div class="em-card"><div class="em-val">720</div><div class="em-lbl">Pass Score</div></div>
+    <div class="em-card" id="etime-card"><div class="em-val">120m</div><div class="em-lbl">Time Limit</div></div>
+  </div>
+  <button class="exam-start" onclick="window._exam.start()">Start Exam</button>
+</div>
+
+<div id="exam-question" class="exam-screen">
+  <div class="exam-timer" id="etimer"></div>
+  <div class="exam-prog-wrap"><div class="exam-prog-fill" id="eprog"></div></div>
+  <div class="eq-header"><span class="eq-num" id="eqnum"></span><span class="eq-badge" id="eqdom"></span></div>
+  <div class="eq-text" id="eqtext"></div>
+  <ul class="eq-choices" id="eqchoices" role="radiogroup"></ul>
+  <div id="eqexpl" class="eq-expl" style="display:none"></div>
+  <div class="eq-nav">
+    <button id="ebtn-prev" onclick="window._exam.prev()">&#8592; Previous</button>
+    <button id="ebtn-flag" onclick="window._exam.flag()">&#9873; Flag</button>
+    <button id="ebtn-next" onclick="window._exam.next()">Next &#8594;</button>
+  </div>
+  <div class="eq-revlink" onclick="window._exam.showReview()">Review all questions</div>
+</div>
+
+<div id="exam-review" class="exam-screen">
+  <h2 style="text-transform:none;font-size:1.1rem;color:var(--text);letter-spacing:0">Review Questions</h2>
+  <div class="egrid-legend"><span><span class="el-dot el-ans"></span>Answered</span><span><span class="el-dot el-flag"></span>Flagged</span><span><span class="el-dot el-unans"></span>Unanswered</span></div>
+  <div class="egrid" id="erev-grid"></div>
+  <div class="ewarn-txt" id="ewarn"></div>
+  <div class="esubmit">
+    <button onclick="window._exam.goQ(window._exam.cur)">Back to Questions</button>
+    <button style="background:var(--text);color:var(--bg);border-color:var(--text)" onclick="window._exam.confirmSubmit()">Submit Exam</button>
+  </div>
+</div>
+
+<div id="exam-results" class="exam-screen">
+  <h2 style="text-align:center;text-transform:none;font-size:1.1rem;color:var(--text);letter-spacing:0">Exam Results</h2>
+  <div class="eres-badge" id="eres-badge"></div>
+  <div class="eres-time" id="eres-time"></div>
+  <div class="exam-metrics" id="eres-metrics"></div>
+  <h3>Domain Breakdown</h3>
+  <div id="edom-bd"></div>
+  <h3>Question Review</h3>
+  <div class="egrid-legend"><span><span class="el-dot el-ok"></span>Correct</span><span><span class="el-dot el-ko"></span>Incorrect</span></div>
+  <div class="egrid" id="eres-grid"></div>
+  <div class="edetail" id="edetail" style="display:none"></div>
+  <div style="text-align:center;margin-top:1.5rem"><button class="exam-start" onclick="window._exam.restart()">Restart</button></div>
+</div>
+</div>
+
+<script>
+(function(){
+var Q=${examJSON};
+var DOMS={D1:"Agentic Architecture & Orchestration",D2:"Tool Design & MCP Integration",D3:"Claude Code Configuration & Workflows",D4:"Prompt Engineering & Structured Output",D5:"Context Management & Reliability"};
+var mode="exam",ans={},flags={},cur=0,startT=null,endT=null,tInt=null,submitted=false,pausedRemaining=null;
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function fmt(t){return esc(t).replace(/\\*\\*(.+?)\\*\\*/g,"<strong>$1</strong>");}
+function scr(id){document.querySelectorAll("#exam-app .exam-screen").forEach(function(s){s.classList.remove("exam-active")});document.getElementById(id).classList.add("exam-active");}
+function setMode(m){mode=m;document.getElementById("ebtn-exam").classList.toggle("esel",m==="exam");document.getElementById("ebtn-study").classList.toggle("esel",m==="study");document.getElementById("etime-card").querySelector(".em-val").textContent=m==="exam"?"120m":"None";}
+function isVisible(){var el=document.getElementById("exam-app");if(!el)return false;var sec=el.closest(".content-section");return sec&&sec.style.display!=="none";}
+function startTimer(){var end=startT+120*60*1000;tInt=setInterval(function(){if(!isVisible()){if(!pausedRemaining){pausedRemaining=end-Date.now();}return;}if(pausedRemaining){end=Date.now()+pausedRemaining;pausedRemaining=null;}var rem=end-Date.now();if(rem<=0){clearInterval(tInt);submitExam();return;}var m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);var el=document.getElementById("etimer");el.textContent=m+":"+(s<10?"0":"")+s;el.classList.toggle("ewarn",rem<300000);},500);}
+function start(){ans={};flags={};cur=0;submitted=false;endT=null;pausedRemaining=null;startT=Date.now();if(mode==="exam")startTimer();scr("exam-question");renderQ();}
+function renderQ(){var q=Q[cur];document.getElementById("eqnum").textContent="Question "+(cur+1)+" of 60";document.getElementById("eqdom").textContent=q.domain_code+" \\u2014 "+(DOMS[q.domain_code]||q.domain_name);document.getElementById("eqtext").textContent=q.question;document.getElementById("eprog").style.width=((cur+1)/60*100)+"%";document.getElementById("etimer").style.display=mode==="exam"&&!submitted?"block":"none";document.getElementById("ebtn-prev").disabled=cur===0;document.getElementById("ebtn-flag").innerHTML=flags[cur]?"&#9873; Unflag":"&#9873; Flag";
+var ul=document.getElementById("eqchoices");ul.innerHTML="";["A","B","C","D"].forEach(function(L){var li=document.createElement("li");li.className="eq-choice";li.setAttribute("tabindex","0");li.setAttribute("role","radio");li.innerHTML='<span class="eq-letter">'+L+")</span> "+esc(q.choices[L]);if(ans[cur]===L)li.classList.add("esel");if(mode==="study"&&ans[cur]){li.classList.remove("esel");if(L===q.correct_answer)li.classList.add("ecorrect");else if(L===ans[cur])li.classList.add("ewrong");}if(mode==="exam"&&submitted){li.classList.remove("esel");if(L===q.correct_answer)li.classList.add("ecorrect");else if(L===ans[cur]&&L!==q.correct_answer)li.classList.add("ewrong");}li.onclick=function(){selAns(L);};li.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();selAns(L);}};ul.appendChild(li);});
+var ex=document.getElementById("eqexpl");if((mode==="study"&&ans[cur])||(mode==="exam"&&submitted)){ex.innerHTML=fmt(q.explanation)+'<span class="eq-labref">Source: '+esc(q.lab_reference)+"</span>";ex.style.display="block";}else{ex.style.display="none";}}
+function selAns(L){if(submitted&&mode==="exam")return;if(mode==="study"&&ans[cur])return;ans[cur]=L;renderQ();}
+function prev(){if(cur>0){cur--;renderQ();}}
+function next(){if(cur<59){cur++;renderQ();}}
+function flagQ(){flags[cur]=!flags[cur];renderQ();}
+function goQ(i){cur=i;scr("exam-question");renderQ();}
+function showReview(){var g=document.getElementById("erev-grid");g.innerHTML="";for(var i=0;i<60;i++){var c=document.createElement("div");c.className="egrid-cell";c.textContent=i+1;if(flags[i])c.classList.add("eflag");else if(ans[i])c.classList.add("eans");else c.classList.add("eunans");c.onclick=(function(idx){return function(){goQ(idx);};})(i);c.setAttribute("tabindex","0");g.appendChild(c);}var u=60-Object.keys(ans).length;document.getElementById("ewarn").textContent=u>0?u+" question(s) unanswered":"";scr("exam-review");}
+function confirmSubmit(){var u=60-Object.keys(ans).length;if(confirm(u>0?"You have "+u+" unanswered question(s). Submit anyway?":"Submit your exam?"))submitExam();}
+function submitExam(){if(tInt)clearInterval(tInt);endT=Date.now();submitted=true;showResults();}
+function showResults(){var correct=0;Q.forEach(function(q,i){if(ans[i]===q.correct_answer)correct++;});var pct=Math.round(correct/60*100),scaled=Math.round(correct/60*1000),passed=scaled>=720;var el=Math.round((endT-startT)/1000),em=Math.floor(el/60),es=el%60;
+document.getElementById("eres-badge").className="eres-badge "+(passed?"epass":"efail");document.getElementById("eres-badge").textContent=passed?"PASSED":"NOT PASSED";document.getElementById("eres-time").textContent="Completed in "+em+"m "+es+"s";
+document.getElementById("eres-metrics").innerHTML='<div class="em-card"><div class="em-val">'+correct+'/60</div><div class="em-lbl">Raw Score</div></div><div class="em-card"><div class="em-val">'+pct+'%</div><div class="em-lbl">Percentage</div></div><div class="em-card"><div class="em-val">'+scaled+'</div><div class="em-lbl">Scaled Score</div></div>';
+var ds={};["D1","D2","D3","D4","D5"].forEach(function(d){ds[d]={t:0,c:0};});Q.forEach(function(q,i){ds[q.domain_code].t++;if(ans[i]===q.correct_answer)ds[q.domain_code].c++;});
+var bd=document.getElementById("edom-bd");bd.innerHTML="";["D1","D2","D3","D4","D5"].forEach(function(d){var s=ds[d],dp=s.t>0?Math.round(s.c/s.t*100):0,cls=dp>=80?"ebgood":dp>=60?"ebmid":"eblow";bd.innerHTML+='<div class="edom-row"><span class="edom-name">'+d+" \\u2014 "+DOMS[d]+'</span><div class="edom-bar-w"><div class="edom-bar '+cls+'" style="width:'+dp+'%"></div></div><span class="edom-sc">'+s.c+"/"+s.t+" ("+dp+"%)</span></div>";});
+var g=document.getElementById("eres-grid");g.innerHTML="";for(var i=0;i<60;i++){var c=document.createElement("div");c.className="egrid-cell";c.textContent=i+1;c.classList.add(ans[i]===Q[i].correct_answer?"eok":"eko");c.onclick=(function(idx){return function(){showDetail(idx);};})(i);c.setAttribute("tabindex","0");g.appendChild(c);}
+document.getElementById("edetail").style.display="none";scr("exam-results");}
+function showDetail(i){var q=Q[i],p=document.getElementById("edetail");var h='<div class="eq-header"><span class="eq-num">Question '+(i+1)+'</span><span class="eq-badge">'+q.domain_code+"</span></div>";h+='<div class="eq-text">'+esc(q.question)+"</div>";h+='<ul class="eq-choices" style="pointer-events:none">';["A","B","C","D"].forEach(function(L){var cls="eq-choice";if(L===q.correct_answer)cls+=" ecorrect";else if(L===ans[i]&&L!==q.correct_answer)cls+=" ewrong";h+='<li class="'+cls+'"><span class="eq-letter">'+L+")</span> "+esc(q.choices[L])+"</li>";});h+="</ul>";if(ans[i]&&ans[i]!==q.correct_answer)h+='<p style="color:var(--red);font-size:0.8rem;margin-bottom:0.5rem">Your answer: '+ans[i]+"</p>";h+='<div class="eq-expl">'+fmt(q.explanation)+'<span class="eq-labref">Source: '+esc(q.lab_reference)+"</span></div>";p.innerHTML=h;p.style.display="block";p.scrollIntoView({behavior:"smooth"});}
+function restart(){if(tInt)clearInterval(tInt);pausedRemaining=null;scr("exam-welcome");}
+document.addEventListener("keydown",function(e){if(!isVisible())return;var qs=document.getElementById("exam-question");if(qs&&qs.classList.contains("exam-active")&&!submitted){var k=e.key.toUpperCase();if(["A","B","C","D"].indexOf(k)>=0){selAns(k);e.preventDefault();}if(e.key==="ArrowRight"||e.key==="ArrowDown"){next();e.preventDefault();}if(e.key==="ArrowLeft"||e.key==="ArrowUp"){prev();e.preventDefault();}if(k==="F"&&!e.ctrlKey&&!e.metaKey){flagQ();e.preventDefault();}}});
+window._exam={setMode:setMode,start:start,prev:prev,next:next,flag:flagQ,goQ:goQ,showReview:showReview,confirmSubmit:confirmSubmit,restart:restart,get cur(){return cur;}};
+})();
+</script>
+`;
 
 // Build the full HTML page
 const html = `<!DOCTYPE html>
