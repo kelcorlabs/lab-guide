@@ -1,6 +1,6 @@
 # Claude Certified Architect – Foundations: Hands-On Lab Guide
 
-A complete hands-on study guide for the **Claude Certified Architect – Foundations** certification exam. Covers all 30 task statements across 5 domains with 31 interactive labs, 28 runnable Python scripts, and a 78-question practice exam.
+A complete hands-on study guide for the **Claude Certified Architect – Foundations** certification exam. Covers all 30 task statements across 5 domains with 31 interactive labs, runnable Python scripts, and a 60-question practice exam.
 
 ## Quick Start
 
@@ -22,9 +22,9 @@ npm run build
 | 4. Prompt Engineering & Structured Output | Domain 4 | 4.1–4.6 | 20% |
 | 5. Context Management & Reliability | Domain 5 | 5.1–5.6 | 15% |
 | Final Scenario | All | 1 lab | — |
-| Practice Exam | All | 78 questions | — |
+| Practice Exam | All | 60 questions | — |
 
-**Total:** 31 labs + 78-question practice exam (~10 hours of study)
+**Total:** 31 labs + 60-question practice exam (~10 hours of study)
 
 ## Prerequisites
 
@@ -52,17 +52,17 @@ npm run test:html      # Validate HTML structure and accessibility basics
 
 ## How Each Lab Works
 
-Every lab follows the same 9-section structure:
+Every lab follows a locked 9-section template:
 
-1. **Learning objectives** — what you'll be able to do
-2. **Recall** — warm-up from prior labs
-3. **Overview** — the problem and why it matters
-4. **Try it** — hands-on Claude Code prompt
-5. **Reference code** — runnable Python script (no API key needed)
-6. **Run it** — instructions to execute the script
-7. **Check your understanding** — comprehension exercises
-8. **Exam tips** — how this appears on the exam
-9. **Key takeaways** — essential patterns to remember
+1. **Scenario** — realistic problem framing
+2. **What you'll learn** — 3-5 bullets mapped to exam task statements
+3. **Concepts** — minimum prose explanation of the pattern
+4. **Walkthrough** — numbered steps with copy-paste code and expected output
+5. **Try it yourself** (or Break it / Debug it for config labs) — extension exercise
+6. **Check your understanding** — 3 MCQs (A/B/C/D) with explanations
+7. **Key takeaways** — 3-5 bullets of essential patterns
+8. **Exam tips** — distractor patterns and wrong-answer traps
+9. **Next:** — bridge to the next lab
 
 ## Repository Structure
 

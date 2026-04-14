@@ -7,7 +7,7 @@ npm test         # Runs all validation (Python scripts, answers, links, HTML)
 ```
 
 ## Architecture
-- **Source of truth:** `Hands on Lab` (markdown, ~11K lines) — all content edits go here
+- **Source of truth:** `Hands on Lab` (markdown, ~10.5K lines) — all content edits go here
 - **Build script:** `build.js` converts markdown → self-contained HTML with embedded CSS/JS
 - **Build outputs:** `lab-guide.html` and `index.html` are generated — never edit directly
 - **Test suite:** `tests/` directory — pure Node.js, no external test frameworks
@@ -23,5 +23,5 @@ npm test         # Runs all validation (Python scripts, answers, links, HTML)
 ## Content structure
 - Modules 1-5 → Labs covering all 30 OG Exam Guide task statements
 - Final Scenario → Integrated capstone lab
-- Self-Test (12 questions) + Scenarios (6 questions) + Full Practice Exam (60 questions) = 78 total
+- Practice Exam (60 questions) — full assessment section
 - QA reports in `docs/qa-reports/`

@@ -39,7 +39,7 @@ npm test               # Run all validation
 
 The test suite checks:
 - All Python reference scripts execute without errors
-- Practice exam answer count is correct (78 total)
+- Practice exam answer count is correct (60 total)
 - Answer distribution is balanced
 - No broken internal links in HTML output
 - HTML structure passes basic quality checks
