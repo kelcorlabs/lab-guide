@@ -8509,300 +8509,349 @@ CI runs `claude -p "Review this code" --output-format json` without `--allowedTo
 
 # LAB 4.1: EXPLICIT CRITERIA TO REDUCE FALSE POSITIVES
 # Domain 4 — Task Statement 4.1
-# Concept: Specific criteria > vague instructions, false positive impact
+# Concept: Specific criteria > vague instructions, false positive impact, trust restoration
 # Time: ~20 minutes | Difficulty: Intermediate
+# Prerequisites: Lab 3.6
 
-## Learning objectives
+## Scenario
 
-- Write specific review criteria that define which issues to report (bugs, security) versus skip (minor style, local patterns) rather than relying on confidence-based filtering
-- Identify when to temporarily disable high false-positive categories to restore developer trust while improving prompts for those categories
-- Define explicit severity criteria with concrete code examples for each severity level to achieve consistent classification
+Your code review agent flags 47 issues on a PR. Developers start reading them -- then discover 30 are false positives: TODO comments flagged as "incomplete code," accurate docstrings flagged as "misleading," and idiomatic Python patterns flagged as "code smells." They stop reading after the fifth false positive. The 17 real bugs -- including a SQL injection -- go unnoticed because developers now ignore ALL findings.
 
-## Recall
-1. What flag makes Claude Code run non-interactively in CI? (Lab 3.6)
-2. Why do independent review instances beat self-review? (Lab 3.6)
+The prompt says "review this code and be conservative." But "conservative" means different things each run. You need explicit categorical criteria that define exactly what to report and what to skip.
 
-## Overview
+## What you'll learn
 
-You tell Claude "review this code and be conservative." It flags 47 issues -- 30 are false positives. Developers ignore ALL findings, including the 17 real bugs.
+- Writing specific review criteria that define which issues to report (bugs, security) vs skip (style, TODOs)
+- Why vague instructions ("be conservative") produce inconsistent results across runs
+- The false positive trust spiral: high FP in one category undermines trust in ALL categories
+- The two-phase trust restoration strategy: disable high-FP category, fix offline, re-enable
+- Building a criteria validator that scores prompts against a false-positive checklist
 
-**The problem:** "be conservative" means different things each run.
+## Concepts
 
-**The fix:** explicit categorical criteria ("flag SQL injection and hardcoded secrets; skip style issues and naming conventions").
+**Explicit criteria** define exactly what to report and what to skip. "Flag SQL injection and hardcoded credentials. Skip TODO comments, style preferences, and comments that are slightly imprecise but not contradicting actual behavior." This is deterministic -- the model checks specific conditions, not vibes.
 
-**Exam connection (Sample Q3):** Explicit escalation criteria + few-shot examples is the correct
-first step for improving calibration — not sentiment analysis, not confidence scores.
+**The trust spiral:** When one review category has a 60% false positive rate, developers stop reading ALL findings -- including accurate ones from other categories. The fix is not "improve confidence filtering" (the model is confidently wrong). The fix is **disable the high-FP category immediately** to restore trust, then fix its criteria offline and re-enable.
 
+**Negative examples** ("what NOT to flag") are as important as positive examples. Without them, the model over-reports -- every TODO comment, every imprecise-but-harmless docstring. Lab 2.1 taught that tool descriptions need "Do NOT use for" boundaries. Explicit criteria need the same "Do NOT flag" boundaries.
 
-"Be conservative" doesn't reduce false positives. Specific categorical criteria does.
-High false positive rates undermine trust in accurate categories.
+## Walkthrough
 
-## Try it
+### Step 1: Define the test code samples
 
-Try this in Claude Code:
-
-```
-> Here are 4 code snippets. Review them for issues using TWO different approaches:
-> First, use a VAGUE instruction: "Review this code and be conservative — only flag high-confidence issues."
-> Second, use SPECIFIC criteria: "Flag ONLY SQL injection and hardcoded credentials. DO NOT flag style issues, TODO comments, or comments that are slightly imprecise but not contradicting actual behavior."
->
-> Snippet 1: def get_user(id): return db.query(f"SELECT * FROM users WHERE id = {id}")
-> Snippet 2: # TODO: refactor this later
->            def process(x): result = x * 2; return result
-> Snippet 3: def get_order(order_id: str) -> dict:
->                '''Retrieves order from local cache.'''
->                return cache.get(order_id)
-> Snippet 4: def verify_signature(data, sig):
->                # Checks that signature is valid
->                return hmac.compare_digest(expected_sig(data), sig)
->
-> Compare the results. Which approach produces fewer false positives?
-```
-
-Watch how the vague prompt flags safe code (TODO comments, accurate docstrings) as issues, while the specific criteria correctly identifies only the SQL injection in Snippet 1.
-
-
-## Reference code
-
-First, we'll create code samples that are a mix of real issues and false-positive-prone patterns.
-The key: only 2 of 4 samples have real issues. A good prompt should flag those 2 and skip the rest.
+Create `~/claude-architect-labs/lab-d4-prompt-engineering/criteria_validator.py`. Start with 4 code samples -- only 1 has a real issue:
 
 ```python
 import json
 
-# In production, replace with client.messages.create()
 
-# Test code samples — mix of real issues and false-positive-prone patterns
+# ============================================================
+# PART 1: CODE SAMPLES (1 real issue, 3 false-positive-prone)
+# ============================================================
+
 CODE_SAMPLES = [
     {
         "id": "sample1",
-        "code": """
-def get_user(id):
-    # Returns user by ID
-    return db.query(f"SELECT * FROM users WHERE id = {id}")
-""",
+        "code": 'def get_user(id):\n'
+                '    return db.query(f"SELECT * FROM users '
+                'WHERE id = {id}")',
         "real_issue": True,
-        "issue_type": "SQL injection"
+        "issue_type": "SQL injection",
     },
     {
         "id": "sample2",
-        "code": """
-# TODO: refactor this later
-def process(x):
-    result = x * 2  # multiply by 2
-    return result
-""",
+        "code": '# TODO: refactor this later\n'
+                'def process(x):\n'
+                '    result = x * 2  # multiply by 2\n'
+                '    return result',
         "real_issue": False,
-        "issue_type": "Style comment (not a bug)"
+        "issue_type": "Style/TODO (not a bug)",
     },
     {
         "id": "sample3",
-        "code": """
-def get_order(order_id: str) -> dict:
-    '''Retrieves order from local cache.'''
-    return cache.get(order_id)
-""",
+        "code": "def get_order(order_id: str) -> dict:\n"
+                "    '''Retrieves order from local cache.'''\n"
+                "    return cache.get(order_id)",
         "real_issue": False,
-        "issue_type": "Accurate docstring (matches behavior)"
+        "issue_type": "Accurate docstring",
     },
     {
         "id": "sample4",
-        "code": """
-def verify_signature(data, sig):
-    # Checks that signature is valid
-    return hmac.compare_digest(expected_sig(data), sig)
-""",
+        "code": "def verify_signature(data, sig):\n"
+                "    # Checks that signature is valid\n"
+                "    return hmac.compare_digest("
+                "expected_sig(data), sig)",
         "real_issue": False,
-        "issue_type": "Comment is accurate"
+        "issue_type": "Accurate comment",
     },
 ]
 ```
 
-## Reference code
-
-Now the experiment: we'll test the SAME code samples with two different prompts.
-The vague prompt says "be conservative." The specific prompt defines EXACTLY what to report.
+### Step 2: Define vague vs explicit criteria prompts
 
 ```python
-# -- VAGUE REVIEW PROMPT (produces false positives) --------
-vague_system = """You are a code reviewer.
-Review the code and flag any issues you find.
-Be conservative — only report high-confidence findings."""
+# ============================================================
+# PART 2: VAGUE VS EXPLICIT CRITERIA
+# ============================================================
 
-# -- SPECIFIC CRITERIA PROMPT (precise) --------------------
-specific_system = """You are a code reviewer.
+VAGUE_CRITERIA = (
+    "Review the code and flag any issues. "
+    "Be conservative -- only report high-confidence findings."
+)
 
-REPORT these issue types:
-- Bugs: code that will throw exceptions or produce wrong results
-- Security: SQL injection, hardcoded credentials, missing auth checks
-- API misuse: wrong parameters, deprecated methods
+EXPLICIT_CRITERIA = (
+    "REPORT these issue types:\n"
+    "- Bugs: code that will throw exceptions or produce "
+    "wrong results\n"
+    "- Security: SQL injection, hardcoded credentials, "
+    "missing auth\n"
+    "\n"
+    "DO NOT REPORT these:\n"
+    "- TODO comments\n"
+    "- Style preferences (naming, formatting)\n"
+    "- Comments that are slightly imprecise but not "
+    "contradicting actual behavior\n"
+    "\n"
+    "For comments: ONLY flag when the comment claims "
+    "behavior that CONTRADICTS what the code actually does."
+)
 
-DO NOT REPORT these:
-- Comments that are slightly imprecise but not misleading
-- Style preferences (variable naming, formatting)
-- TODO comments
-- Code patterns that work correctly even if non-idiomatic
-
-For comments: ONLY flag when the comment claims behavior that CONTRADICTS
-what the code actually does. An incomplete comment is NOT a flag.
-
-Return JSON: [{"issue": "...", "severity": "high/medium/low", "category": "bug/security/api_misuse"}]
-If no issues found, return: []"""
-
-# -- SIMULATED RESPONSES ----------------------------------
-# In production, replace with client.messages.create()
-
-SIMULATED_VAGUE_RESPONSES = {
-    "sample1": [{"issue": "SQL injection via f-string", "severity": "high", "category": "security"}],
-    "sample2": [{"issue": "TODO comment indicates incomplete code", "severity": "low", "category": "style"},
-                {"issue": "Comment 'multiply by 2' is trivial", "severity": "low", "category": "style"}],
-    "sample3": [{"issue": "Docstring says 'local cache' but function uses cache.get() which may be remote",
-                 "severity": "low", "category": "documentation"}],
-    "sample4": [{"issue": "Comment could be more specific about what 'valid' means",
-                 "severity": "low", "category": "documentation"}],
+# Simulated responses
+VAGUE_RESPONSES = {
+    "sample1": [{"issue": "SQL injection via f-string",
+                 "severity": "high"}],
+    "sample2": [{"issue": "TODO indicates incomplete code",
+                 "severity": "low"},
+                {"issue": "Trivial comment",
+                 "severity": "low"}],
+    "sample3": [{"issue": "Docstring says 'local cache' "
+                 "but may be remote",
+                 "severity": "low"}],
+    "sample4": [{"issue": "Comment could be more specific",
+                 "severity": "low"}],
 }
 
-SIMULATED_SPECIFIC_RESPONSES = {
-    "sample1": [{"issue": "SQL injection: user input interpolated into query via f-string",
-                 "severity": "high", "category": "security"}],
-    "sample2": [],  # Correctly skipped — TODO comment, style only
-    "sample3": [],  # Correctly skipped — docstring is accurate
-    "sample4": [],  # Correctly skipped — comment is accurate
+EXPLICIT_RESPONSES = {
+    "sample1": [{"issue": "SQL injection: user input in "
+                 "f-string query", "severity": "high"}],
+    "sample2": [],
+    "sample3": [],
+    "sample4": [],
 }
-
-def review_code(system_prompt, code_sample):
-    # In production, replace with client.messages.create()
-    sample_id = code_sample["id"]
-    if system_prompt == vague_system:
-        return SIMULATED_VAGUE_RESPONSES.get(sample_id, [])
-    else:
-        return SIMULATED_SPECIFIC_RESPONSES.get(sample_id, [])
 ```
 
-## Reference code
-
-This is where you see the difference. The vague prompt will flag accurate comments as issues.
-The specific prompt will correctly skip them and only flag the real bugs.
+### Step 3: Add the category control pattern
 
 ```python
-if __name__ == "__main__":
-    print("=== False Positive Comparison ===\n")
+# ============================================================
+# PART 3: CATEGORY DISABLE/ENABLE (TRUST RESTORATION)
+# ============================================================
 
+def build_criteria(enabled, disabled):
+    """Build review criteria with category control."""
+    criteria = "REPORT these issue types:\n"
+    for cat in enabled:
+        criteria += (f"- {cat.replace('_', ' ').title()}: "
+                     f"flag when found\n")
+    if disabled:
+        criteria += ("\nDO NOT REPORT (temporarily disabled "
+                     "for improvement):\n")
+        for cat in disabled:
+            criteria += (f"- {cat.replace('_', ' ').title()}: "
+                         f"SKIP\n")
+    return criteria
+```
+
+### Step 4: Add the criteria scoring function
+
+```python
+# ============================================================
+# PART 4: CRITERIA VALIDATOR (scores a prompt)
+# ============================================================
+
+CRITERIA_CHECKLIST = {
+    "specific_categories": "Defines specific issue categories",
+    "negative_examples": "Specifies what NOT to flag",
+    "comment_rule": "Has a rule for when comments are wrong",
+    "format_spec": "Defines output format (JSON, fields)",
+    "severity_levels": "Defines severity criteria",
+}
+
+
+def score_criteria(prompt_text):
+    """Score a review prompt against the FP checklist."""
+    p = prompt_text.lower()
+    scores = {}
+
+    scores["specific_categories"] = (
+        1 if any(w in p for w in
+                 ["sql injection", "hardcoded", "security",
+                  "bug", "exception"]) else 0
+    )
+    scores["negative_examples"] = (
+        1 if any(w in p for w in
+                 ["do not report", "do not flag", "skip",
+                  "not a bug"]) else 0
+    )
+    scores["comment_rule"] = (
+        1 if "contradict" in p or "contradicts" in p else 0
+    )
+    scores["format_spec"] = (
+        1 if "json" in p or "return" in p else 0
+    )
+    scores["severity_levels"] = (
+        1 if "high" in p and ("low" in p or "medium" in p)
+        else 0
+    )
+
+    return scores
+```
+
+### Step 5: Add the demo runner
+
+```python
+# ============================================================
+# DEMO
+# ============================================================
+
+def run_demo():
+    sep = "=" * 60
+    print(sep)
+    print("EXPLICIT CRITERIA VS VAGUE INSTRUCTIONS")
+    print(sep)
+
+    # Compare vague vs explicit
+    vague_fp = 0
+    explicit_fp = 0
     for sample in CODE_SAMPLES:
-        print(f"Sample {sample['id']} (real issue: {sample['real_issue']}, type: {sample['issue_type']})")
-        print(f"Code: {sample['code'].strip()[:80]}...")
+        sid = sample["id"]
+        v_findings = VAGUE_RESPONSES.get(sid, [])
+        e_findings = EXPLICIT_RESPONSES.get(sid, [])
 
-        vague_result   = review_code(vague_system, sample)
-        specific_result = review_code(specific_system, sample)
+        is_real = sample["real_issue"]
+        v_fp = len(v_findings) if not is_real else 0
+        e_fp = len(e_findings) if not is_real else 0
+        vague_fp += v_fp
+        explicit_fp += e_fp
 
-        print(f"  VAGUE criteria:    {vague_result}")
-        print(f"  SPECIFIC criteria: {specific_result}")
-        print()
+        marker = "BUG" if is_real else "SAFE"
+        print(f"\n  [{marker}] {sample['issue_type']}")
+        print(f"    Vague:    {len(v_findings)} finding(s)"
+              f"{'  <- FALSE POSITIVE' if v_fp else ''}")
+        print(f"    Explicit: {len(e_findings)} finding(s)")
 
-    print("\n=== Key Insights ===")
-    print("""
-    1. "Be conservative" doesn't help — it's still vague.
-       The model doesn't know WHAT to be conservative about.
+    print(f"\n{'-' * 60}")
+    print(f"  FALSE POSITIVES: Vague={vague_fp}, "
+          f"Explicit={explicit_fp}")
+    print(f"{'-' * 60}")
 
-    2. Specific categories fix it:
-       "Flag comments ONLY when claimed behavior CONTRADICTS actual code"
-       Not: "flag when comments might be inaccurate"
+    # Score both prompts
+    print(f"\n{sep}")
+    print("CRITERIA QUALITY SCORES")
+    print(sep)
 
-    3. False positive categories hurt trust:
-       If style issues are flagged alongside real bugs,
-       developers start ignoring ALL findings — including real bugs.
+    for label, prompt in [("Vague", VAGUE_CRITERIA),
+                          ("Explicit", EXPLICIT_CRITERIA)]:
+        scores = score_criteria(prompt)
+        total = sum(scores.values())
+        print(f"\n  {label} prompt: {total}/"
+              f"{len(scores)}")
+        for key, val in scores.items():
+            marker = "[OK]" if val else "[  ]"
+            print(f"    {marker} {key}")
 
-    4. Fix high-FP categories by:
-       a. Temporarily DISABLE the category (restore trust)
-       b. Improve the criterion with specific examples
-       c. Re-enable with better criteria
-    """)
+    # Category control demo
+    print(f"\n{sep}")
+    print("TRUST RESTORATION: CATEGORY CONTROL")
+    print(sep)
 
-    # === Category disable/enable pattern ===
-    print("=== Temporarily Disabling High-FP Categories ===\n")
+    enabled = ["security_vulnerability", "logic_bug"]
+    disabled = ["comment_accuracy", "naming_convention"]
+    criteria = build_criteria(enabled, disabled)
+    print(f"\n{criteria}")
+    print("  Phase 1: Disable high-FP categories -> "
+          "trust rebuilds")
+    print("  Phase 2: Fix criteria offline -> re-enable")
 
-    # Track which categories produce too many false positives
-    DISABLED_CATEGORIES = ["comment_accuracy", "naming_convention"]  # high FP in production
-    ENABLED_CATEGORIES = ["security_vulnerability", "logic_bug", "error_handling"]
 
-    def build_criteria_with_category_control(disabled: list, enabled: list) -> str:
-        """Build review criteria that only include enabled categories."""
-        criteria = "REPORT these issue types:\n"
-        for cat in enabled:
-            criteria += f"- {cat.replace('_', ' ').title()}: flag when found\n"
-
-        if disabled:
-            criteria += "\nDO NOT REPORT these types (temporarily disabled for improvement):\n"
-            for cat in disabled:
-                criteria += f"- {cat.replace('_', ' ').title()}: SKIP — do not flag\n"
-
-        return criteria
-
-    criteria = build_criteria_with_category_control(DISABLED_CATEGORIES, ENABLED_CATEGORIES)
-    print(criteria)
-    print("Why this works:")
-    print("  1. Developers stop seeing false positives -> trust rebuilds")
-    print("  2. You improve the disabled category criteria offline")
-    print("  3. Re-enable with better criteria -> precision is higher")
-    print("  4. Trust is restored instead of eroded by noise")
+if __name__ == "__main__":
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
 
+```bash
+cd ~/claude-architect-labs
+mkdir -p lab-d4-prompt-engineering
+python lab-d4-prompt-engineering/criteria_validator.py
 ```
-python lab-d4-prompt-eng/explicit_criteria.py
-```
 
-**What you should see:**
-- Sample 1 (SQL injection): Both prompts flag it — it's a real bug
-- Sample 2 (style comment): VAGUE flags it as inaccurate → **false positive**. SPECIFIC correctly skips it
-- Sample 3 (accurate docstring): VAGUE may flag it → **false positive**. SPECIFIC correctly skips it
-- Sample 4 (accurate comment): Same pattern — SPECIFIC is more precise
+You should see:
+- 4 code samples compared with vague vs explicit criteria
+- Vague produces 4 false positives across safe samples; explicit produces 0
+- Criteria quality scores: vague scores 0-1/5, explicit scores 4-5/5
+- Trust restoration pattern showing category disable/enable
 
-The key insight: "be conservative" is vague. "Flag ONLY when comment contradicts actual code behavior" is specific.
+## Try it yourself
+
+Take a different detection task: finding potential SQL injection risks across a codebase.
+
+1. Write explicit criteria with at least 3 exceptions (parameterized queries are safe, ORM queries are safe, test files with hardcoded SQL are safe).
+2. Create 4 code samples (2 with real SQL injection, 2 with safe patterns that look similar).
+3. Run `score_criteria()` on your prompt and confirm it scores 4/5 or better.
+4. Verify your criteria correctly flag the 2 real issues and skip the 2 safe patterns.
 
 ## Check your understanding
 
-1. **What happens if you replace specific criteria with "be conservative"?** Run the same code 5 times. Is the output consistent? (Answer: no — "conservative" means different things each run)
-2. **What happens if you keep a high-false-positive category active** (e.g., "comment accuracy") while it has a 60% FP rate? Do developers trust the other categories? (Answer: no — high FP in one category undermines trust in ALL categories)
-3. **Why doesn't confidence-based filtering** ("only report high-confidence findings") work as a replacement for explicit criteria? (Answer: the model is often confidently wrong — confidence alone doesn't reduce false positives)
+**Q1.** Your code review agent produces accurate security findings but also flags 60% false positives in the "comment accuracy" category. Developers have started ignoring ALL review findings. What is the best immediate action?
 
-### Interim Trust Restoration Strategy
+**A.** Add confidence scores and filter out low-confidence findings
+**B.** Add more few-shot examples for the comment accuracy category
+**C.** Disable the "comment accuracy" category entirely, then improve its criteria separately before re-enabling
+**D.** Switch to a more capable model for better accuracy
 
-**Exam-tested pattern:** What do you do when one review category has an 80% false positive rate?
+**Correct: C.** Disabling the high-FP category immediately restores trust in the remaining accurate categories. Developers start reading findings again. Then iterate on the criteria offline. **Why not A:** Confidence scores are unreliable when the model is confidently wrong -- high-confidence false positives still pass the filter. **Why not B:** Few-shot examples may gradually improve the category but don't address the immediate trust crisis. **Why not D:** A different model doesn't fix vague criteria -- the same prompt produces the same types of false positives.
 
-The trap: you might think "add confidence scores" or "improve the prompt for that category." But here's the problem -- while category X is producing false positives, **developers stop reading ALL findings**, including accurate ones from other categories.
+---
 
-**The correct fix (two-phase):**
+**Q2.** You replace "be conservative -- only report high-confidence issues" with explicit criteria listing specific issue categories and exclusions. What changes?
 
-1. **Phase 1 -- Disable the high-FP category entirely.** Developers immediately see that remaining findings are trustworthy. Trust is restored. They start reading and acting on feedback again.
+**A.** Nothing -- both approaches produce the same results
+**B.** The explicit criteria produce consistent results across runs because the model checks specific conditions instead of interpreting a vague instruction differently each time
+**C.** The explicit criteria produce more false positives because they're more detailed
+**D.** The vague instruction is better because it lets the model use judgment
 
-2. **Phase 2 -- Fix category X's criteria separately.** Test on a sample set. When FP rate drops below your threshold, re-enable it.
+**Correct: B.** Explicit criteria define exactly what to check and what to skip. "Flag SQL injection" is unambiguous. "Be conservative" is interpreted differently each run. **Why not A:** Vague and explicit approaches produce very different results -- vague is inconsistent, explicit is consistent. **Why not C:** Explicit criteria with "DO NOT REPORT" boundaries reduce false positives by filtering safe patterns. **Why not D:** Unguided model judgment is exactly what produces the inconsistent results.
 
-**Why this beats other approaches:**
-- **Confidence scores** don't help -- the model is often confidently wrong
-- **"Improve the prompt"** takes time -- meanwhile developers are ignoring everything
-- **Disabling** is fast and immediately restores trust in the remaining categories
+---
 
-**Code Analysis:** Why is disabling a high-FP category better than adding confidence scores? The model's confidence doesn't correlate with accuracy for false positives -- it's often confident about wrong findings.
+**Q3.** Your review criteria say "flag all security issues." The agent flags `logging.info(user_email)` as "data exposure." In test files, this is intentional. In production code, it depends on whether the log is externally accessible. What should you add to the criteria?
 
-**Disabling** is a deterministic fix; confidence filtering is probabilistic.
+**A.** Remove "security issues" from the criteria entirely
+**B.** Add context-aware exceptions: "Skip logging in test files. For production, flag only if the log is externally accessible or contains PII."
+**C.** Add "be more careful about logging" to the instructions
+**D.** Add confidence scores to filter uncertain findings
 
-## Exam tips
-
-- **If the exam says** "developers ignore all review findings" → high-FP category undermining trust
-- **Wrong answer trap:** "Add confidence scores" — model is confidently wrong on false positives
-- **Wrong answer trap:** "Add sentiment analysis" — sentiment doesn't correlate with finding accuracy
-- **The correct pattern:** Disable high-FP category → restore trust → fix criteria → re-enable
+**Correct: B.** Context-aware exceptions distinguish between safe patterns (test files, internal logs) and real risks (externally accessible logs with PII). **Why not A:** Removing security checks entirely misses real vulnerabilities. **Why not C:** "Be more careful" is the same vague instruction problem. **Why not D:** Confidence scores don't fix missing context -- the model doesn't know about file-type exceptions unless you specify them.
 
 ## Key takeaways
 
-- Vague instructions ("be conservative") don't reduce false positives
-- Specific categorical criteria: define WHAT to report vs skip
-- "Flag comments only when claimed behavior contradicts actual code"
-- High FP categories undermine trust in all categories → disable to restore trust
-- Interim strategy: disable high-FP category → restore trust → fix prompts → re-enable
-- Explicit severity criteria with code examples → consistent classification
+- Vague instructions ("be conservative") produce inconsistent results across runs
+- Explicit criteria define WHAT to report and WHAT to skip -- deterministic, not vibes
+- Negative examples ("DO NOT flag TODO comments") are as important as positive criteria
+- High FP in one category undermines trust in ALL categories -- developers stop reading
+- Trust restoration: disable high-FP category immediately, fix criteria offline, re-enable
+- Score criteria against a checklist before deploying to catch missing boundaries
+
+## Exam tips
+
+- **"Developers ignore all review findings"** --> high-FP category undermining trust -> disable it
+- **"Review output is inconsistent"** --> replace vague instructions with explicit criteria
+- **Wrong answer trap:** "Add confidence scores" -- model is confidently wrong on false positives
+- **Wrong answer trap:** "Add sentiment analysis" -- sentiment doesn't correlate with finding accuracy
+- **The core pattern:** explicit criteria + negative examples + category control = low FP rate
+
+**Next:** Lab 4.2 covers few-shot prompting -- how 2-4 targeted examples fix format consistency and ambiguous case handling where explicit criteria alone aren't enough.
 
 ---
 
@@ -8810,186 +8859,565 @@ The trap: you might think "add confidence scores" or "improve the prompt for tha
 # Domain 4 — Task Statement 4.2
 # Concept: Examples for consistency, ambiguous case handling
 # Time: ~20 minutes | Difficulty: Intermediate
-# Prerequisites: Lab 4.1
+# Prerequisites: Lab 4.1, Lab 3.5
 
-## Learning objectives
+## Scenario
 
-- Design 2-4 targeted few-shot examples for ambiguous scenarios that show reasoning for why one action was chosen over plausible alternatives
-- Implement few-shot examples that demonstrate specific desired output format (location, issue, severity, suggested fix) to achieve consistency
-- Write few-shot examples distinguishing acceptable code patterns from genuine issues to reduce false positives while enabling generalization
-- Apply few-shot examples to demonstrate correct handling of varied document structures (inline citations vs bibliographies, methodology sections vs embedded details)
+Your structured extraction pipeline pulls customer records from support tickets. Despite clear instructions ("return JSON with customer_id, name, issue, priority"), Claude returns inconsistent field names: sometimes `customer_id`, sometimes `customerId`, sometimes just `id`. Your downstream parser breaks because it expects exact keys.
 
-## Recall
-1. Why doesn't "be conservative" reduce false positives? (Lab 4.1)
-2. What is the interim trust restoration strategy for high-FP categories? (Lab 4.1)
+You have tried adding more detail to the prose instructions. It helps a little, but after 50 tickets the inconsistency rate is still 30%. You need a reliable fix.
 
-## Overview
+**The solution:** Add 2-3 few-shot examples showing the EXACT output format. Claude generalizes the pattern and produces consistent field names across novel inputs. This is the same principle from Lab 3.5 (showing the model what you want rather than describing it), applied specifically to extraction.
 
-**The problem:** You tell Claude "review this code for security issues." It returns findings in different formats every time -- sometimes JSON, sometimes bullets, sometimes prose. Your automation script breaks because it can't parse inconsistent output.
+## What you'll learn
 
-**Worse:** Claude flags `logging.info(user_email)` as a "data exposure" issue. Is it? Depends on context. Without guidance on ambiguous cases, Claude either over-flags (floods developers with false positives) or under-flags (misses real issues).
+- Why few-shot examples beat prose instructions for format consistency
+- How to select diverse examples that cover common and edge cases
+- How to include a negative/ambiguous example to prevent over-extraction
+- How to measure consistency across a batch of test inputs
 
-**The solution: few-shot examples.** Show Claude 2-4 examples of the EXACT output format you want, including at least one ambiguous case with the correct decision. Claude generalizes the pattern to new inputs without needing hundreds of examples.
+## Concepts
 
-**The key insight:** Few-shot fixes FORMAT consistency and AMBIGUOUS CASE handling. It does NOT fix the underlying problem if your criteria are vague -- that's Lab 4.1's job (explicit criteria).
+| Concept | Why it matters |
+|---|---|
+| **Few-shot > prose for format** | Prose instructions are interpreted differently each run. Examples are contracts -- they show the exact output shape. |
+| **Example selection (diverse)** | Pick examples that span your input variety: clean data, messy data, missing fields. 2-4 targeted examples outperform 10+ similar ones. |
+| **Ambiguous case handling** | Include at least one example where the correct answer is "no extraction" or "null." Without it, Claude over-extracts. |
+| **Examples as contracts** | Each example is a binding specification. The model generalizes the PATTERN, not just the content. |
+| **Callback: Lab 3.5** | Lab 3.5 introduced showing vs telling. Few-shot is the formal technique for that principle. |
 
-**Exam connection (Sample Q3):** Explicit criteria + few-shot examples = the correct first step
-for improving escalation calibration.
+## Walkthrough
 
-## Try it
-
-Try this in Claude Code:
-
-```
-> Review this code for security issues. Return findings in JSON format with
-> fields: file, line, severity, issue, suggestion.
->
-> def login(user, pw): return db.query(f"SELECT * FROM users WHERE user='{user}'")
-> x = value or 0  # default to zero
-> def get_count(): return len(items)  # Returns number of active users
-```
-
-Run it twice. Notice the output format changes each time? Now try again with few-shot examples prepended:
-
-```
-> Review code using this EXACT format. Here are examples:
-> Example 1 input: def get_user(id): return db.execute(f"SELECT * FROM users WHERE id={id}")
-> Example 1 output: {"file": "api.py", "line": 1, "severity": "high", "issue": "SQL injection", "suggestion": "Use parameterized query"}
-> Example 2 input: result = value or default_value  # use default if None
-> Example 2 output: []  (No issues — valid Python pattern, accurate comment)
->
-> Now review: def login(user, pw): return db.query(f"SELECT * FROM users WHERE user='{user}'")
-```
-
-Compare the consistency. The few-shot version produces structured, predictable output every time.
-
-## Reference code
+### Step 1: See the problem -- prose-only returns inconsistent formats
 
 ```python
+# few_shot_builder.py  -- Step 1
+# Prose-only extraction produces inconsistent field names
+
 import json
 
-# In production, replace with client.messages.create()
-
-# -- WITHOUT FEW-SHOT (inconsistent output format) ---------
-no_shot_system = """You are a code review assistant.
-Review code and report findings with location, issue, severity, and suggested fix."""
-
-# -- WITH FEW-SHOT (consistent, actionable format) ----------
-few_shot_system = """You are a code review assistant.
-
-Here are examples of the EXACT output format required:
-
-Example 1:
-Code: `def get_user(id): return db.execute(f"SELECT * FROM users WHERE id={id}")`
-Output: {"file": "api.py", "line": 1, "severity": "high",
-         "issue": "SQL injection: user input interpolated directly into query",
-         "suggestion": "Use parameterized query: db.execute('SELECT * FROM users WHERE id=?', (id,))"}
-
-Example 2:
-Code: `# Returns user by ID\ndef get_user(id): return cache[id]`
-Output: {"file": "api.py", "line": 1, "severity": "low",
-         "issue": "Comment mentions 'user' but function returns cache entry (may be stale)",
-         "suggestion": "Update comment: '# Returns user from cache by ID'"}
-
-Example 3 (ambiguous — local pattern, not a real bug):
-Code: `result = value or default_value  # use default if None`
-Output: []  (No issues — this is a valid Python pattern, comment is accurate)
-
-Why Example 3 returns empty: The `or` pattern is idiomatic Python.
-The comment accurately describes the behavior. This is NOT a false positive.
-
-Now review the provided code using this exact format."""
-
-# -- SIMULATED RESPONSES ----------------------------------
-# In production, replace with client.messages.create()
-# Shows how NO FEW-SHOT produces inconsistent formats while FEW-SHOT is structured
-
-SIMULATED_NO_SHOT = {
-    "login": "Security Issue: The login function uses string formatting in the SQL query which is vulnerable to SQL injection attacks. The user parameter is directly interpolated. Severity: HIGH. Fix: use parameterized queries.",
-    "or_pattern": "Potential issue: Using 'or' for default values can have unexpected behavior with falsy values like 0 or empty string. Consider using 'if value is None' instead.",
-    "get_count": "- The comment says 'active users' but the function returns len(items) which could be any items\n- Missing type hints\n- No docstring",
+# Simulated: what Claude returns with prose instructions only
+PROSE_ONLY_RESPONSES = {
+    "ticket_clean": {
+        "customerId": "C-1001",
+        "name": "Alice Chen",
+        "issue": "billing overcharge",
+        "priority": "high"
+    },
+    "ticket_messy": {
+        "id": "C-1002",
+        "customer_name": "Bob Diaz",
+        "problem": "login failure",
+        "severity": "medium"
+    },
+    "ticket_empty": {
+        "customer_id": "UNKNOWN",
+        "name": "N/A",
+        "issue": "general inquiry",
+        "priority": "low"
+    },
+    "ticket_multi": {
+        "Customer_ID": "C-1004",
+        "Name": "Dana Kim",
+        "Issue": "two issues: refund AND shipping delay",
+        "Priority": "high"
+    },
+    "ticket_ambiguous": {
+        "cust_id": "C-1005",
+        "name": "Eve Park",
+        "issue": "wants to know store hours",
+        "priority": "medium"
+    }
 }
 
-SIMULATED_FEW_SHOT = {
-    "login": '{"file": "auth.py", "line": 1, "severity": "high", "issue": "SQL injection: user input interpolated directly into query via f-string", "suggestion": "Use parameterized query: db.query(\'SELECT * FROM users WHERE user=?\', (user,))"}',
-    "or_pattern": '[]  (No issues — valid Python pattern, comment is accurate)',
-    "get_count": '{"file": "utils.py", "line": 1, "severity": "low", "issue": "Comment says \'active users\' but function returns len(items) — items may not be users", "suggestion": "Update comment to match actual behavior: \'# Returns number of items\'"}',
+EXPECTED_KEYS = {"customer_id", "name", "issue", "priority"}
+
+def check_consistency(response: dict) -> list:
+    """Check if response keys match expected format exactly."""
+    errors = []
+    actual_keys = set(response.keys())
+    missing = EXPECTED_KEYS - actual_keys
+    extra = actual_keys - EXPECTED_KEYS
+    if missing:
+        errors.append(f"Missing keys: {missing}")
+    if extra:
+        errors.append(f"Unexpected keys: {extra}")
+    return errors
+
+print("=== Step 1: Prose-Only Extraction (Inconsistent) ===\n")
+for ticket_id, response in PROSE_ONLY_RESPONSES.items():
+    errors = check_consistency(response)
+    status = "PASS" if not errors else "FAIL"
+    print(f"  {ticket_id}: {status}")
+    if errors:
+        for e in errors:
+            print(f"    -> {e}")
+    print(f"    Keys returned: {list(response.keys())}")
+
+consistent_count = sum(
+    1 for r in PROSE_ONLY_RESPONSES.values()
+    if not check_consistency(r)
+)
+total = len(PROSE_ONLY_RESPONSES)
+print(f"\nConsistency: {consistent_count}/{total} "
+      f"({consistent_count/total*100:.0f}%)")
+```
+
+### Step 2: Add 1 example
+
+```python
+# few_shot_builder.py  -- Step 2
+# Adding a single example improves consistency, but not enough
+
+SINGLE_EXAMPLE = {
+    "input": "Ticket: Customer C-9999 reports they were charged twice for order #778.",
+    "output": {
+        "customer_id": "C-9999",
+        "name": None,
+        "issue": "double charge on order #778",
+        "priority": "high"
+    }
 }
 
-TEST_CASE_KEYS = ["login", "or_pattern", "get_count"]
+# Simulated: with 1 example, some tickets now use correct keys
+ONE_SHOT_RESPONSES = {
+    "ticket_clean": {
+        "customer_id": "C-1001",
+        "name": "Alice Chen",
+        "issue": "billing overcharge",
+        "priority": "high"
+    },
+    "ticket_messy": {
+        "customer_id": "C-1002",
+        "name": "Bob Diaz",
+        "issue": "login failure",
+        "priority": "medium"
+    },
+    "ticket_empty": {
+        "customer_id": "UNKNOWN",
+        "name": "N/A",           # Still not null -- only 1 example showed null
+        "issue": "general inquiry",
+        "priority": "low"
+    },
+    "ticket_multi": {
+        "customer_id": "C-1004",
+        "name": "Dana Kim",
+        "issue": "refund AND shipping delay",
+        "Priority": "high"       # Oops -- capitalized key
+    },
+    "ticket_ambiguous": {
+        "customer_id": "C-1005",
+        "name": "Eve Park",
+        "issue": "wants to know store hours",
+        "priority": "medium"
+    }
+}
 
-def review_code(system, code, label, key):
-    # In production, replace with client.messages.create()
-    print(f"\n[{label}]")
-    if system == no_shot_system:
-        print(SIMULATED_NO_SHOT[key])
-    else:
-        print(SIMULATED_FEW_SHOT[key])
+print("\n=== Step 2: One-Shot Extraction ===\n")
+consistent_count = 0
+for ticket_id, response in ONE_SHOT_RESPONSES.items():
+    errors = check_consistency(response)
+    status = "PASS" if not errors else "FAIL"
+    if not errors:
+        consistent_count += 1
+    print(f"  {ticket_id}: {status}")
+    if errors:
+        for e in errors:
+            print(f"    -> {e}")
+
+print(f"\nConsistency: {consistent_count}/{total} "
+      f"({consistent_count/total*100:.0f}%) -- up from 20%")
+```
+
+### Step 3: Add 3 diverse examples
+
+```python
+# few_shot_builder.py  -- Step 3
+# 3 diverse examples that cover clean, messy, and missing-data cases
+
+FEW_SHOT_EXAMPLES = [
+    {
+        "input": "Ticket: Customer C-9999 reports double charge on order #778.",
+        "output": {
+            "customer_id": "C-9999",
+            "name": None,
+            "issue": "double charge on order #778",
+            "priority": "high"
+        }
+    },
+    {
+        "input": "hi, my login broke after the update --Bob D, acct C-1002",
+        "output": {
+            "customer_id": "C-1002",
+            "name": "Bob D",
+            "issue": "login broken after update",
+            "priority": "medium"
+        }
+    },
+    {
+        "input": "Ticket from unknown caller. No details provided.",
+        "output": {
+            "customer_id": None,
+            "name": None,
+            "issue": "no details provided",
+            "priority": "low"
+        }
+    }
+]
+
+def build_few_shot_prompt(examples, task_input):
+    """Build a prompt with few-shot examples prepended."""
+    prompt_parts = [
+        "Extract customer ticket data. Return JSON with exactly these keys: "
+        "customer_id, name, issue, priority.\n"
+        "Use null for any field not present in the ticket.\n"
+    ]
+    for i, ex in enumerate(examples, 1):
+        prompt_parts.append(f"Example {i} input: {ex['input']}")
+        prompt_parts.append(f"Example {i} output: {json.dumps(ex['output'])}\n")
+
+    prompt_parts.append(f"Now extract from: {task_input}")
+    return "\n".join(prompt_parts)
+
+# Show the constructed prompt
+sample_prompt = build_few_shot_prompt(
+    FEW_SHOT_EXAMPLES,
+    "hi, my login broke after the update --Bob D, acct C-1002"
+)
+print("\n=== Step 3: Few-Shot Prompt (3 examples) ===\n")
+print(sample_prompt[:600])
+print("...\n")
+```
+
+### Step 4: Add a negative example
+
+```python
+# few_shot_builder.py  -- Step 4
+# A negative example teaches Claude when NOT to extract
+
+NEGATIVE_EXAMPLE = {
+    "input": "Can you tell me your store hours? Thanks, --Eve",
+    "output": {
+        "customer_id": None,
+        "name": "Eve",
+        "issue": None,
+        "priority": null
+    },
+    "reasoning": "This is a general inquiry, not a support issue. "
+                 "issue and priority are null because there is no "
+                 "actionable support problem."
+}
+
+# Add it to the example set
+ALL_EXAMPLES = FEW_SHOT_EXAMPLES + [
+    {
+        "input": NEGATIVE_EXAMPLE["input"],
+        "output": NEGATIVE_EXAMPLE["output"]
+    }
+]
+
+print("=== Step 4: Added Negative Example ===")
+print(f"Total examples: {len(ALL_EXAMPLES)}")
+print(f"Negative example teaches: non-issues return null for issue/priority")
+```
+
+### Step 5: Measure consistency across test cases
+
+```python
+# few_shot_builder.py  -- Step 5
+# With 3 diverse + 1 negative example, consistency is near 100%
+
+FEW_SHOT_RESPONSES = {
+    "ticket_clean": {
+        "customer_id": "C-1001",
+        "name": "Alice Chen",
+        "issue": "billing overcharge",
+        "priority": "high"
+    },
+    "ticket_messy": {
+        "customer_id": "C-1002",
+        "name": "Bob Diaz",
+        "issue": "login failure",
+        "priority": "medium"
+    },
+    "ticket_empty": {
+        "customer_id": None,
+        "name": None,
+        "issue": "general inquiry",
+        "priority": "low"
+    },
+    "ticket_multi": {
+        "customer_id": "C-1004",
+        "name": "Dana Kim",
+        "issue": "refund request and shipping delay",
+        "priority": "high"
+    },
+    "ticket_ambiguous": {
+        "customer_id": "C-1005",
+        "name": "Eve Park",
+        "issue": None,
+        "priority": null
+    }
+}
+
+print("\n=== Step 5: Few-Shot Extraction (3 + negative) ===\n")
+consistent_count = 0
+for ticket_id, response in FEW_SHOT_RESPONSES.items():
+    errors = check_consistency(response)
+    status = "PASS" if not errors else "FAIL"
+    if not errors:
+        consistent_count += 1
+    print(f"  {ticket_id}: {status}  keys={list(response.keys())}")
+
+print(f"\nConsistency: {consistent_count}/{total} "
+      f"({consistent_count/total*100:.0f}%) -- up from 20% (prose) and 60% (1-shot)")
+```
+
+### Step 6: Build and run the complete script
+
+```python
+# few_shot_builder.py  -- Complete script
+# Run: python ~/claude-architect-labs/lab-d4-prompt-engineering/few_shot_builder.py
+
+import json
+
+# --- SCENARIOS: test inputs representing diverse ticket types ---
+SCENARIOS = {
+    "ticket_clean": "Ticket #4401: Customer C-1001 (Alice Chen) reports billing overcharge of $50 on last invoice.",
+    "ticket_messy": "hi, my login broke after the update --Bob D, acct C-1002",
+    "ticket_empty": "Ticket from unknown caller. No details provided.",
+    "ticket_multi": "Dana Kim (C-1004): I need a refund for order #990 AND my shipping is delayed.",
+    "ticket_ambiguous": "Can you tell me your store hours? Thanks, --Eve Park (C-1005)"
+}
+
+EXPECTED_KEYS = {"customer_id", "name", "issue", "priority"}
+
+# --- Simulated no-shot responses (inconsistent field names) ---
+NO_SHOT_RESPONSES = {
+    "ticket_clean": {"customerId": "C-1001", "name": "Alice Chen", "issue": "billing overcharge", "priority": "high"},
+    "ticket_messy": {"id": "C-1002", "customer_name": "Bob Diaz", "problem": "login failure", "severity": "medium"},
+    "ticket_empty": {"customer_id": "UNKNOWN", "name": "N/A", "issue": "general inquiry", "priority": "low"},
+    "ticket_multi": {"Customer_ID": "C-1004", "Name": "Dana Kim", "Issue": "refund AND shipping", "Priority": "high"},
+    "ticket_ambiguous": {"cust_id": "C-1005", "name": "Eve Park", "issue": "store hours", "priority": "medium"}
+}
+
+# --- Simulated few-shot responses (consistent after 3 + negative example) ---
+FEW_SHOT_RESPONSES = {
+    "ticket_clean": {"customer_id": "C-1001", "name": "Alice Chen", "issue": "billing overcharge", "priority": "high"},
+    "ticket_messy": {"customer_id": "C-1002", "name": "Bob Diaz", "issue": "login failure after update", "priority": "medium"},
+    "ticket_empty": {"customer_id": None, "name": None, "issue": "general inquiry", "priority": "low"},
+    "ticket_multi": {"customer_id": "C-1004", "name": "Dana Kim", "issue": "refund request and shipping delay", "priority": "high"},
+    "ticket_ambiguous": {"customer_id": "C-1005", "name": "Eve Park", "issue": None, "priority": None}
+}
+
+# --- Few-shot examples ---
+FEW_SHOT_EXAMPLES = [
+    {
+        "input": "Ticket: Customer C-9999 reports double charge on order #778.",
+        "output": {"customer_id": "C-9999", "name": None, "issue": "double charge on order #778", "priority": "high"}
+    },
+    {
+        "input": "hi, my login broke after the update --Bob D, acct C-1002",
+        "output": {"customer_id": "C-1002", "name": "Bob D", "issue": "login broken after update", "priority": "medium"}
+    },
+    {
+        "input": "Ticket from unknown caller. No details provided.",
+        "output": {"customer_id": None, "name": None, "issue": "no details provided", "priority": "low"}
+    },
+    {
+        "input": "Can you tell me your store hours? Thanks, --Eve",
+        "output": {"customer_id": None, "name": "Eve", "issue": None, "priority": None}
+    }
+]
+
+
+def few_shot_prompt_builder(examples, task_input):
+    """Build a prompt with few-shot examples prepended.
+
+    Args:
+        examples: list of {"input": str, "output": dict} pairs
+        task_input: the new input to extract from
+
+    Returns:
+        Fully constructed prompt string
+    """
+    parts = [
+        "Extract customer ticket data. Return JSON with exactly these keys: "
+        "customer_id, name, issue, priority.",
+        "Use null for any field not present in the ticket.",
+        ""
+    ]
+    for i, ex in enumerate(examples, 1):
+        parts.append(f"Example {i} input: {ex['input']}")
+        parts.append(f"Example {i} output: {json.dumps(ex['output'])}")
+        parts.append("")
+
+    parts.append(f"Now extract from: {task_input}")
+    return "\n".join(parts)
+
+
+def check_consistency(response):
+    """Check if response keys match expected format exactly."""
+    errors = []
+    actual = set(response.keys())
+    missing = EXPECTED_KEYS - actual
+    extra = actual - EXPECTED_KEYS
+    if missing:
+        errors.append(f"Missing keys: {missing}")
+    if extra:
+        errors.append(f"Unexpected keys: {extra}")
+    return errors
+
 
 if __name__ == "__main__":
-    test_cases = [
-        'def login(user, pw): return db.query(f"SELECT * FROM users WHERE user=\'{user}\'")',
-        'x = value or 0  # default to zero',
-        'def get_count(): return len(items)  # Returns number of active users',
-    ]
+    print("=== No-Shot Extraction (Prose Instructions Only) ===\n")
+    no_shot_pass = 0
+    for tid, resp in NO_SHOT_RESPONSES.items():
+        errs = check_consistency(resp)
+        ok = not errs
+        no_shot_pass += int(ok)
+        print(f"  {tid}: {'PASS' if ok else 'FAIL'}  keys={list(resp.keys())}")
+        for e in errs:
+            print(f"    -> {e}")
 
-    for code, key in zip(test_cases, TEST_CASE_KEYS):
-        print(f"\nCode: {code[:70]}...")
-        review_code(no_shot_system, code, "NO FEW-SHOT (inconsistent)", key)
-        review_code(few_shot_system, code, "FEW-SHOT (consistent)", key)
+    print(f"\nNo-shot consistency: {no_shot_pass}/{len(NO_SHOT_RESPONSES)} "
+          f"({no_shot_pass/len(NO_SHOT_RESPONSES)*100:.0f}%)")
+
+    print("\n\n=== Few-Shot Extraction (3 diverse + 1 negative example) ===\n")
+
+    # Show constructed prompt for one case
+    sample = few_shot_prompt_builder(FEW_SHOT_EXAMPLES, SCENARIOS["ticket_clean"])
+    print("Sample prompt (first 500 chars):")
+    print(sample[:500])
+    print("...\n")
+
+    few_shot_pass = 0
+    for tid, resp in FEW_SHOT_RESPONSES.items():
+        errs = check_consistency(resp)
+        ok = not errs
+        few_shot_pass += int(ok)
+        print(f"  {tid}: {'PASS' if ok else 'FAIL'}  keys={list(resp.keys())}")
+
+    print(f"\nFew-shot consistency: {few_shot_pass}/{len(FEW_SHOT_RESPONSES)} "
+          f"({few_shot_pass/len(FEW_SHOT_RESPONSES)*100:.0f}%)")
+
+    print(f"\nImprovement: {no_shot_pass*100//len(NO_SHOT_RESPONSES)}% -> "
+          f"{few_shot_pass*100//len(FEW_SHOT_RESPONSES)}%")
 
     print("\n\n=== Few-Shot Design Principles ===")
     print("""
-    2-4 targeted examples:
-    - Show the DESIRED output format exactly
-    - Include ambiguous cases with explanation of why they go each way
-    - Include at least one example of "no finding" (not every code has bugs)
-    - Show reasoning for ambiguous decisions (why example 3 returns empty)
+    2-4 targeted examples beat 10+ similar ones:
+    - Show the EXACT output format (keys, types, structure)
+    - Include diverse inputs (clean, messy, missing data)
+    - Include a negative example (when NOT to extract)
+    - Each example is a contract, not a suggestion
 
     Where few-shot works best:
-    - Ambiguous tool selection (show: for X type of request, choose tool Y)
-    - Varied document structures (show: inline citations vs bibliography extraction)
-    - Reducing hallucination (show: when information is absent, return null not a guess)
-    - Output format consistency (show the exact JSON structure required)
+    - Format consistency (field names, JSON structure)
+    - Ambiguous case handling (null vs fabricate)
+    - Output calibration (what qualifies as high/medium/low)
 
-    Few-shot generalizes:
-    The model applies the PATTERN to novel cases — it doesn't just match examples.
-    3 good examples -> consistent handling of 100+ novel patterns.
+    Where few-shot does NOT work:
+    - Vague criteria ("be conservative") -> need explicit criteria (Lab 4.1)
+    - Schema enforcement -> need tool_use (Lab 4.3)
+    - Semantic validation -> need custom code (Lab 4.4)
     """)
 ```
 
-## Run it
+**Expected output:**
 
 ```
-python lab-d4-prompt-eng/few_shot.py
+=== No-Shot Extraction (Prose Instructions Only) ===
+
+  ticket_clean: FAIL  keys=['customerId', 'name', 'issue', 'priority']
+    -> Missing keys: {'customer_id'}
+    -> Unexpected keys: {'customerId'}
+  ticket_messy: FAIL  keys=['id', 'customer_name', 'problem', 'severity']
+    -> Missing keys: {'customer_id', 'name', 'issue', 'priority'}
+    -> Unexpected keys: {'id', 'customer_name', 'problem', 'severity'}
+  ticket_empty: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+  ticket_multi: FAIL  keys=['Customer_ID', 'Name', 'Issue', 'Priority']
+    -> Missing keys: {'customer_id', 'name', 'issue', 'priority'}
+    -> Unexpected keys: {'Customer_ID', 'Name', 'Issue', 'Priority'}
+  ticket_ambiguous: FAIL  keys=['cust_id', 'name', 'issue', 'priority']
+    -> Missing keys: {'customer_id'}
+    -> Unexpected keys: {'cust_id'}
+
+No-shot consistency: 1/5 (20%)
+
+
+=== Few-Shot Extraction (3 diverse + 1 negative example) ===
+
+Sample prompt (first 500 chars):
+Extract customer ticket data. Return JSON with exactly these keys: ...
+...
+
+  ticket_clean: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+  ticket_messy: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+  ticket_empty: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+  ticket_multi: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+  ticket_ambiguous: PASS  keys=['customer_id', 'name', 'issue', 'priority']
+
+Few-shot consistency: 5/5 (100%)
+
+Improvement: 20% -> 100%
 ```
 
-**What you should see:**
-- For each of 3 code snippets (SQL injection, `or` pattern, misleading comment), both NO FEW-SHOT and FEW-SHOT reviews are printed side by side
-- The NO FEW-SHOT reviews produce inconsistent formats (prose, bullets, varying structure), while the FEW-SHOT reviews use the exact JSON format from the examples
-- The few-shot reviewer correctly returns empty findings for the safe `or` pattern (Example 3 calibration), while the no-shot reviewer flags it unnecessarily
-- A "Few-Shot Design Principles" summary explaining why 2-4 targeted examples beat verbose instructions
+## Try it yourself
+
+1. Pick a different extraction task (e.g., extracting product reviews into `{product_id, rating, sentiment, summary}`).
+2. Write 3 few-shot examples: one clean input, one messy input, one where a field should be null.
+3. Run the `few_shot_prompt_builder` function against 5 new inputs and check consistency.
+4. Remove the negative example and re-run. Does consistency on edge cases drop?
 
 ## Check your understanding
 
-1. **What happens if you remove Example 3 (the ambiguous case)** from the few-shot prompt? Does Claude now over-flag or under-flag ambiguous code? (Answer: yes — without ambiguous case guidance, Claude defaults to inconsistent decisions)
-2. **Why do 10+ examples perform worse than 2-4?** (Answer: diminishing returns + token waste. 2-4 targeted examples outperform large volumes because the model generalizes from the pattern, not from volume)
-3. **Can few-shot examples fix decision quality if the criteria are vague** (e.g., "be conservative")? (Answer: format improves but decision quality doesn't — few-shot fixes format, not judgment. You need explicit criteria from Lab 4.1 for that)
+**Q1.** Your extraction pipeline returns correct data most of the time, but field names vary between runs (`customer_id` vs `customerId` vs `id`). You have clear prose instructions specifying the exact field names. What is the most effective fix?
 
-## Exam tips
+**A.** Add JSON schema validation to reject malformed responses.
+**B.** Add 2-3 few-shot examples showing the exact output format.
+**C.** Switch to a smaller, faster model for more deterministic output.
+**D.** Repeat the field name instructions three times in the prompt.
 
-- **If the exam says** "inconsistent output format" or "wrong handling of ambiguous cases" → few-shot examples
-- **Wrong answer trap:** "More detailed instructions" — prose is interpreted differently each run
-- **Wrong answer trap:** "Add a JSON schema" — schema enforces structure but doesn't teach ambiguous case reasoning
-- **The correct pattern:** 2-4 targeted examples including an ambiguous case with reasoning
+**Correct: B.** Few-shot examples are the most effective way to enforce format consistency. The model generalizes the exact key names, types, and structure from examples far more reliably than from prose instructions. **Why not A:** JSON schema validation catches malformed responses after the fact but does not teach the model to produce consistent field names in the first place. **Why not C:** Model size does not determine format consistency -- a smaller model may be even more inconsistent without examples. **Why not D:** Repeating instructions is a weak intervention; the model already "understood" the instructions but interpreted them differently each run.
+
+**Q2.** You add 15 few-shot examples to your extraction prompt. Consistency is 95%, but latency doubled and cost increased significantly. A colleague's prompt with 3 examples achieves 97% consistency. What explains the difference?
+
+**A.** More examples always improve accuracy, so the 15-example version must have a bug.
+**B.** Few-shot examples have diminishing returns -- 2-4 targeted examples outperform large volumes because the model generalizes from the pattern, not from volume.
+**C.** The 3-example version works because it uses a more capable model.
+**D.** 15 examples confused the model by providing contradictory output formats.
+
+**Correct: B.** The model generalizes the pattern from a small number of diverse, targeted examples. Beyond 3-4 examples, additional ones consume tokens (increasing cost and latency) without meaningfully improving consistency. **Why not A:** There is no bug -- 15 examples genuinely offer minimal improvement over 3 well-chosen ones. **Why not C:** The question states the colleague's prompt achieves better results, not that they use a different model. **Why not D:** While contradictory examples would be harmful, the issue here is diminishing returns, not contradiction.
+
+**Q3.** Your few-shot examples produce perfectly consistent JSON format, but the model still flags `logging.info(user_email)` as a "data exposure" issue 40% of the time. Adding more format examples does not reduce this rate. What should you do?
+
+**A.** Add 10 more few-shot examples showing correct handling of logging statements.
+**B.** Switch to tool_use with a JSON schema to enforce the output structure.
+**C.** Define explicit criteria for what constitutes "data exposure" vs acceptable logging (Lab 4.1).
+**D.** Increase temperature to give the model more flexibility in its decisions.
+
+**Correct: C.** Few-shot fixes FORMAT consistency, not DECISION QUALITY. If the model is making wrong judgments about what constitutes a real issue, you need explicit criteria (Lab 4.1) that define the boundary between acceptable and problematic patterns. **Why not A:** More format examples do not improve the model's judgment about what constitutes data exposure -- that requires criteria, not examples. **Why not B:** tool_use enforces output structure but does not teach the model better decision-making about ambiguous security patterns. **Why not D:** Higher temperature increases randomness, which would make the inconsistent flagging worse, not better.
 
 ## Key takeaways
 
-- 2-4 targeted examples beat detailed instructions for consistency
-- Include examples of ambiguous cases with decision rationale
-- Include at least one "no finding" example (prevent over-flagging)
-- Few-shot examples enable generalization to novel patterns
-- Show exact output format — don't describe it, demonstrate it
+- 2-4 targeted examples beat detailed prose instructions for format consistency
+- Select diverse examples: clean input, messy input, missing data, negative case
+- Include at least one negative example (when NOT to extract) to prevent over-extraction
+- Few-shot examples enable generalization -- 3 examples handle 100+ novel patterns
+- Few-shot fixes FORMAT consistency and AMBIGUOUS CASE handling
+- Few-shot does NOT fix decision quality when criteria are vague -- that requires explicit criteria (Lab 4.1)
+- Diminishing returns: beyond 3-4 examples, added tokens hurt more than they help
+
+## Exam tips
+
+- **If the exam says** "inconsistent output format" or "field names vary" --> few-shot examples
+- **If the exam says** "wrong decisions on ambiguous cases" --> few-shot with ambiguous case examples
+- **Wrong answer trap:** "More detailed instructions" -- prose is interpreted differently each run
+- **Wrong answer trap:** "Add a JSON schema" -- schema enforces structure but does not teach ambiguous case reasoning
+- **The correct pattern:** 2-4 targeted examples including an ambiguous case with reasoning
+
+**Next:** Few-shot examples enforce format consistency, but what happens when Claude adds prose around your JSON? In Lab 4.3, we move from guidance (examples) to enforcement (tool_use with JSON schemas) -- guaranteeing structured output at the API level.
 
 ---
 
@@ -8997,90 +9425,98 @@ python lab-d4-prompt-eng/few_shot.py
 # Domain 4 — Task Statement 4.3
 # Concept: tool_use for guaranteed schema compliance, nullable fields, enums
 # Time: ~25 minutes | Difficulty: Advanced
-# Prerequisites: Lab 4.1
+# Prerequisites: Lab 4.2
 
-## Learning objectives
+## Scenario
 
-- Define extraction tools with JSON schemas as input parameters and extract structured data from the tool_use response
-- Force a specific tool with tool_choice or use tool_choice "any" to guarantee structured output when the document type is unknown
-- Design schema fields as optional (nullable) when source documents may not contain the information, preventing the model from fabricating values
-- Implement enum values like "unclear" for ambiguous cases and "other" + detail fields for extensible categorization
+Your extraction pipeline uses a system prompt saying "return JSON only." It works 90% of the time -- until Claude adds a prose preamble ("Here's the extracted data for you:") and your JSON parser crashes. Another run wraps the JSON in markdown code fences. Another adds trailing commas. Prose instructions are guidance; Claude can always choose to add commentary.
 
-## Recall
-1. What do few-shot examples fix that descriptions alone can't? (Lab 4.2)
-2. How many examples are typically needed? (Lab 4.2)
+The fix is not a better prompt. The fix is `tool_use` with a JSON `input_schema`. When Claude calls a tool, it MUST return data conforming to the schema. No preamble, no code fences, no syntax errors. The schema is enforced by the API, not by Claude's good behavior. Prompts are guidance; code is law.
 
-## Overview
+## What you'll learn
 
-**The problem:** You ask Claude to extract invoice data and return JSON. Sometimes it wraps the JSON in markdown code fences. Sometimes it adds a chatty preamble. Sometimes the JSON has trailing commas. Your parser crashes on all three.
+- Using `tool_use` with `input_schema` to guarantee structured output (no syntax errors)
+- Designing nullable fields (`["string", "null"]`) to prevent fabrication of missing data
+- Using enum values with "unclear" and "other" + detail fields for extensible categorization
+- Forcing a specific tool with `tool_choice` (callback to Lab 2.3)
+- The critical distinction: schema compliance eliminates SYNTAX errors but not SEMANTIC errors
 
-**The solution: `tool_use` with JSON schema.** When you define a tool with an `input_schema`, Claude MUST return data matching that schema. No code fences, no preamble, no syntax errors. The schema is enforced by the API, not by Claude's good behavior.
+## Concepts
 
-**But here's the catch:** Schema compliance eliminates SYNTAX errors (missing fields, wrong types). It does NOT eliminate SEMANTIC errors (fabricated vendor IDs, line items that don't sum to total). For semantic validation, you need custom code -- that's Lab 4.4.
+**tool_use + input_schema = enforcement.** When you define a tool with an `input_schema`, Claude MUST return data matching that schema. No code fences, no preamble, no malformed JSON. This is the API enforcing structure, not the prompt requesting it.
 
-**Two critical schema patterns:**
+**Nullable fields** (`"type": ["string", "null"]`): Use when the source document might not contain the information. Claude returns `null` instead of fabricating a value. Without nullable fields, required fields force Claude to invent data to satisfy the schema.
 
-- **Nullable fields** (`"type": ["string", "null"]`): Use when the source document might not contain the information. Claude returns `null` instead of making something up.
-- **Enum with "other" + detail**: `"category": {"enum": ["electronics", "clothing", "other"]}` plus `"category_detail": {"type": "string"}`. Handles unexpected values without forcing a wrong choice.
+**Enum with "unclear" and "other":** `"enum": ["paid", "unpaid", "unclear", "other"]` with an adjacent `detail` field. "Unclear" handles genuinely ambiguous documents. "Other" handles unexpected values without forcing a wrong category choice.
 
-**Exam connection (Exercise 3):** "Process documents where some fields are absent and verify the
-model returns null rather than fabricating values."
+**Schema compliance does not equal semantic correctness.** Tool use eliminates syntax errors (malformed JSON, missing fields, wrong types). It does NOT eliminate semantic errors (line items that don't sum to the stated total, fabricated vendor IDs). Semantic validation requires custom code -- that's Lab 4.4.
 
-### Challenge Mode (optional — try before looking at the solution)
+**Callback to Lab 2.3:** `tool_choice: {"type": "tool", "name": "extract_invoice"}` forces Claude to call the extraction tool. `tool_choice: "any"` with multiple tools lets Claude pick the right schema for unknown document types.
 
-Design a `tool_use` extraction schema for employee records with these requirements:
+## Walkthrough
 
-1. Required fields: `employee_id` (string), `name` (string), `department` (enum: engineering, sales, marketing, other)
-2. Optional fields: `salary` (nullable number — some records don't include it), `start_date` (nullable string)
-3. A `department_detail` field for when department is "other"
-4. Use `tool_choice` to force the extraction tool
+### Step 1: See the problem -- prose preamble breaks the parser
 
-Write the tool definition and API call. Does the model return `null` for missing fields or fabricate values? Then compare to the reference below.
-
----
-
-## Try it
-
-Try this in Claude Code:
-
-```
-> I have this invoice text. Extract the data into structured JSON:
->
-> INVOICE #INV-2024-042
-> Vendor: Acme Supply Co.
-> Date: March 15, 2024
-> Line Items:
->   Office Supplies: $250.00
->   Printer Paper: $89.99
->   Ink Cartridges: $145.00
-> TOTAL DUE: $484.99
-> Status: UNPAID
->
-> Now try a second invoice that has MISSING fields:
-> INVOICE
-> Vendor: Unknown Supplier
-> Various items provided as discussed. Please remit payment.
->
-> For the second invoice, which fields would you return as null vs fabricate?
-> Explain why nullable schema fields ("type": ["string", "null"]) prevent hallucination.
-```
-
-Notice how Claude handles the incomplete invoice. Without nullable fields in a schema, the model would be forced to invent values. With them, it can honestly return null.
-
-## Reference code
+Create `~/claude-architect-labs/lab-d4-prompt-engineering/schema_enforcer.py`:
 
 ```python
 import json
 
-# In production, replace with client.messages.create()
 
-# -- EXTRACTION TOOL DEFINITION ----------------------------
-# Tool use + JSON schema = guaranteed schema compliance
-# (Eliminates JSON syntax errors — model MUST conform to schema)
+# ============================================================
+# PART 1: THE PROBLEM -- PROSE AROUND JSON
+# ============================================================
+
+# With prompt-only approach, Claude sometimes adds prose
+PROMPT_ONLY_RESPONSES = [
+    # Run 1: clean JSON (works)
+    '{"invoice_number": "INV-042", "total": 484.99}',
+
+    # Run 2: prose preamble (parser crashes)
+    'Here is the extracted data:\n'
+    '{"invoice_number": "INV-042", "total": 484.99}',
+
+    # Run 3: markdown code fence (parser crashes)
+    '```json\n{"invoice_number": "INV-042", '
+    '"total": 484.99}\n```',
+]
+
+def parse_json_response(text):
+    """Downstream parser that expects clean JSON."""
+    try:
+        return {"success": True, "data": json.loads(text)}
+    except json.JSONDecodeError as e:
+        return {"success": False,
+                "error": f"Parse failed: {e}"}
+
+print("=" * 60)
+print("THE PROBLEM: PROMPT-ONLY JSON")
+print("=" * 60)
+for i, resp in enumerate(PROMPT_ONLY_RESPONSES):
+    result = parse_json_response(resp)
+    status = "OK" if result["success"] else "CRASH"
+    print(f"\n  Run {i+1}: [{status}]")
+    print(f"  Response: {resp[:50]}...")
+    if not result["success"]:
+        print(f"  Error: {result['error']}")
+```
+
+### Step 2: Define the extraction tool with input_schema
+
+```python
+# ============================================================
+# PART 2: TOOL DEFINITION WITH JSON SCHEMA
+# ============================================================
 
 extraction_tool = {
     "name": "extract_invoice",
-    "description": "Extracts structured data from an invoice document.",
+    "description": (
+        "Extracts structured data from an invoice document. "
+        "Input: raw invoice text. "
+        "Returns: structured invoice fields. "
+        "Use for: invoices, purchase orders, billing. "
+        "Do NOT use for: contracts, reports, receipts."
+    ),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -9090,15 +9526,16 @@ extraction_tool = {
             },
             "vendor_name": {
                 "type": "string",
-                "description": "Name of the vendor/supplier"
+                "description": "Name of the vendor"
             },
             "invoice_date": {
                 "type": ["string", "null"],
-                "description": "Invoice date in ISO format (YYYY-MM-DD) or null if not found"
+                "description": "Date in YYYY-MM-DD or null "
+                               "if not found"
             },
             "total_amount": {
                 "type": ["number", "null"],
-                "description": "Total amount due. null if not present in document."
+                "description": "Total due. null if absent."
             },
             "line_items": {
                 "type": "array",
@@ -9113,37 +9550,50 @@ extraction_tool = {
             },
             "payment_status": {
                 "type": "string",
-                "enum": ["paid", "unpaid", "partial", "overdue", "unclear", "other"],
-                "description": "Payment status. Use 'unclear' if document is ambiguous."
+                "enum": ["paid", "unpaid", "partial",
+                         "overdue", "unclear", "other"],
+                "description": "Use 'unclear' if ambiguous"
             },
             "payment_status_detail": {
                 "type": ["string", "null"],
-                "description": "Required when payment_status is 'other'. Details."
+                "description": "Details when status is "
+                               "'other'"
             },
             "calculated_total": {
                 "type": ["number", "null"],
-                "description": "Sum of line item amounts (for validation). null if no line items."
+                "description": "Sum of line items "
+                               "(for validation)"
             },
             "conflict_detected": {
                 "type": "boolean",
-                "description": "True if stated total doesn't match sum of line items."
+                "description": "True if stated total != "
+                               "sum of line items"
             }
         },
         "required": [
-            "invoice_number", "vendor_name", "payment_status",
-            "conflict_detected", "line_items"
+            "invoice_number", "vendor_name",
+            "payment_status", "conflict_detected",
+            "line_items"
         ]
     }
 }
+```
 
-def extract_invoice(document_text: str) -> dict:
-    """Extract invoice data using tool_use for guaranteed schema compliance."""
-    # In production, replace with client.messages.create() using:
-    #   tools=[extraction_tool],
-    #   tool_choice={"type": "tool", "name": "extract_invoice"}
-    # The tool_use response block.input will conform to the schema above.
+### Step 3: Simulate tool_use extraction
 
-    # Simulated tool_use responses for each test document
+```python
+# ============================================================
+# PART 3: SIMULATED TOOL_USE EXTRACTION
+# ============================================================
+
+# In production: client.messages.create(
+#     tools=[extraction_tool],
+#     tool_choice={"type": "tool", "name": "extract_invoice"}
+# )
+# The response.content[0].input is GUARANTEED to match schema.
+
+def extract_invoice(document_text):
+    """Simulate tool_use extraction."""
     if "INV-2024-042" in document_text:
         return {
             "invoice_number": "INV-2024-042",
@@ -9151,9 +9601,12 @@ def extract_invoice(document_text: str) -> dict:
             "invoice_date": "2024-03-15",
             "total_amount": 484.99,
             "line_items": [
-                {"description": "Office Supplies", "amount": 250.00},
-                {"description": "Printer Paper", "amount": 89.99},
-                {"description": "Ink Cartridges", "amount": 145.00}
+                {"description": "Office Supplies",
+                 "amount": 250.00},
+                {"description": "Printer Paper",
+                 "amount": 89.99},
+                {"description": "Ink Cartridges",
+                 "amount": 145.00}
             ],
             "payment_status": "unpaid",
             "payment_status_detail": None,
@@ -9167,9 +9620,9 @@ def extract_invoice(document_text: str) -> dict:
             "invoice_date": None,
             "total_amount": 500.00,
             "line_items": [
-                {"description": "Widget A", "amount": 100.00},
-                {"description": "Widget B", "amount": 200.00},
-                {"description": "Widget C", "amount": 150.00}
+                {"description": "Widget A", "amount": 100},
+                {"description": "Widget B", "amount": 200},
+                {"description": "Widget C", "amount": 150}
             ],
             "payment_status": "unclear",
             "payment_status_detail": None,
@@ -9177,7 +9630,6 @@ def extract_invoice(document_text: str) -> dict:
             "conflict_detected": True
         }
     else:
-        # Incomplete invoice — nullable fields return null
         return {
             "invoice_number": "UNKNOWN",
             "vendor_name": "Unknown Supplier",
@@ -9189,18 +9641,60 @@ def extract_invoice(document_text: str) -> dict:
             "calculated_total": None,
             "conflict_detected": False
         }
+```
 
-# Test documents
+### Step 4: Add semantic validation
+
+```python
+# ============================================================
+# PART 4: SEMANTIC VALIDATION
+# ============================================================
+
+def validate_extraction(data):
+    """Validate semantic correctness.
+    Schema catches syntax; this catches meaning.
+    """
+    errors = []
+
+    # Cross-field check: line items vs total
+    items = data.get("line_items", [])
+    if items:
+        calc = sum(i.get("amount", 0) for i in items)
+        stated = data.get("total_amount")
+        if stated and abs(calc - stated) > 0.01:
+            if not data.get("conflict_detected"):
+                errors.append(
+                    f"Line items sum to ${calc:.2f} but "
+                    f"total is ${stated:.2f}. "
+                    f"conflict_detected should be true."
+                )
+
+    # Enum consistency check
+    if (data.get("payment_status") == "other"
+            and not data.get("payment_status_detail")):
+        errors.append(
+            "payment_status is 'other' but "
+            "payment_status_detail is missing"
+        )
+
+    return errors
+```
+
+### Step 5: Add test documents and demo runner
+
+```python
+# ============================================================
+# PART 5: TEST DOCUMENTS AND DEMO
+# ============================================================
+
 GOOD_INVOICE = """
 INVOICE #INV-2024-042
 Vendor: Acme Supply Co.
 Date: March 15, 2024
-
 Line Items:
   Office Supplies: $250.00
   Printer Paper:   $89.99
   Ink Cartridges:  $145.00
-
 TOTAL DUE: $484.99
 Status: UNPAID
 """
@@ -9208,13 +9702,11 @@ Status: UNPAID
 CONFLICTING_INVOICE = """
 INVOICE #INV-2024-099
 Vendor: Widget Corp
-
 Items:
   Widget A: $100.00
   Widget B: $200.00
   Widget C: $150.00
-
-Total Due: $500.00  (note: line items sum to $450, not $500)
+Total Due: $500.00
 """
 
 INCOMPLETE_INVOICE = """
@@ -9224,196 +9716,258 @@ Various items provided as discussed.
 Please remit payment.
 """
 
-def validate_extraction(data: dict) -> list:
-    """Validate semantic correctness (schema compliance is guaranteed by tool_use)."""
-    errors = []
+def run_demo():
+    sep = "=" * 60
 
-    if data.get("conflict_detected") and data.get("calculated_total") and data.get("total_amount"):
-        calc = data["calculated_total"]
-        stated = data["total_amount"]
-        if abs(calc - stated) > 0.01:
-            errors.append(f"Total mismatch: line items sum to ${calc:.2f} but stated total is ${stated:.2f}")
+    # Demo tool_use extraction
+    print(f"\n{sep}")
+    print("TOOL_USE EXTRACTION (guaranteed schema)")
+    print(sep)
 
-    if data.get("payment_status") == "other" and not data.get("payment_status_detail"):
-        errors.append("payment_status is 'other' but payment_status_detail is missing")
-
-    return errors
-
-if __name__ == "__main__":
-    print("=== Structured Extraction with Tool Use ===\n")
-
-    for label, doc in [("Good invoice", GOOD_INVOICE),
-                        ("Conflicting totals", CONFLICTING_INVOICE),
-                        ("Incomplete invoice", INCOMPLETE_INVOICE)]:
-        print(f"\n--- {label} ---")
+    for label, doc in [
+        ("Good invoice", GOOD_INVOICE),
+        ("Conflicting totals", CONFLICTING_INVOICE),
+        ("Incomplete invoice", INCOMPLETE_INVOICE),
+    ]:
+        print(f"\n  --- {label} ---")
         result = extract_invoice(doc)
         print(json.dumps(result, indent=2))
 
-        errors = validate_extraction(result or {})
+        errors = validate_extraction(result)
         if errors:
-            print(f"Semantic validation errors: {errors}")
+            print(f"  Semantic errors: {errors}")
         else:
-            print("Semantic validation: PASS")
+            print(f"  Semantic validation: PASS")
 
-    print("\n\n=== Key Schema Design Patterns ===")
+    # Key patterns summary
+    print(f"\n{sep}")
+    print("SCHEMA DESIGN PATTERNS")
+    print(sep)
     print("""
-    Nullable fields: "type": ["string", "null"]
-    -> Use when source document may not contain the information
-    -> Prevents model from fabricating values to satisfy required fields
+  Nullable fields: "type": ["string", "null"]
+    Use when data may be absent in source document.
+    Model returns null instead of fabricating values.
 
-    Enum with "unclear" and "other":
-    -> "unclear": ambiguous in source document
-    -> "other" + detail field: extensible without schema changes
+  Enum with "unclear" and "other":
+    "unclear": document is genuinely ambiguous
+    "other" + detail field: unexpected values
 
-    Conflict detection: calculated_total + conflict_detected boolean
-    -> Schema compliance ≠ semantic correctness
-    -> Tool use eliminates syntax errors, not logic errors
-    -> Add cross-field validation for semantic checks
+  Conflict detection: calculated_total + boolean
+    Schema guarantees structure, NOT correctness.
+    Cross-field validation catches semantic errors.
 
-    tool_choice forced vs any:
-    -> forced: specific tool MUST run (single schema)
-    -> any: model picks which schema (multiple schemas for different doc types)
-    """)
+  tool_choice modes (Lab 2.3 callback):
+    forced: {"type": "tool", "name": "extract_invoice"}
+      -> guarantees THIS specific tool runs
+    "any": model picks from multiple schemas
+      -> for unknown document types
+""")
 
-    # === Demo: tool_choice "any" with multiple schemas ===
-    print("\n=== tool_choice 'any' — Multiple Schema Selection ===\n")
 
-    receipt_tool = {
-        "name": "extract_receipt",
-        "description": "Extract data from retail receipts. Use for store purchases.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_name": {"type": "string"},
-                "items": {"type": "array", "items": {"type": "object",
-                    "properties": {"name": {"type": "string"}, "price": {"type": "number"}}}},
-                "tax": {"type": ["number", "null"]},
-                "total": {"type": "number"}
-            },
-            "required": ["store_name", "items", "total"]
-        }
-    }
-
-    # Use tool_choice "any" — model picks the right schema
-    unknown_doc = "INVOICE #INV-2024-042\nVendor: Acme Supply\nItems: Paper $50\nTOTAL: $50.00"
-
-    # In production, use client.messages.create() with:
-    #   tools=[extraction_tool, receipt_tool], tool_choice="any"
-    # Simulated: model correctly picks extract_invoice over extract_receipt
-    simulated_name = "extract_invoice"
-    simulated_data = {"invoice_number": "INV-2024-042", "vendor_name": "Acme Supply",
-                      "line_items": [{"description": "Paper", "amount": 50.00}],
-                      "total_amount": 50.00, "payment_status": "unclear", "conflict_detected": False}
-    print(f"  Model chose: {simulated_name}")
-    print(f"  (Correctly selected invoice schema over receipt schema)")
-    print(f"  Data: {json.dumps(simulated_data, indent=2)[:200]}")
-
-    print("""
-    When to use tool_choice "any":
-    - Unknown document type -> let model pick the right extraction schema
-    - Multiple valid output formats -> model selects the best match
-    - Guarantees structured output (won't return text) but with flexibility
-    """)
+if __name__ == "__main__":
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
+
+```bash
+cd ~/claude-architect-labs
+python lab-d4-prompt-engineering/schema_enforcer.py
+```
+
+You should see:
 
 ```
-python lab-d4-prompt-eng/structured_output.py
+============================================================
+THE PROBLEM: PROMPT-ONLY JSON
+============================================================
+
+  Run 1: [OK]
+  Response: {"invoice_number": "INV-042", "total": 484.99}...
+
+  Run 2: [CRASH]
+  Response: Here is the extracted data:
+{"invoice_numbe...
+  Error: Parse failed: Expecting value: line 1 column 1 (char 0)
+
+  Run 3: [CRASH]
+  Response: ```json
+{"invoice_number": "INV-042", "total...
+  Error: Parse failed: Expecting value: line 1 column 1 (char 0)
+
+============================================================
+TOOL_USE EXTRACTION (guaranteed schema)
+============================================================
+
+  --- Good invoice ---
+{
+  "invoice_number": "INV-2024-042",
+  "vendor_name": "Acme Supply Co.",
+  "invoice_date": "2024-03-15",
+  "total_amount": 484.99,
+  "line_items": [
+    {"description": "Office Supplies", "amount": 250.0},
+    {"description": "Printer Paper", "amount": 89.99},
+    {"description": "Ink Cartridges", "amount": 145.0}
+  ],
+  "payment_status": "unpaid",
+  "payment_status_detail": null,
+  "calculated_total": 484.99,
+  "conflict_detected": false
+}
+  Semantic validation: PASS
+
+  --- Conflicting totals ---
+{
+  "invoice_number": "INV-2024-099",
+  "vendor_name": "Widget Corp",
+  "invoice_date": null,
+  "total_amount": 500.0,
+  "line_items": [
+    {"description": "Widget A", "amount": 100},
+    {"description": "Widget B", "amount": 200},
+    {"description": "Widget C", "amount": 150}
+  ],
+  "payment_status": "unclear",
+  "payment_status_detail": null,
+  "calculated_total": 450.0,
+  "conflict_detected": true
+}
+  Semantic validation: PASS
+
+  --- Incomplete invoice ---
+{
+  "invoice_number": "UNKNOWN",
+  "vendor_name": "Unknown Supplier",
+  "invoice_date": null,
+  "total_amount": null,
+  "line_items": [],
+  "payment_status": "unclear",
+  "payment_status_detail": null,
+  "calculated_total": null,
+  "conflict_detected": false
+}
+  Semantic validation: PASS
 ```
 
-**What you should see:**
-- Good invoice: All fields extracted correctly, conflict_detected = false
-- Conflicting totals: Line items don't match stated total, conflict_detected = true
-- Incomplete invoice: Missing fields return null (not fabricated values)
-- Multi-schema: Model correctly picks extract_invoice over extract_receipt
+Key outputs:
+- **Prompt-only:** 2 of 3 runs crash the parser (prose preamble, markdown fence)
+- **Tool_use:** all 3 documents return schema-compliant JSON -- no preamble, no fences
+- **Nullable fields:** incomplete invoice returns `null` for missing data instead of fabricating
+- **Conflict detection:** conflicting invoice correctly flags `conflict_detected: true`
+
+## Try it yourself
+
+Define a new extraction tool for a different document type (e.g., employee records with `employee_id`, `name`, `department` enum, nullable `salary`, nullable `start_date`).
+
+1. Write the `input_schema` with at least one nullable field and one enum.
+2. Create 3 test documents: one complete, one with missing fields, one with an "other" department.
+3. Run extraction and confirm: nullable fields return `null` (not fabricated), enum handles "other."
+4. Add a semantic validator that checks cross-field consistency.
 
 ## Check your understanding
 
-Study the schema and validation code, then answer:
+**Q1.** Your extraction pipeline uses `tool_use` with a JSON schema. Invoices are extracted correctly with no JSON syntax errors. However, line items sometimes don't sum to the stated total, and the model fills in made-up vendor IDs for documents that don't contain them. What should you add?
 
-1. **What does making `vendor_name` nullable (`"type": ["string", "null"]`) change?** If you ran the conflicting invoice with this change, the schema validates fine — but the SEMANTIC error (line items don't sum to total) is still caught only by the `validate_extraction()` function.
-2. **What is the key distinction between schema compliance and semantic correctness?** (Answer: tool_use + JSON schema catches syntax errors — missing fields, wrong types, malformed JSON. Custom validation catches semantic errors — values that don't add up, fabricated data. You need both.)
-3. **When would you use `tool_choice: "any"` vs forced tool selection?** (Answer: "any" when you have multiple schemas and want the model to pick the right one based on document type. Forced when you know exactly which schema applies.)
+**A.** Switch to a stricter JSON schema mode
+**B.** Add few-shot examples showing correct extraction
+**C.** Increase max_tokens so the model has more room to be precise
+**D.** Add custom semantic validation (cross-field checks) and make vendor_id nullable to prevent fabrication
 
-## Exam tips
-
-- **If the exam says** "schema validates but values are wrong" → schema catches syntax, NOT semantics
-- **If the exam says** "model fabricates values for missing fields" → make fields nullable
-- **Wrong answer trap:** "Use stricter schema" — stricter syntax doesn't fix semantic errors
-- **The correct pattern:** tool_use + nullable fields + custom semantic validation
-
-## Key takeaways
-
-- tool_use + JSON schema = guaranteed schema syntax compliance
-- Schema compliance does NOT prevent semantic errors (wrong field values)
-- Nullable fields: `["string", "null"]` for potentially absent data
-- `"unclear"` enum value for ambiguous cases
-- `"other"` + detail field for extensible categorization
-- Add cross-field validation for semantic correctness checks
-- tool_choice "any" with multiple schemas: model picks the right extraction tool
+**Correct: D.** tool_use + JSON schema eliminates syntax errors but NOT semantic errors (wrong sums, fabricated values). Custom validation catches cross-field issues, and nullable fields prevent fabrication. **Why not A:** A stricter JSON schema only enforces structural rules -- it cannot validate that line items sum correctly or detect fabricated values. **Why not B:** Few-shot examples can improve extraction quality probabilistically but cannot guarantee cross-field consistency the way programmatic validation can. **Why not C:** max_tokens controls output length, not extraction accuracy.
 
 ---
 
+**Q2.** Your extraction schema has `"vendor_id": {"type": "string"}` (required, not nullable). For a document that doesn't mention a vendor ID, what does the model do?
+
+**A.** Returns an empty string
+**B.** Fabricates a plausible-looking vendor ID to satisfy the required field
+**C.** Returns null
+**D.** Raises a schema validation error
+
+**Correct: B.** When a required field is not nullable, the model must produce a value to satisfy the schema. It will fabricate a plausible-looking value rather than leave the field empty. Fix: make the field nullable (`"type": ["string", "null"]`) so the model can honestly return `null`. **Why not A:** Required string fields typically get fabricated values, not empty strings. **Why not C:** The schema doesn't allow null for a non-nullable field. **Why not D:** The model generates output to match the schema -- it doesn't raise errors.
+
+---
+
+**Q3.** You have two extraction tools: `extract_invoice` and `extract_receipt`. A document arrives and you don't know which type it is. What `tool_choice` setting should you use?
+
+**A.** `"auto"` -- let Claude decide whether to call a tool or return text
+**B.** `"any"` -- force Claude to call one of the tools (it picks which one)
+**C.** `{"type": "tool", "name": "extract_invoice"}` -- always use the invoice tool
+**D.** Don't use tool_choice -- let Claude figure it out
+
+**Correct: B.** `"any"` forces Claude to call one of the available tools -- guaranteeing structured output -- while letting it pick the right schema based on document content. **Why not A:** `"auto"` might return text instead of calling a tool, which defeats the purpose of structured extraction. **Why not C:** Forcing the invoice tool on a receipt produces wrong results. **Why not D:** Without `tool_choice`, Claude might return text instead of structured data.
+
+## Key takeaways
+
+- tool_use + JSON schema = guaranteed syntax compliance (no parse errors)
+- Schema compliance does NOT equal semantic correctness (values may be wrong)
+- Nullable fields (`["string", "null"]`) prevent fabrication of missing data
+- "unclear" enum value for ambiguous documents; "other" + detail for extensibility
+- `tool_choice` forced = specific tool must run; "any" = model picks the right schema
+- Custom semantic validation (Lab 4.4) catches cross-field errors schema can't
+
+## Exam tips
+
+- **"Schema validates but values are wrong"** --> schema catches syntax, NOT semantics; add custom validation
+- **"Model fabricates values for missing fields"** --> make fields nullable
+- **"Parser crashes on prose around JSON"** --> switch from prompt-only to tool_use
+- **Wrong answer trap:** "Use stricter schema" -- stricter syntax doesn't fix semantic errors
+- **Wrong answer trap:** "Add more few-shot examples" -- examples improve quality probabilistically, not deterministically
+- **The core pattern:** prompts are guidance, tool_use is enforcement. Use both.
+
+**Next:** Lab 4.4 covers validation and retry loops -- what to do when tool_use returns schema-valid but semantically wrong data, and how to construct retry prompts with specific error feedback.
+
+---
 # LAB 4.4: VALIDATION AND RETRY LOOPS
 # Domain 4 — Task Statement 4.4
-# Concept: Retry with specific feedback, when retries won't help
-# Time: ~20 minutes | Difficulty: Advanced
-# Prerequisites: Lab 4.1
+# Concept: Semantic validation, retry with specific feedback, bounded retries
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 4.3
 
-## Learning objectives
+## Scenario
 
-- Implement follow-up requests that include the original document, the failed extraction, and specific validation errors for model self-correction
-- Identify when retries will be ineffective (information absent from source) versus when they will succeed (format mismatches, structural output errors)
-- Design detected_pattern fields in structured findings to enable analysis of false positive patterns when developers dismiss findings
-- Implement self-correction validation flows that extract calculated_total alongside stated_total to flag discrepancies
+Even with schema-enforced tool_use, your extraction pipeline returns structurally valid but semantically wrong data: an invoice where line items sum to $300 but the stated total is $350, a vendor_id that looks plausible but was fabricated because the document doesn't mention one, and a date field set to "2024-01-01" when the document says "January 15." Schema validation catches the shape; it doesn't catch the meaning.
 
-## Recall
-1. What does JSON schema enforce — syntax or semantics? (Lab 4.3)
-2. Why should fields be nullable when source data might be missing? (Lab 4.3)
+You need a retry loop that validates output semantically, and on failure, sends the specific error back to Claude with a targeted correction request -- not "try again" but "line items sum to $300, not $350; set conflict_detected to true."
 
-## Overview
+## What you'll learn
 
-Your extraction pipeline uses tool_use with a JSON schema -- no syntax errors. But line items sum to $300 while the stated total is $350. And for documents that don't mention a vendor ID, Claude fabricates one.
+- The distinction between schema validation (shape) and semantic validation (meaning)
+- Building a retry loop that catches semantic errors and constructs specific correction prompts
+- When retries help (format/arithmetic errors) vs when they don't (data absent from source)
+- Bounded retry (max 3 attempts) to prevent infinite loops, with escalation on exhaustion
+- Using `detected_pattern` fields to track which code constructs produce false positives
 
-**Schema compliance ≠ correctness.** You need custom validation + nullable fields.
+## Concepts
 
-**Exam connection (Exercise 3):** "Implement a validation-retry loop: when validation fails, send
-a follow-up including the document, failed extraction, and specific validation error."
+**Three validation layers:**
 
-## Try it
+| Layer | What it catches | What it misses |
+|-------|----------------|----------------|
+| **JSON Schema (tool_use)** | Syntax/structure errors | Everything semantic |
+| **Pydantic** | Type constraints, basic rules | Business logic |
+| **Custom semantic** | Business logic, cross-field | Nothing (you write the rules) |
 
-Try this in Claude Code:
+**Retry with specific feedback** is the core pattern. When validation fails, the retry prompt includes: (1) the original document, (2) the failed extraction, and (3) the SPECIFIC validation errors. "Line items sum to $300 but total_amount is $350. Set conflict_detected=true." This enables targeted correction. Vague retries ("try again") produce random changes.
 
-```
-> Extract invoice data from this document:
->
-> INVOICE #INV-999
-> Vendor: Widget Co
-> Items:
->   Widget A: $100.00
->   Widget B: $200.00
-> Total: $350.00
->
-> Notice the line items sum to $300 but the stated total is $350.
-> Walk me through: if a validation check caught this mismatch,
-> how would you construct a retry prompt that includes the original
-> document, the failed extraction, and the SPECIFIC error
-> ("line items sum to $300 but total is $350")?
-> Why is specific error feedback more effective than just saying "try again"?
-```
+**Retries help when** the information exists in the document but was extracted incorrectly (format errors, arithmetic, structural issues). **Retries don't help when** the information is absent from the source ("contact billing for pricing"). You can't extract what isn't there. Return null.
 
-This demonstrates the core pattern: retry-with-specific-feedback enables targeted correction, while vague retries produce random changes.
+**Bounded retry:** Max 3 attempts prevents infinite loops. After exhaustion, escalate (return best attempt with error annotations) rather than failing silently.
 
-## Reference code
+## Walkthrough
 
-First, we define the tool schema and a validator that catches semantic errors
-(things JSON schema alone can't catch — like line items not summing to total).
+### Step 1: Define the extraction tool and semantic validator
+
+Create `~/claude-architect-labs/lab-d4-prompt-engineering/validation_retry_loop.py`:
 
 ```python
 import json
 
-# In production, replace with client.messages.create()
+
+# ============================================================
+# PART 1: TOOL SCHEMA + SEMANTIC VALIDATION
+# ============================================================
 
 extraction_tool = {
     "name": "extract_invoice",
@@ -9426,20 +9980,26 @@ extraction_tool = {
             "total_amount": {"type": ["number", "null"]},
             "line_items": {
                 "type": "array",
-                "items": {"type": "object",
-                          "properties": {"description": {"type": "string"},
-                                         "amount": {"type": "number"}},
-                          "required": ["description", "amount"]}
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "description": {"type": "string"},
+                        "amount": {"type": "number"}
+                    },
+                    "required": ["description", "amount"]
+                }
             },
             "calculated_total": {"type": ["number", "null"]},
             "conflict_detected": {"type": "boolean"}
         },
-        "required": ["invoice_number", "vendor_name", "line_items", "conflict_detected"]
+        "required": ["invoice_number", "vendor_name",
+                     "line_items", "conflict_detected"]
     }
 }
 
-def validate_extraction(data: dict) -> list:
-    """Returns list of validation error messages."""
+
+def validate_extraction(data):
+    """Semantic validation -- catches what schema can't."""
     errors = []
 
     if not data.get("invoice_number"):
@@ -9447,70 +10007,71 @@ def validate_extraction(data: dict) -> list:
 
     items = data.get("line_items", [])
     if items:
-        calc = sum(item.get("amount", 0) for item in items)
+        calc = sum(i.get("amount", 0) for i in items)
         stated = data.get("total_amount")
         if stated and abs(calc - stated) > 0.01:
-            # If there's a mismatch, the model MUST flag it
             if not data.get("conflict_detected"):
                 errors.append(
-                    f"Line items sum to ${calc:.2f} but total_amount is ${stated:.2f}. "
-                    f"Set calculated_total={calc:.2f} and conflict_detected=true."
+                    f"Line items sum to ${calc:.2f} but "
+                    f"total_amount is ${stated:.2f}. "
+                    f"Set calculated_total={calc:.2f} and "
+                    f"conflict_detected=true."
                 )
 
     return errors
 ```
 
-## Reference code
-
-This is the core pattern: when validation fails, send a follow-up that includes
-the original document + the failed extraction + SPECIFIC error messages.
-Claude can self-correct because it knows exactly what went wrong.
+### Step 2: Build the retry loop
 
 ```python
-def extract_with_retry(doc_text: str, max_retries: int = 2) -> dict:
-    """
-    Extract invoice data with retry-on-validation-failure.
+# ============================================================
+# PART 2: RETRY LOOP WITH SPECIFIC FEEDBACK
+# ============================================================
 
-    KEY PATTERN: Each retry includes the SPECIFIC validation errors.
-    "Your previous extraction had these errors: [specific errors]"
-    This is far more effective than vague retries.
-    In production, replace simulated responses with client.messages.create()
-    using tools=[extraction_tool], tool_choice={"type": "tool", "name": "extract_invoice"}
+def extract_with_retry(doc_text, max_retries=2):
+    """Extract with semantic validation and retry.
+
+    On validation failure, constructs a correction prompt
+    with the SPECIFIC errors. This is far more effective
+    than vague "try again" retries.
     """
-    # Simulated extraction responses per attempt
+    # Simulated responses per attempt
     if "INV-999" in doc_text:
-        # Conflicting totals -- attempt 1 misses conflict, attempt 2 corrects it
-        attempt_responses = [
-            {  # Attempt 1: misses the conflict
+        attempts = [
+            {   # Attempt 1: misses the conflict
                 "invoice_number": "INV-999",
                 "vendor_name": "Widget Co",
                 "total_amount": 350.00,
                 "line_items": [
-                    {"description": "Widget A", "amount": 100.00},
-                    {"description": "Widget B", "amount": 200.00}
+                    {"description": "Widget A",
+                     "amount": 100.00},
+                    {"description": "Widget B",
+                     "amount": 200.00}
                 ],
                 "calculated_total": 300.00,
-                "conflict_detected": False  # Wrong -- should be True
+                "conflict_detected": False
             },
-            {  # Attempt 2: corrected after specific error feedback
+            {   # Attempt 2: corrected after feedback
                 "invoice_number": "INV-999",
                 "vendor_name": "Widget Co",
                 "total_amount": 350.00,
                 "line_items": [
-                    {"description": "Widget A", "amount": 100.00},
-                    {"description": "Widget B", "amount": 200.00}
+                    {"description": "Widget A",
+                     "amount": 100.00},
+                    {"description": "Widget B",
+                     "amount": 200.00}
                 ],
                 "calculated_total": 300.00,
-                "conflict_detected": True  # Corrected
+                "conflict_detected": True
             }
         ]
     else:
-        # Missing data doc -- retries won't help (data isn't there)
-        attempt_responses = [
+        # Missing data -- retries won't help
+        attempts = [
             {
                 "invoice_number": "INV-888",
                 "vendor_name": "Supply Plus",
-                "total_amount": None,  # Correctly null -- data isn't in document
+                "total_amount": None,
                 "line_items": [],
                 "calculated_total": None,
                 "conflict_detected": False
@@ -9518,36 +10079,120 @@ def extract_with_retry(doc_text: str, max_retries: int = 2) -> dict:
         ]
 
     for attempt in range(max_retries + 1):
-        print(f"\n  Attempt {attempt + 1}/{max_retries + 1}...")
+        print(f"\n  Attempt {attempt + 1}/"
+              f"{max_retries + 1}...")
 
-        # In production, this would be client.messages.create()
-        data = attempt_responses[min(attempt, len(attempt_responses) - 1)]
-
+        idx = min(attempt, len(attempts) - 1)
+        data = attempts[idx]
         errors = validate_extraction(data)
 
         if not errors:
-            print(f"  Valid on attempt {attempt + 1}")
+            print(f"  [OK] Valid on attempt {attempt + 1}")
             return data
 
         print(f"  Errors: {errors}")
 
         if attempt < max_retries:
-            # In production, retry with SPECIFIC error feedback:
-            error_list = "\n".join(f"- {e}" for e in errors)
-            print(f"  Retrying with feedback:\n{error_list}")
+            # Construct specific correction prompt
+            error_list = "\n".join(
+                f"- {e}" for e in errors
+            )
+            print(f"  Retrying with feedback:")
+            print(f"  {error_list}")
+            # In production:
+            # messages.append({"role": "user",
+            #     "content": f"Your extraction had errors:"
+            #     f"\n{error_list}\nPlease correct."})
 
-    print(f"  Returning best attempt after {max_retries + 1} tries")
+    print(f"  [WARNING] Max retries exhausted. "
+          f"Returning best attempt.")
     return data
 ```
 
-## Reference code
-
-Two test cases demonstrate the critical distinction:
-- Conflicting totals → retry CAN fix it (information is there, just miscalculated)
-- Missing data → retry CAN'T fix it (information isn't in the document at all)
+### Step 3: Add the detected_pattern analysis
 
 ```python
-# Test cases
+# ============================================================
+# PART 3: DETECTED_PATTERN FOR FP ANALYSIS
+# ============================================================
+
+from collections import defaultdict
+
+# When developers dismiss findings, log the pattern
+DISMISSED_FINDINGS = [
+    {"detected_pattern": "== None comparison",
+     "dismissed": True},
+    {"detected_pattern": "f-string in SQL",
+     "dismissed": False},
+    {"detected_pattern": "except: pass",
+     "dismissed": True},
+    {"detected_pattern": "f-string in SQL",
+     "dismissed": False},
+    {"detected_pattern": "== None comparison",
+     "dismissed": True},
+]
+
+
+def analyze_dismissals(findings):
+    """Find which patterns have high dismissal rates."""
+    by_pattern = defaultdict(
+        lambda: {"dismissed": 0, "total": 0}
+    )
+    for f in findings:
+        p = f["detected_pattern"]
+        by_pattern[p]["total"] += 1
+        if f["dismissed"]:
+            by_pattern[p]["dismissed"] += 1
+
+    print("\n  Pattern Dismissal Rates:")
+    for pattern, counts in sorted(by_pattern.items()):
+        rate = counts["dismissed"] / counts["total"] * 100
+        flag = (" <- HIGH FP"
+                if rate >= 50 else "")
+        print(f"    '{pattern}': {rate:.0f}% dismissed "
+              f"({counts['dismissed']}/"
+              f"{counts['total']}){flag}")
+```
+
+### Step 4: Add the validation layers summary
+
+```python
+# ============================================================
+# PART 4: THREE VALIDATION LAYERS
+# ============================================================
+
+VALIDATION_LAYERS = [
+    {
+        "layer": "JSON Schema (tool_use)",
+        "catches": "Syntax/structure errors",
+        "misses": "Everything semantic",
+        "example": "Missing field, wrong type, "
+                   "invalid enum",
+    },
+    {
+        "layer": "Pydantic",
+        "catches": "Type constraints + basic rules",
+        "misses": "Business logic",
+        "example": "String too long, number out of "
+                   "range, invalid date",
+    },
+    {
+        "layer": "Custom semantic validation",
+        "catches": "Business logic, cross-field",
+        "misses": "Nothing (you write the rules)",
+        "example": "Line items don't sum to total, "
+                   "fabricated vendor IDs",
+    },
+]
+```
+
+### Step 5: Add test documents and demo runner
+
+```python
+# ============================================================
+# PART 5: TEST DOCUMENTS AND DEMO
+# ============================================================
+
 CONFLICTING_DOC = """
 INVOICE #INV-999
 Vendor: Widget Co
@@ -9560,216 +10205,144 @@ Total: $350.00
 MISSING_DATA_DOC = """
 INVOICE #INV-888
 Vendor: Supply Plus
-Contact billing@supplyplus.com for pricing details.
+Contact billing@supplyplus.com for pricing.
 """
 
-if __name__ == "__main__":
-    print("=== Test 1: Conflicting totals (retry should fix it) ===")
+def run_demo():
+    sep = "=" * 60
+    print(sep)
+    print("VALIDATION AND RETRY LOOPS")
+    print(sep)
+
+    # Test 1: Conflicting totals (retry fixes it)
+    print("\n--- Test 1: Conflicting totals ---")
+    print("(Retry SHOULD fix -- info is in document)")
     result = extract_with_retry(CONFLICTING_DOC)
-    print(f"\nFinal: conflict_detected={result.get('conflict_detected')}, "
-          f"calculated_total={result.get('calculated_total')}")
+    print(f"\n  Final: conflict_detected="
+          f"{result.get('conflict_detected')}")
 
-    print("\n\n=== Test 2: Missing data (retry won't help) ===")
+    # Test 2: Missing data (retry won't help)
+    print("\n\n--- Test 2: Missing data ---")
+    print("(Retry WON'T help -- info is absent)")
     result = extract_with_retry(MISSING_DATA_DOC)
-    print(f"\nFinal: total_amount={result.get('total_amount')} (should be null — data isn't in doc)")
+    print(f"\n  Final: total_amount="
+          f"{result.get('total_amount')} "
+          f"(null = correct)")
 
-    print("\n\n=== When Retries Help vs Don't Help ===")
+    # Detected pattern analysis
+    print(f"\n\n{sep}")
+    print("DETECTED_PATTERN DISMISSAL ANALYSIS")
+    print(sep)
+    analyze_dismissals(DISMISSED_FINDINGS)
+
+    # Validation layers
+    print(f"\n{sep}")
+    print("THREE VALIDATION LAYERS")
+    print(sep)
+    for layer in VALIDATION_LAYERS:
+        print(f"\n  {layer['layer']}:")
+        print(f"    Catches: {layer['catches']}")
+        print(f"    Misses:  {layer['misses']}")
+        print(f"    Example: {layer['example']}")
+
+    # When retries help vs don't
+    print(f"\n{sep}")
+    print("WHEN RETRIES HELP VS DON'T")
+    print(sep)
     print("""
-    Retries WILL help:
-    - Format errors (date in wrong format -> specify the correct format)
-    - Arithmetic errors (calculated_total doesn't match sum -> point out the math)
-    - Missing cross-field validation (conflict_detected should be true -> explain why)
-    - Structural errors (line items in wrong format -> show correct structure)
+  Retries HELP (info exists, extracted wrong):
+  - Format errors (date in wrong format)
+  - Arithmetic (calculated_total != sum)
+  - Missing cross-field flags (conflict_detected)
 
-    Retries WON'T help:
-    - Information not in the document ("contact billing for pricing")
-      -> The data literally doesn't exist in the source. Retrying doesn't add new information.
-    - Information in an external document that wasn't provided
-    - Genuinely ambiguous source data
+  Retries DON'T HELP (info absent):
+  - "Contact billing for pricing" -> no price
+  - Document doesn't mention vendor ID -> null
+  - Genuinely ambiguous source data
 
-    KEY EXAM CONCEPT: Identify WHETHER information is absent vs structurally wrong.
-    Absent = null is correct, stop retrying.
-    Wrong format = retry with specific correction feedback.
-    """)
+  RULE: Absent info -> null is correct. Stop retrying.
+        Wrong format -> retry with specific error.
+""")
+
+
+if __name__ == "__main__":
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
 
-```
-python lab-d4-prompt-eng/retry_loop.py
-```
-
-**What you should see:**
-- Test 1 (conflicting totals): Attempt 1 may miss the conflict → validation error → Attempt 2 corrects with conflict_detected=true
-- Test 2 (missing data): All attempts return total_amount=null because the pricing data genuinely isn't in the document. Retries don't help here.
-
-## Reference code
-
-When Claude reviews code and developers dismiss findings, you need to know WHY.
-The `detected_pattern` field lets you systematically analyze dismissal patterns.
-
-```python
-# Code review finding WITH detected_pattern field
-review_finding_schema = {
-    "name": "report_finding",
-    "description": "Report a code review finding",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "file":             {"type": "string"},
-            "line":             {"type": "integer"},
-            "severity":         {"type": "string", "enum": ["high", "medium", "low"]},
-            "issue":            {"type": "string"},
-            "suggestion":       {"type": "string"},
-            "detected_pattern": {
-                "type": "string",
-                "description": (
-                    "The specific code construct that triggered this finding. "
-                    "Examples: 'f-string in SQL query', 'except: pass', "
-                    "'hardcoded string comparison'. "
-                    "Used for false positive analysis when developers dismiss findings."
-                )
-            }
-        },
-        "required": ["file", "severity", "issue", "detected_pattern"]
-    }
-}
-
-# How to use: when developers dismiss a finding, log it with detected_pattern.
-# After 100 reviews, analyze: which detected_patterns have high dismissal rates?
-# High dismissal rate -> that pattern is generating false positives -> refine the criteria.
-
-dismissed_findings = [
-    {"detected_pattern": "== None comparison",  "dismissed": True},
-    {"detected_pattern": "f-string in SQL",     "dismissed": False},
-    {"detected_pattern": "except: pass",        "dismissed": True},
-    {"detected_pattern": "f-string in SQL",     "dismissed": False},
-    {"detected_pattern": "== None comparison",  "dismissed": True},
-]
-
-from collections import Counter, defaultdict
-
-def analyze_dismissal_patterns(findings: list) -> None:
-    """Find which patterns have high dismissal rates -> false positive candidates."""
-    by_pattern = defaultdict(lambda: {"dismissed": 0, "total": 0})
-    for f in findings:
-        p = f["detected_pattern"]
-        by_pattern[p]["total"] += 1
-        if f["dismissed"]:
-            by_pattern[p]["dismissed"] += 1
-
-    print("Pattern Dismissal Rates:")
-    for pattern, counts in sorted(by_pattern.items()):
-        rate = counts["dismissed"] / counts["total"] * 100
-        flag = " <- HIGH FALSE POSITIVE RATE" if rate >= 50 else ""
-        print(f"  '{pattern}': {rate:.0f}% dismissed ({counts['dismissed']}/{counts['total']}){flag}")
-
-analyze_dismissal_patterns(dismissed_findings)
+```bash
+cd ~/claude-architect-labs
+python lab-d4-prompt-engineering/validation_retry_loop.py
 ```
 
-Run it. High-dismissal patterns → those are your false positive sources → tighten criteria for them.
+You should see:
+- Test 1: Attempt 1 misses conflict -> specific error feedback -> Attempt 2 corrects with `conflict_detected=true`
+- Test 2: Returns `total_amount=null` because pricing data isn't in the document. Retries don't help.
+- Dismissal analysis: "== None comparison" has 100% dismissal rate (high FP), "f-string in SQL" has 0% (real issues)
+- Three validation layers table
 
-## Reference code
+## Try it yourself
 
-The exam appendix and Exercise 3 reference Pydantic as a tested concept.
-Here's how Pydantic replaces manual validation in extraction pipelines:
+Add a new semantic validator that checks: "if invoice_date is present, it must not be in the future."
 
-```python
-# Install: pip install pydantic
-from pydantic import BaseModel, validator, ValidationError
-from typing import Optional, List
-import json
-
-class LineItem(BaseModel):
-    description: str
-    amount: float
-
-class InvoiceExtraction(BaseModel):
-    invoice_number: str
-    vendor_name: str
-    total_amount: Optional[float] = None
-    line_items: List[LineItem] = []
-    conflict_detected: bool = False
-
-    @validator("total_amount")
-    def total_must_be_positive(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("total_amount must be positive")
-        return v
-
-def validate_with_pydantic(raw_data: dict) -> tuple[dict | None, list]:
-    """
-    Validate extraction using Pydantic.
-    Returns (validated_data, errors).
-    Pydantic catches: wrong types, missing required fields, constraint violations.
-    """
-    try:
-        validated = InvoiceExtraction(**raw_data)
-        return validated.dict(), []
-    except ValidationError as e:
-        errors = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-        return None, errors
-
-# Test cases
-test_cases = [
-    {"invoice_number": "INV-001", "vendor_name": "Acme", "total_amount": 500.0, "line_items": []},
-    {"invoice_number": "INV-002", "vendor_name": "Acme", "total_amount": -100},  # Pydantic catches negative
-    {"vendor_name": "Acme"},                                                       # Missing required field
-    {"invoice_number": "INV-003", "vendor_name": "Acme",
-     "total_amount": 300.0, "line_items": [{"description": "Widget", "amount": "not-a-number"}]},  # Type error
-]
-
-for data in test_cases:
-    result, errors = validate_with_pydantic(data)
-    if errors:
-        print(f"VALIDATION ERRORS: {errors}")
-        # -> Retry with: original_doc + failed_extraction + specific_errors
-    else:
-        print(f"VALID: {result['invoice_number']}")
-```
-
-**Key distinction (frequently tested):**
-- Pydantic catches **schema/type errors** (wrong types, missing fields)
-- Tool use with JSON schema also catches **syntax errors** (malformed JSON)
-- Neither catches **semantic errors** (line items don't sum to total)
-- Semantic errors need custom cross-field validation like `conflict_detected`
+1. Add the validation rule to `validate_extraction()`.
+2. Create a test document with a future date (e.g., "Date: December 31, 2099").
+3. Create a simulated extraction that returns the future date.
+4. Run the retry loop and observe: the first attempt fails validation, the retry prompt includes the specific error, and the second attempt returns the corrected date.
 
 ## Check your understanding
 
-1. **What happens if you remove the validation function** and rely only on JSON schema? (Answer: yes, the model still returns line items that don't sum to the total — schema catches syntax, not semantics)
-2. **When does retrying NOT help?** Consider a document that says "contact billing for pricing." Will retry 3 produce the missing data? (Answer: no — the data isn't there. Retries can't invent new information. Return null.)
-3. **Why is specific error feedback critical in the retry message?** Compare "try again" vs "line items sum to $300 but total_amount is $350. Set conflict_detected=true." (Answer: specific errors enable targeted correction; vague retries produce random changes)
+**Q1.** Your extraction pipeline validates successfully against the JSON schema but line items sum to $300 while the stated total is $350. What type of validation is missing?
 
-### Validation Layers — What Each One Catches
+**A.** Stricter JSON schema with numeric range constraints
+**B.** Custom semantic validation that checks cross-field consistency (line item sum vs stated total)
+**C.** Pydantic type validation
+**D.** More few-shot examples showing correct arithmetic
 
-The exam tests your understanding of three distinct validation layers:
+**Correct: B.** JSON schema catches syntax (structure, types). Cross-field arithmetic is a semantic error that requires custom validation code. **Why not A:** JSON schema range constraints can check individual field bounds but cannot compare values across fields. **Why not C:** Pydantic catches type constraints but doesn't inherently validate that line items sum to the total. **Why not D:** Few-shot examples improve extraction quality probabilistically but don't guarantee arithmetic correctness.
 
-| Layer | What it catches | What it misses | Example |
-|---|---|---|---|
-| **JSON Schema (tool_use)** | Syntax/structure errors | Everything semantic | Missing required field, wrong type, invalid enum value |
-| **Pydantic** | Type constraints + basic rules | Business logic | String too long, number out of range, invalid date format |
-| **Custom semantic validation** | Business logic + cross-field | Nothing (you write the rules) | Line items don't sum to total, fabricated vendor IDs, conflicting dates |
+---
 
-**The exam trap:** Candidates who think "I use JSON schema, so my output is correct" are wrong. Schema guarantees **syntax** (the JSON is well-formed and matches the structure). It does NOT guarantee **semantics** (the values are accurate, consistent, or non-fabricated).
+**Q2.** Your retry prompt says "the extraction had errors, please try again." After 3 retries, the same error persists. A colleague changes the retry prompt to: "Line items sum to $300 but total_amount is $350. Set calculated_total=300 and conflict_detected=true." The next retry succeeds. What is the lesson?
 
-**Nullable fields prevent fabrication.** When a field is `"type": ["string", "null"]`, the model returns `null` for missing data instead of inventing a value to satisfy a required field.
+**A.** The model needs more retries -- 5 instead of 3
+**B.** Specific error feedback enables targeted correction; vague retries produce random changes
+**C.** The colleague used a more capable model
+**D.** The model's temperature was too high
 
-## Exam tips
+**Correct: B.** Specific error messages tell the model exactly what to fix. "Try again" gives no direction -- the model may change something unrelated or repeat the same error. **Why not A:** More vague retries don't fix the problem -- the model doesn't know what's wrong. **Why not C:** The same model succeeds with specific feedback. **Why not D:** Temperature affects word choice, not whether the model understands what to correct.
 
-- **If the exam says** "extraction fails, retry doesn't help" → information is absent from the source document
-- **Wrong answer trap:** "Retry with a different prompt" — can't extract what isn't there
-- **Wrong answer trap:** "Use a more capable model" — no model can extract data that doesn't exist in the source
-- **The correct pattern:** Retries fix format/structural errors. They can't fix missing information. Return null.
+---
+
+**Q3.** A document says "Contact billing@supplier.com for pricing details." Your extraction returns `total_amount=null`. Should you retry?
+
+**A.** Yes -- retry with a more detailed extraction prompt
+**B.** Yes -- retry with a higher max_tokens setting
+**C.** No -- the pricing data is absent from the document. Null is the correct answer. Retrying cannot create information that doesn't exist.
+**D.** No -- but flag it as an error so the pipeline stops
+
+**Correct: C.** Retries help when information exists in the document but was extracted wrong. When information is genuinely absent, null is the correct extraction. Retrying cannot add new information to the source. **Why not A:** A better prompt can't extract data that isn't there. **Why not B:** max_tokens controls output length, not access to missing information. **Why not D:** Returning null for absent data is correct behavior, not an error.
 
 ## Key takeaways
 
-- Retry includes SPECIFIC validation errors → Claude knows exactly what to fix
-- Retries help: format errors, arithmetic errors, structural issues
-- Retries don't help: information absent from source document
-- Include original document + failed extraction + specific errors in retry prompt
-- Three validation layers: JSON Schema (syntax) → Pydantic (types) → Custom (semantics)
-- `detected_pattern` field: track which code constructs trigger findings → analyze dismissal rates → identify false positive sources
-- Nullable fields prevent fabrication — model returns null instead of inventing data
+- JSON schema catches syntax errors; semantic validation catches meaning errors -- you need both
+- Retry with SPECIFIC error feedback: original document + failed extraction + exact errors
+- Retries help for format/arithmetic errors; don't help for absent information
+- Bounded retry (max 3) prevents infinite loops; escalate after exhaustion
+- `detected_pattern` field enables false positive analysis by tracking dismissal rates
+- Three layers: JSON Schema (syntax) -> Pydantic (types) -> Custom (semantics)
+
+## Exam tips
+
+- **"Schema validates but values are wrong"** --> custom semantic validation (cross-field checks)
+- **"Retry doesn't help"** --> information is absent from source; return null
+- **"Model fabricates values"** --> make fields nullable (`["string", "null"]`)
+- **Wrong answer trap:** "Retry with a different prompt" -- can't extract what isn't there
+- **Wrong answer trap:** "Use a more capable model" -- no model extracts absent data
+- **The core pattern:** specific error feedback in retries; null for absent data; bounded attempts
+
+**Next:** Lab 4.5 covers the Message Batches API -- 50% cost savings for non-blocking workflows like overnight reports, with the critical constraint that blocking tasks (pre-merge checks) must stay synchronous.
 
 ---
 
