@@ -13631,162 +13631,228 @@ Apply the provenance tracker. Verify:
 
 ---
 
+
 # LAB FINAL: THE COMPLETE EXAM SCENARIO
-# ALL 5 DOMAINS
+# All 5 Domains -- Capstone Integration
 # Build a production-grade customer support agent
 # Time: ~45 minutes | Difficulty: Advanced
-# Prerequisites: All modules
+# Prerequisites: All modules (1.1 through 5.6)
 
-> **Prerequisite:** Complete all labs in Modules 1–5 first.
+## Scenario
 
-## Learning objectives
+You are architecting a customer support agent that will replace the first-line human support team for a mid-sized e-commerce company. The agent handles refund requests, order status inquiries, shipping issues, and account updates. It routes hard cases -- policy edge cases, high-dollar refunds, compliance-sensitive requests -- to human agents with structured handoff context.
 
-By the end of this lab, you will be able to:
-- Integrate all 5 domain patterns into a single production-grade agent
-- Identify which domain each architectural decision belongs to
-- Apply prerequisite gates, hooks, tool scoping, case facts, and escalation in one system
-- Trace through a complete agent implementation and explain every design choice
+This is the capstone. Everything from Modules 1-5 comes together in one system: the agentic loop from Module 1, the tool design and structured errors from Module 2, the CLAUDE.md configuration and CI deployment from Module 3, the explicit criteria and structured output from Module 4, and the case facts, escalation rules, and provenance tracking from Module 5.
 
-## Recall
-1. How do you preserve claim-source mappings through synthesis? (Lab 5.6)
-2. When two sources conflict, should the synthesis agent pick one? (Lab 5.6)
-3. What is the core exam thesis about deterministic vs probabilistic approaches? (All labs)
+## What you'll learn
 
-## Overview
+- Integrating all 5 domain patterns into a single production-grade agent
+- Domain 1: Agentic loop with prerequisite gates and PostToolUse hooks for data normalization
+- Domain 2: Well-described tools with structured error responses and scoped access
+- Domain 3: CLAUDE.md hierarchy, path-specific rules, slash commands, and CI deployment
+- Domain 4: Explicit escalation criteria with few-shot examples and structured handoff output
+- Domain 5: Case facts block for context preservation, deterministic routing for human review
 
-**This is the exam.** The certification uses scenario-based questions grounded in realistic production contexts. Scenario 1 (Customer Support) is the most comprehensive -- it tests all 5 domains simultaneously.
+## Concepts
 
-If you can build this agent and understand every decision in it, you're ready for the exam.
+This lab does not introduce new concepts. It integrates the patterns you practiced individually in 30 labs into one unified system. The core exam insight: every production agent requires decisions from all 5 domains. The certification tests whether you can identify which domain each architectural decision belongs to and apply the correct pattern for each.
 
-**Exam connection:** 4 of 6 exam scenarios are randomly selected. Customer Support (Scenario 1) covers Domains 1, 2, and 5. The concepts here also appear in Scenarios 3-6. Every pattern you practiced in individual labs comes together in this one system.
+**The universal rule:** Deterministic compliance (gates, hooks, schema enforcement) for things that must be reliable. Probabilistic guidance (prompts, few-shot, criteria) for things that benefit from flexibility. Know which situation requires which approach.
 
-## Try it
+## Walkthrough
 
-Try this in Claude Code:
+### Step 1: Create the project structure
 
-```
-> Let's build a complete customer support agent. I'll test it with these scenarios:
->
-> 1. "I'm jane@email.com. My order ORD-555 arrived damaged. I want a refund."
->    (Should: verify customer -> look up order -> process refund)
->
-> 2. "I want to speak to a manager right now."
->    (Should: escalate immediately, no investigation)
->
-> 3. "I'm jane@email.com. I found the same item at Amazon for $50 less.
->    Will you price match?"
->    (Should: escalate as policy gap — our policy doesn't cover competitor matching)
->
-> For each scenario, identify which domains are being tested:
-> Domain 1 (agentic loop, gates), Domain 2 (tool design, errors),
-> Domain 4 (escalation criteria), Domain 5 (case facts, trimming).
+```bash
+mkdir -p ~/claude-architect-labs/lab-final-capstone/.claude/rules
+mkdir -p ~/claude-architect-labs/lab-final-capstone/.claude/commands
+cd ~/claude-architect-labs/lab-final-capstone
 ```
 
-This is the exam scenario. Every domain comes together in one unified system.
+### Step 2: Create CLAUDE.md (Domain 3)
 
-### The Scenario
+Create `CLAUDE.md` at the project root. This gives Claude Code the agent's role, coding standards, and pulls in modular rules via `@import`:
 
-This is Exam Scenario 1: Customer Support Resolution Agent.
-You apply every concept from every domain in one unified system.
+```markdown
+# Customer Support Agent -- Project Configuration
 
-### What You'll Build
+## Role
+Production customer support agent for e-commerce.
+Handles refunds, order status, shipping, account updates.
 
-A complete customer support agent with:
+## Standards
+@import .claude/rules/support-standards.md
 
-**Domain 1 -- Agentic Architecture:**
-- Agentic loop
-- Multi-agent coordinator pattern
-- Programmatic prerequisite gates
-- PostToolUse hooks for data normalization
+## Architecture Patterns
+- Agentic loop: while True + stop_reason (Lab 1.1)
+- Prerequisite gates: verify customer before any order/refund ops (Lab 1.4)
+- Structured errors: isError, errorCategory, isRetryable (Lab 2.2)
+- Tool result trimming: keep only relevant fields per issue type (Lab 5.1)
+- Case facts block: persist exact amounts/dates across turns (Lab 5.1)
 
-**Domain 2 -- Tool Design:**
-- Well-designed tool descriptions
-- Structured error responses with all 4 categories
-- Scoped tool access with tool_choice
+## Escalation Policy
+- Explicit customer request -> escalate immediately
+- Policy gap (policy silent on the situation) -> escalate
+- No progress after 3 tool calls -> escalate
+- Refund > $500 -> auto-escalate via policy gate
+- DO NOT escalate for frustrated customers whose issue is within capability
+```
 
-**Domain 3 -- Configuration:**
-- CLAUDE.md context configuration
+### Step 3: Create path-specific rules (Domain 3)
 
-**Domain 4 + 5 -- Prompt Engineering & Context:**
-- Explicit escalation criteria with few-shot examples
-- Structured handoff output on escalation
-- Case facts block for context preservation
-- Tool result trimming
+Create `.claude/rules/support-standards.md`:
 
-## Reference code
+```markdown
+---
+paths:
+  - "complete_agent.py"
+  - "**/*.py"
+---
+# Support Agent Standards
+# (Loads only when editing agent code)
+
+## Tool Descriptions
+- Every tool: purpose, input format, output, when-to-use, when-NOT-to-use
+- Callback: Lab 2.1 five-part template
+
+## Error Responses
+- Always include: isError, errorCategory, isRetryable
+- Categories: transient, validation, business, permission
+- Callback: Lab 2.2 structured errors
+
+## Escalation Criteria
+- Dollar threshold: $500 auto-approval limit
+- Explicit request: honor immediately, no investigation
+- Policy gap: escalate when policy is silent
+- Callback: Lab 5.2 deterministic triggers
+
+## Review Routing
+- Use deterministic rules, NOT model self-confidence
+- Gray-zone cases -> human review
+- Callback: Lab 5.5 routing rules
+```
+
+### Step 4: Create the slash command (Domain 3)
+
+Create `.claude/commands/run-support-agent.md`:
+
+```markdown
+Run the customer support agent with this customer request: $ARGUMENTS
+
+Use the escalation criteria from CLAUDE.md.
+Verify customer identity before any order/refund operations.
+Trim tool results to relevant fields.
+Maintain case facts block across the conversation.
+```
+
+### Step 5: Build the agent (Domains 1, 2, 4, 5)
+
+Create `complete_agent.py`. This is the core -- all 4 remaining domains integrated:
 
 ```python
 import json
+from datetime import datetime
 
-# ============================================
-# DOMAIN 1: Data layer (fake backend)
-# ============================================
+
+# ============================================================
+# DOMAIN 1: Data layer (simulated backend)
+# ============================================================
 
 CUSTOMERS = {
-    "jane@email.com": {"id": "CUST-001", "name": "Jane Smith", "tier": "gold",
-                       "email": "jane@email.com", "phone": "555-0101",
-                       "created_at": 1704067200,  # Unix timestamp (will be normalized)
-                       "status": 1},               # Numeric status (will be normalized)
-    "bob@email.com":  {"id": "CUST-002", "name": "Bob Jones", "tier": "silver",
-                       "email": "bob@email.com",  "phone": "555-0102",
-                       "created_at": 1706745600,
-                       "status": 1}
+    "jane@email.com": {
+        "id": "CUST-001", "name": "Jane Smith",
+        "tier": "gold", "email": "jane@email.com",
+        "phone": "555-0101",
+        "created_at": 1704067200, "status": 1,
+    },
+    "bob@email.com": {
+        "id": "CUST-002", "name": "Bob Jones",
+        "tier": "silver", "email": "bob@email.com",
+        "phone": "555-0102",
+        "created_at": 1706745600, "status": 1,
+    },
 }
 
 ORDERS = {
-    "ORD-555": {"id": "ORD-555", "customer_id": "CUST-001",
-                "items": ["Blue Widget x2", "Red Gadget x1"],
-                "total": 149.99, "status": "shipped",
-                "tracking": "1Z999AA10123456784",
-                "delivery_eta": "2024-01-18",
-                "warehouse_id": "WH-007", "picker_id": "EMP-1234",  # irrelevant fields
-                "insurance_value": 149.99, "weight_lbs": 2.3},       # irrelevant fields
-    "ORD-777": {"id": "ORD-777", "customer_id": "CUST-002",
-                "items": ["Green Thing x1"], "total": 29.99,
-                "status": "processing", "tracking": None,
-                "delivery_eta": None,
-                "warehouse_id": "WH-003", "picker_id": None}
+    "ORD-555": {
+        "id": "ORD-555", "customer_id": "CUST-001",
+        "items": ["Blue Widget x2", "Red Gadget x1"],
+        "total": 149.99, "status": "shipped",
+        "tracking": "1Z999AA10123456784",
+        "delivery_eta": "2024-01-18",
+        "warehouse_id": "WH-007",
+        "picker_id": "EMP-1234",
+        "insurance_value": 149.99, "weight_lbs": 2.3,
+    },
+    "ORD-777": {
+        "id": "ORD-777", "customer_id": "CUST-002",
+        "items": ["Green Thing x1"], "total": 29.99,
+        "status": "processing", "tracking": None,
+        "delivery_eta": None,
+        "warehouse_id": "WH-003", "picker_id": None,
+    },
 }
 
-# ============================================
-# DOMAIN 1: PostToolUse Hook — Data Normalization
-# ============================================
+
+# ============================================================
+# DOMAIN 1: PostToolUse hook -- data normalization
+# ============================================================
 
 STATUS_MAP = {1: "active", 2: "suspended", 3: "closed"}
 
-from datetime import datetime
 
-def post_tool_use_normalize(tool_name: str, result: dict) -> dict:
-    """Normalize data formats before model sees results."""
-    if "created_at" in result and isinstance(result["created_at"], int):
-        result["created_at"] = datetime.fromtimestamp(result["created_at"]).isoformat()
-    if "status" in result and isinstance(result["status"], int):
-        result["status"] = STATUS_MAP.get(result["status"], "unknown")
+def post_tool_use_normalize(tool_name, result):
+    """Normalize data formats before model sees results.
+    Lab 1.5: hooks intercept tool results for consistent
+    formatting.
+    """
+    if ("created_at" in result
+            and isinstance(result["created_at"], int)):
+        result["created_at"] = datetime.fromtimestamp(
+            result["created_at"]
+        ).isoformat()
+    if ("status" in result
+            and isinstance(result["status"], int)):
+        result["status"] = STATUS_MAP.get(
+            result["status"], "unknown"
+        )
     return result
 
-# ============================================
-# DOMAIN 5: Tool Result Trimming
-# ============================================
 
-CUSTOMER_RELEVANT_FIELDS = {"id", "name", "email", "tier", "status"}
-ORDER_RELEVANT_FIELDS     = {"id", "status", "total", "items", "tracking", "delivery_eta"}
+# ============================================================
+# DOMAIN 5: Tool result trimming
+# ============================================================
 
-def trim_customer(c: dict) -> dict:
-    return {k: v for k, v in c.items() if k in CUSTOMER_RELEVANT_FIELDS}
+CUSTOMER_FIELDS = {
+    "id", "name", "email", "tier", "status"
+}
+ORDER_FIELDS = {
+    "id", "status", "total", "items",
+    "tracking", "delivery_eta"
+}
 
-def trim_order(o: dict) -> dict:
-    return {k: v for k, v in o.items() if k in ORDER_RELEVANT_FIELDS}
 
-# ============================================
-# DOMAIN 1: Prerequisite Gate State
-# ============================================
+def trim_customer(c):
+    return {k: v for k, v in c.items()
+            if k in CUSTOMER_FIELDS}
+
+
+def trim_order(o):
+    return {k: v for k, v in o.items()
+            if k in ORDER_FIELDS}
+
+
+# ============================================================
+# DOMAIN 1: Prerequisite gate state
+# ============================================================
 
 verified_customer_id = None
-case_facts = {}  # Domain 5: persistent case facts
+case_facts = {}
 
-# ============================================
-# DOMAIN 2: Tool Execution with Structured Errors
-# ============================================
+
+# ============================================================
+# DOMAIN 2: Tool execution with structured errors
+# ============================================================
 
 def execute_tool(name, input_data):
     global verified_customer_id, case_facts
@@ -13796,41 +13862,48 @@ def execute_tool(name, input_data):
 
         if not email or "@" not in email:
             return json.dumps({
-                "isError": True, "errorCategory": "validation",
+                "isError": True,
+                "errorCategory": "validation",
                 "isRetryable": False,
-                "message": f"Invalid email format: '{email}'"
+                "message": "Invalid email format: "
+                           "'" + email + "'"
             })
 
         c = CUSTOMERS.get(email)
         if c:
-            # Domain 1: PostToolUse hook — normalize data
-            c = post_tool_use_normalize("get_customer", dict(c))
-            # Domain 5: Trim to relevant fields
+            c = post_tool_use_normalize(
+                "get_customer", dict(c)
+            )
             c_trimmed = trim_customer(c)
             verified_customer_id = c_trimmed["id"]
-            print(f"    [OK] Customer verified: {verified_customer_id}")
-            # Domain 5: Update case facts
-            case_facts.update({"customer_id": verified_customer_id,
-                                "email": email, "tier": c_trimmed["tier"]})
+            print("    [OK] Customer verified: "
+                  + verified_customer_id)
+            case_facts.update({
+                "customer_id": verified_customer_id,
+                "email": email,
+                "tier": c_trimmed["tier"],
+            })
             return json.dumps(c_trimmed)
 
         return json.dumps({
             "isError": False, "results": None,
-            "message": f"No customer found with email '{email}'."
+            "message": "No customer found with "
+                       "email '" + email + "'."
         })
 
     elif name == "lookup_order":
-        # Domain 1: Prerequisite gate
         if verified_customer_id is None:
             return json.dumps({
-                "isError": True, "errorCategory": "validation",
+                "isError": True,
+                "errorCategory": "validation",
                 "isRetryable": False,
-                "message": "Customer verification required. Call get_customer first."
+                "message": "Customer verification "
+                           "required. Call get_customer "
+                           "first."
             })
         order_id = input_data.get("order_id", "")
         o = ORDERS.get(order_id)
         if o:
-            # Domain 5: Trim to relevant fields
             o_trimmed = trim_order(dict(o))
             case_facts.setdefault("order_ids", [])
             if order_id not in case_facts["order_ids"]:
@@ -13838,367 +13911,555 @@ def execute_tool(name, input_data):
             return json.dumps(o_trimmed)
         return json.dumps({
             "isError": False, "results": None,
-            "message": f"No order found with ID '{order_id}'."
+            "message": "No order found: '"
+                       + order_id + "'."
         })
 
     elif name == "process_refund":
-        # Domain 1: Prerequisite gate
         if verified_customer_id is None:
             return json.dumps({
-                "isError": True, "errorCategory": "validation",
+                "isError": True,
+                "errorCategory": "validation",
                 "isRetryable": False,
-                "message": "Customer verification required. Call get_customer first."
+                "message": "Customer verification "
+                           "required first."
             })
         amount = input_data.get("amount", 0)
         order_id = input_data.get("order_id", "unknown")
 
-        # Domain 1: Policy gate (PreToolUse hook pattern)
         if amount > 500:
-            print(f"    [BLOCKED] BLOCKED: ${amount} > $500 policy limit")
+            print("    [BLOCKED] $" + str(amount)
+                  + " > $500 policy limit")
             return json.dumps({
-                "isError": True, "errorCategory": "business",
+                "isError": True,
+                "errorCategory": "business",
                 "isRetryable": False,
-                "message": f"Refund of ${amount} exceeds $500 auto-approval limit.",
-                "customer_friendly_message": "This refund requires manager approval. You'll be contacted within 24 hours.",
+                "message": "Refund of $" + str(amount)
+                           + " exceeds $500 limit.",
+                "customer_friendly_message":
+                    "This refund requires manager "
+                    "approval.",
                 "redirect": "escalate_to_human"
             })
 
-        print(f"    [OK] Refund processed: ${amount} for {order_id}")
+        print("    [OK] Refund: $" + str(amount)
+              + " for " + order_id)
         case_facts.setdefault("refund_amounts", [])
         case_facts["refund_amounts"].append(amount)
-        return json.dumps({"success": True, "refund_amount": amount,
-                           "order_id": order_id, "customer_id": verified_customer_id})
+        return json.dumps({
+            "success": True,
+            "refund_amount": amount,
+            "order_id": order_id,
+            "customer_id": verified_customer_id,
+        })
 
     elif name == "escalate_to_human":
         summary = input_data.get("summary", "")
-        reason  = input_data.get("reason", "unspecified")
-        print(f"\n    -> ESCALATING: reason={reason}")
-        print(f"      Customer: {input_data.get('customer_id', verified_customer_id)}")
-        print(f"      Summary: {summary[:120]}")
-        return json.dumps({"escalated": True, "ticket_id": "TKT-9999",
-                           "assigned_agent": "Sarah (Senior Support)"})
+        reason = input_data.get("reason", "unspecified")
+        print("\n    -> ESCALATING: reason=" + reason)
+        print("      Customer: "
+              + str(input_data.get(
+                  "customer_id", verified_customer_id)))
+        print("      Summary: " + summary[:120])
+        return json.dumps({
+            "escalated": True,
+            "ticket_id": "TKT-9999",
+            "assigned_agent": "Sarah (Senior Support)",
+        })
 
-    return json.dumps({"error": f"Unknown tool: {name}"})
+    return json.dumps({"error": "Unknown tool: " + name})
 
 
-# ============================================
-# DOMAIN 2: Tool Definitions (well-described)
-# ============================================
+# ============================================================
+# DOMAIN 2: Tool definitions (five-part template)
+# ============================================================
 
 tools = [
     {
         "name": "get_customer",
         "description": (
-            "Retrieves customer profile by email address. "
+            "Retrieves customer profile by email. "
             "Input: email (string). "
-            "Returns: customer ID, name, membership tier, account status. "
-            "ALWAYS call this first before any order lookup or refund operations. "
-            "Do NOT use for: looking up order details, tracking numbers."
-        ),
-        "input_schema": {"type": "object",
-                         "properties": {"email": {"type": "string",
-                                                  "description": "Customer's email address"}},
-                         "required": ["email"]}
-    },
-    {
-        "name": "lookup_order",
-        "description": (
-            "Retrieves order details by order ID (format: 'ORD-NNN'). "
-            "Returns: status, items, total, tracking number, delivery ETA. "
-            "Requires: get_customer must be called first. "
-            "Use when: customer mentions a specific order ID or asks about order status/tracking."
-        ),
-        "input_schema": {"type": "object",
-                         "properties": {"order_id": {"type": "string",
-                                                     "description": "Order ID, e.g. ORD-555"}},
-                         "required": ["order_id"]}
-    },
-    {
-        "name": "process_refund",
-        "description": (
-            "Issues a refund for a customer's order. "
-            "Input: order_id, amount (numeric, no currency symbol). "
-            "Requires: get_customer must succeed first. "
-            "Limit: refunds over $500 automatically escalate to human agent. "
-            "Use for: damaged items, missing items, incorrect orders, standard returns."
-        ),
-        "input_schema": {"type": "object",
-                         "properties": {"order_id": {"type": "string"},
-                                        "amount":   {"type": "number",
-                                                     "description": "Refund amount in dollars"}},
-                         "required": ["order_id", "amount"]}
-    },
-    {
-        "name": "escalate_to_human",
-        "description": (
-            "Transfers case to a human agent. "
-            "Use ONLY when: (1) customer explicitly requests human, "
-            "(2) policy gap exists, (3) no progress after full investigation, "
-            "(4) refund over $500. "
-            "Do NOT use for: frustrated customers whose issue you can resolve, "
-            "standard returns/refunds within policy."
+            "Returns: customer ID, name, tier, status. "
+            "ALWAYS call first before order/refund ops. "
+            "Do NOT use for: order details, tracking."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "reason": {"type": "string",
-                           "enum": ["explicit_customer_request", "policy_gap",
-                                    "no_progress", "high_value_refund"]},
-                "customer_id": {"type": ["string", "null"]},
-                "summary":  {"type": "string",
-                             "description": "Brief summary of the issue"},
+                "email": {
+                    "type": "string",
+                    "description": "Customer email"
+                }
+            },
+            "required": ["email"]
+        }
+    },
+    {
+        "name": "lookup_order",
+        "description": (
+            "Retrieves order by ID (format: ORD-NNN). "
+            "Returns: status, items, total, tracking. "
+            "Requires: get_customer must succeed first. "
+            "Use for: order status, tracking, details."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "Order ID, e.g. ORD-555"
+                }
+            },
+            "required": ["order_id"]
+        }
+    },
+    {
+        "name": "process_refund",
+        "description": (
+            "Issues a refund for a customer order. "
+            "Input: order_id, amount (numeric). "
+            "Requires: get_customer must succeed first. "
+            "Limit: > $500 auto-escalates to human. "
+            "Use for: damaged, missing, incorrect orders."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {"type": "string"},
+                "amount": {
+                    "type": "number",
+                    "description": "Refund amount in dollars"
+                }
+            },
+            "required": ["order_id", "amount"]
+        }
+    },
+    {
+        "name": "escalate_to_human",
+        "description": (
+            "Transfers case to human agent. "
+            "Use ONLY when: (1) customer explicitly "
+            "requests human, (2) policy gap exists, "
+            "(3) no progress after investigation, "
+            "(4) refund over $500. "
+            "Do NOT use for: frustrated customers "
+            "whose issue you can resolve."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "explicit_customer_request",
+                        "policy_gap", "no_progress",
+                        "high_value_refund"
+                    ]
+                },
+                "customer_id": {
+                    "type": ["string", "null"]
+                },
+                "summary": {"type": "string"},
                 "root_cause": {"type": "string"},
                 "recommended_action": {"type": "string"}
             },
-            "required": ["reason", "summary", "root_cause", "recommended_action"]
+            "required": ["reason", "summary",
+                         "root_cause",
+                         "recommended_action"]
         }
-    }
+    },
 ]
 
-# ============================================
-# DOMAINS 4+5: System prompt with explicit criteria, few-shot escalation
-# ============================================
+
+# ============================================================
+# DOMAINS 4+5: System prompt with criteria + few-shot
+# ============================================================
 
 SYSTEM_PROMPT = """You are a customer support agent.
-Resolve issues autonomously when possible. Aim for first-contact resolution.
+Resolve issues autonomously when possible.
 
-ESCALATION CRITERIA — EXAMPLES:
+ESCALATION CRITERIA -- EXAMPLES:
 Escalate IMMEDIATELY (no investigation):
-  "I want to speak to a manager" -> escalate_to_human(reason="explicit_customer_request")
-  "Let me talk to a real person" -> escalate_to_human(reason="explicit_customer_request")
+  "I want to speak to a manager" -> escalate(reason=
+    "explicit_customer_request")
 
 Escalate for POLICY GAP:
-  Customer asks for competitor price match -> policy only covers own-site -> escalate
-  Refund > $500 -> process_refund will redirect automatically
+  Competitor price match -> policy only covers own-site
+  Refund > $500 -> process_refund redirects automatically
 
 Escalate for NO PROGRESS:
-  Same issue after full investigation -> escalate_to_human(reason="no_progress")
+  Same issue after full investigation -> escalate(reason=
+    "no_progress")
 
-DO NOT ESCALATE — handle autonomously:
-  Standard return within 30 days -> look up order -> process refund
+DO NOT ESCALATE -- handle autonomously:
+  Standard return within 30 days -> process refund
   Frustrated customer, issue within capability:
     -> Acknowledge frustration, offer resolution
-    -> Escalate ONLY if they repeat the human request
+    -> Escalate ONLY if they repeat human request
 
-CONTEXT: Always verify customer identity FIRST with get_customer.
+CONTEXT: Always verify customer identity FIRST.
 """
 
-# ============================================
-# SIMULATED AGENT SCENARIOS
-# In production, replace with client.messages.create()
-# ============================================
 
-SIMULATED_SCENARIOS = {
+# ============================================================
+# SIMULATED SCENARIOS
+# ============================================================
+
+SCENARIOS = {
     "standard_refund": {
+        "message": "I'm jane@email.com. My order ORD-555 "
+                   "arrived damaged. I want a refund.",
         "steps": [
-            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
-            {"tool": "lookup_order", "input": {"order_id": "ORD-555"}},
-            {"tool": "process_refund", "input": {"order_id": "ORD-555", "amount": 149.99}},
+            {"tool": "get_customer",
+             "input": {"email": "jane@email.com"}},
+            {"tool": "lookup_order",
+             "input": {"order_id": "ORD-555"}},
+            {"tool": "process_refund",
+             "input": {"order_id": "ORD-555",
+                       "amount": 149.99}},
         ],
         "final_text": (
-            "I've verified your identity and looked up order ORD-555. "
-            "I can see it contained Blue Widget x2 and Red Gadget x1 for $149.99. "
-            "I've processed a full refund of $149.99 to your original payment method. "
-            "You should see it within 3-5 business days. Is there anything else I can help with?"
-        )
+            "I've verified your identity and looked up "
+            "order ORD-555. Your $149.99 refund has been "
+            "processed. You should see it within 3-5 "
+            "business days."
+        ),
+        "domains": "1 (loop, gates), 2 (tools, errors), "
+                   "5 (trimming, case facts)",
     },
     "over_limit_refund": {
+        "message": "I'm jane@email.com. I need a $750 "
+                   "refund for ORD-555.",
         "steps": [
-            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
-            {"tool": "lookup_order", "input": {"order_id": "ORD-555"}},
-            {"tool": "process_refund", "input": {"order_id": "ORD-555", "amount": 750}},
-            {"tool": "escalate_to_human", "input": {
-                "reason": "high_value_refund",
-                "customer_id": "CUST-001",
-                "summary": "Customer requesting $750 refund for ORD-555, exceeds $500 auto-approval limit",
-                "root_cause": "Refund amount exceeds automated processing threshold",
-                "recommended_action": "Manager review and approval of $750 refund"
-            }},
+            {"tool": "get_customer",
+             "input": {"email": "jane@email.com"}},
+            {"tool": "lookup_order",
+             "input": {"order_id": "ORD-555"}},
+            {"tool": "process_refund",
+             "input": {"order_id": "ORD-555",
+                       "amount": 750}},
+            {"tool": "escalate_to_human",
+             "input": {
+                 "reason": "high_value_refund",
+                 "customer_id": "CUST-001",
+                 "summary": "$750 refund exceeds $500 "
+                            "auto-approval limit",
+                 "root_cause": "Amount exceeds threshold",
+                 "recommended_action": "Manager review "
+                                      "of $750 refund",
+             }},
         ],
         "final_text": (
-            "I understand you need a $750 refund for order ORD-555. This amount requires "
-            "manager approval since it exceeds our standard processing limit. I've escalated "
-            "your case to our senior support team — Sarah will be handling it. Your ticket "
-            "number is TKT-9999. You'll be contacted within 24 hours."
-        )
+            "This refund requires manager approval since "
+            "it exceeds our $500 limit. I've escalated "
+            "your case -- ticket TKT-9999."
+        ),
+        "domains": "1 (policy gate), 2 (business error), "
+                   "4 (escalation criteria)",
     },
     "explicit_human_request": {
+        "message": "I want to speak to a manager right "
+                   "now. This is unacceptable.",
         "steps": [
-            {"tool": "escalate_to_human", "input": {
-                "reason": "explicit_customer_request",
-                "summary": "Customer explicitly requested to speak to a manager",
-                "root_cause": "Customer preference for human agent",
-                "recommended_action": "Connect to available manager immediately"
-            }},
+            {"tool": "escalate_to_human",
+             "input": {
+                 "reason": "explicit_customer_request",
+                 "summary": "Customer explicitly requested "
+                            "manager",
+                 "root_cause": "Customer preference",
+                 "recommended_action": "Connect to "
+                                      "manager immediately",
+             }},
         ],
         "final_text": (
-            "I completely understand. I'm transferring you to a manager right now. "
-            "Your ticket is TKT-9999 and Sarah from our senior support team will be with you shortly."
-        )
+            "I'm transferring you to a manager right now. "
+            "Your ticket is TKT-9999."
+        ),
+        "domains": "4 (escalation criteria), "
+                   "5 (handoff context)",
     },
     "policy_gap": {
+        "message": "I'm jane@email.com. I found the same "
+                   "item at Amazon for $50 less. Will you "
+                   "price match?",
         "steps": [
-            {"tool": "get_customer", "input": {"email": "jane@email.com"}},
-            {"tool": "escalate_to_human", "input": {
-                "reason": "policy_gap",
-                "customer_id": "CUST-001",
-                "summary": "Customer requests competitor price match (Amazon); our policy only covers own-site adjustments",
-                "root_cause": "Policy gap — competitor price matching not covered by current policy",
-                "recommended_action": "Manager to evaluate competitor price match request for gold-tier customer"
-            }},
+            {"tool": "get_customer",
+             "input": {"email": "jane@email.com"}},
+            {"tool": "escalate_to_human",
+             "input": {
+                 "reason": "policy_gap",
+                 "customer_id": "CUST-001",
+                 "summary": "Competitor price match -- "
+                            "policy only covers own-site",
+                 "root_cause": "Policy gap -- competitor "
+                               "matching not covered",
+                 "recommended_action": "Manager to "
+                                      "evaluate for "
+                                      "gold-tier customer",
+             }},
         ],
         "final_text": (
-            "I appreciate you letting us know about the price difference. Our standard policy "
-            "covers price adjustments on our own site, but competitor price matching requires "
-            "special authorization. I've escalated this to our senior team — as a gold-tier "
-            "member, we want to make sure we find the best solution for you. Your ticket is TKT-9999."
-        )
+            "Competitor price matching requires special "
+            "authorization. I've escalated this -- as a "
+            "gold-tier member, we want the best solution "
+            "for you. Ticket TKT-9999."
+        ),
+        "domains": "4 (policy gap trigger), "
+                   "5 (escalation with context)",
     },
     "frustrated_resolvable": {
+        "message": "I'm bob@email.com. I'm really "
+                   "frustrated, my order ORD-777 still "
+                   "says processing.",
         "steps": [
-            {"tool": "get_customer", "input": {"email": "bob@email.com"}},
-            {"tool": "lookup_order", "input": {"order_id": "ORD-777"}},
+            {"tool": "get_customer",
+             "input": {"email": "bob@email.com"}},
+            {"tool": "lookup_order",
+             "input": {"order_id": "ORD-777"}},
         ],
         "final_text": (
-            "I completely understand your frustration, Bob, and I'm sorry for the wait. "
-            "I've looked into your order ORD-777 — it's currently in processing status for "
-            "a Green Thing x1 ($29.99). I can see it hasn't shipped yet. Let me check on "
-            "what's causing the delay and get this moving for you. Would you like me to "
-            "expedite the shipment or would you prefer a different resolution?"
-        )
+            "I understand your frustration, Bob. Your "
+            "order ORD-777 is currently processing. Let "
+            "me check on the delay and get this moving "
+            "for you."
+        ),
+        "domains": "4 (does NOT escalate -- frustration "
+                   "is not a trigger), 5 (case facts)",
     },
 }
 
-# ============================================
-# The Agent Loop (simulated)
-# ============================================
 
-def run_support_agent(scenario_key: str, user_message: str):
+# ============================================================
+# THE AGENT LOOP (simulated)
+# ============================================================
+
+def run_support_agent(scenario_key):
     global verified_customer_id, case_facts
     verified_customer_id = None
     case_facts = {}
 
-    print(f"\n{'='*65}")
-    print(f"CUSTOMER: {user_message}")
-    print(f"{'='*65}\n")
+    sim = SCENARIOS[scenario_key]
 
-    sim = SIMULATED_SCENARIOS[scenario_key]
+    print("\n" + "=" * 65)
+    print("CUSTOMER: " + sim["message"])
+    print("Domains tested: " + sim["domains"])
+    print("=" * 65 + "\n")
+
     iteration = 0
-
-    # Domain 5: Case facts block would be included in system context
-    # when populated (shown here as it accumulates through tool calls)
-
     for step in sim["steps"]:
         iteration += 1
-        print(f"  [Loop iteration {iteration}]")
-        print(f"  stop_reason: tool_use")
-        print(f"  Tool: {step['tool']}({json.dumps(step['input'])[:60]})")
+        print("  [Iteration " + str(iteration) + "]")
+        print("  stop_reason: tool_use")
+        print("  Tool: " + step["tool"] + "("
+              + json.dumps(step["input"])[:50] + ")")
         execute_tool(step["tool"], step["input"])
-
-        # Show case facts accumulation (Domain 5)
         if case_facts:
-            print(f"  Case facts so far: {json.dumps(case_facts)}")
+            print("  Case facts: "
+                  + json.dumps(case_facts))
 
-    # Final response
     iteration += 1
-    print(f"  [Loop iteration {iteration}]")
-    print(f"  stop_reason: end_turn")
-    print(f"\nAGENT RESPONSE:\n{sim['final_text']}\n")
-    if case_facts:
-        print(f"Case facts accumulated: {json.dumps(case_facts)}")
+    print("  [Iteration " + str(iteration) + "]")
+    print("  stop_reason: end_turn")
+    print("\nAGENT: " + sim["final_text"] + "\n")
     return sim["final_text"]
 
 
-# ============================================
-# Test Scenarios (maps to all 6 exam scenarios)
-# ============================================
+# ============================================================
+# MAIN -- RUN ALL SCENARIOS
+# ============================================================
 
 if __name__ == "__main__":
-    print("\n=== Scenario 1: Standard refund (Domains 1, 2) ===")
-    run_support_agent("standard_refund",
-        "I'm jane@email.com. My order ORD-555 arrived damaged. I want a refund.")
+    print("=" * 65)
+    print("CAPSTONE: COMPLETE CUSTOMER SUPPORT AGENT")
+    print("=" * 65)
 
-    print("\n=== Scenario 2: Over-limit refund (Domain 1 gate) ===")
-    run_support_agent("over_limit_refund",
-        "I'm jane@email.com. I need a $750 refund for ORD-555.")
+    for key in SCENARIOS:
+        run_support_agent(key)
 
-    print("\n=== Scenario 3: Explicit human request (Domain 5 escalation) ===")
-    run_support_agent("explicit_human_request",
-        "I want to speak to a manager right now. This is unacceptable.")
+    print("\n" + "=" * 65)
+    print("ARCHITECTURE SUMMARY")
+    print("=" * 65)
+    print("""
+  Domain 1 -- Agentic Architecture:
+    Agentic loop (Lab 1.1), prerequisite gates (Lab 1.4),
+    PostToolUse hooks for normalization (Lab 1.5)
 
-    print("\n=== Scenario 4: Policy gap (Domain 5 escalation) ===")
-    run_support_agent("policy_gap",
-        "I'm jane@email.com. I found the same item at Amazon for $50 less. Will you price match?")
+  Domain 2 -- Tool Design:
+    Five-part descriptions (Lab 2.1), structured errors
+    with 4 categories (Lab 2.2), scoped tools (Lab 2.3)
 
-    print("\n=== Scenario 5: Frustrated but resolvable (Domain 5 nuance) ===")
-    run_support_agent("frustrated_resolvable",
-        "I'm bob@email.com. I'm really frustrated, my order ORD-777 still says processing.")
+  Domain 3 -- Configuration:
+    CLAUDE.md with @import (Lab 3.1), path-specific rules
+    (Lab 3.3), slash command (Lab 3.2), CI with -p flag
+    (Lab 3.6)
+
+  Domain 4 -- Prompt Engineering:
+    Explicit criteria + few-shot (Lab 4.1/4.2), tool_use
+    for structured output (Lab 4.3), validation retry
+    (Lab 4.4)
+
+  Domain 5 -- Context & Reliability:
+    Case facts block (Lab 5.1), tool result trimming
+    (Lab 5.1), deterministic escalation (Lab 5.2),
+    routing rules not confidence (Lab 5.5)
+""")
 ```
 
-## Run it
-
-Create the file and run it:
+### Step 6: Run the 5 test scenarios
 
 ```bash
-python lab-final-scenario/complete_agent.py
+cd ~/claude-architect-labs/lab-final-capstone
+python complete_agent.py
 ```
 
-**What you should see:**
-- Five scenarios running sequentially, each showing loop iterations with `stop_reason` and tool calls printed at each step
-- Scenario 1 (standard refund): get_customer -> lookup_order -> process_refund -> end_turn, with "Customer verified" and "Refund processed" confirmations and accumulated case facts printed at the end
-- Scenario 2 (over-limit refund): process_refund BLOCKED at $750 (exceeds $500 policy limit), automatically escalated to human agent with a ticket ID
-- Scenario 3 (explicit human request): immediate escalation with no tool investigation, honoring the customer's request to speak to a manager
+You should see 5 scenarios:
+1. **Standard refund:** get_customer -> lookup_order -> process_refund -> end_turn. Gate enforced, tool results trimmed, case facts accumulated.
+2. **Over-limit refund:** process_refund BLOCKED at $750 -> auto-escalate. Policy gate fires, structured error with business category.
+3. **Explicit request:** escalate_to_human immediately. No investigation -- explicit requests honored.
+4. **Policy gap:** get_customer -> escalate (competitor pricing outside policy). Structured handoff with reason, summary, recommended action.
+5. **Frustrated but resolvable:** get_customer -> lookup_order -> response. Acknowledges frustration, offers help, does NOT escalate.
 
-### What to observe in each scenario
+### Step 7: Deploy in CI (Domain 3)
 
-1. **Standard refund:** `get_customer` → `lookup_order` → `process_refund` → `end_turn`
-   Gate enforced (customer verified before refund), trimmed tool results.
+To run this agent in a CI pipeline (e.g., automated testing of the agent's behavior), use:
 
-2. **Over-limit:** `get_customer` → `lookup_order` → `process_refund` (BLOCKED) → `escalate_to_human`
-   Policy gate fires, structured escalation handoff with all required fields.
+```bash
+claude -p "Run the support agent for: I need a refund for ORD-555" \
+  --output-format json \
+  --allowedTools "Read,Grep,Glob" \
+  < /dev/null
+```
 
-3. **Explicit request:** `escalate_to_human` immediately.
-   No investigation -- explicit requests honored without "let me try first."
+The `-p` flag prevents interactive hangs (Lab 3.6). `--output-format json` produces machine-parseable output. `--allowedTools` restricts to read-only tools for safe automated testing.
 
-4. **Policy gap:** `get_customer` → `escalate_to_human(reason="policy_gap")`
-   Agent correctly identifies competitor pricing as outside current policy.
+### Step 8: Plan mode reference (Domain 3)
 
-5. **Frustrated but resolvable:** `get_customer` → `lookup_order` → response.
-   Acknowledges frustration, offers to help, does NOT immediately escalate.
+When architecting this agent from scratch, use `/plan` to map the tool boundaries, escalation rules, and data flow before writing code. Plan mode (Lab 3.4) prevents costly rework on architectural decisions -- you would have explored the gate structure, error categories, and escalation triggers before committing to an implementation.
+
+### Step 9: Architecture summary
+
+Every part of this build traces back to a specific lab:
+
+| Component | Domain | Source Lab |
+|-----------|--------|-----------|
+| while True + stop_reason loop | 1 | Lab 1.1 |
+| Prerequisite gates (verify before refund) | 1 | Lab 1.4 |
+| PostToolUse data normalization | 1 | Lab 1.5 |
+| Five-part tool descriptions | 2 | Lab 2.1 |
+| Structured errors (4 categories) | 2 | Lab 2.2 |
+| CLAUDE.md with @import | 3 | Lab 3.1 |
+| Path-specific rules | 3 | Lab 3.3 |
+| Slash command for invocation | 3 | Lab 3.2 |
+| CI deployment with -p flag | 3 | Lab 3.6 |
+| Explicit escalation criteria + few-shot | 4 | Lab 4.1, 4.2 |
+| Case facts block | 5 | Lab 5.1 |
+| Tool result trimming | 5 | Lab 5.1 |
+| Deterministic escalation triggers | 5 | Lab 5.2 |
+| Routing rules (not confidence) | 5 | Lab 5.5 |
+
+## Try it yourself
+
+Adapt this agent for a different support category: subscription management.
+
+1. Modify `CLAUDE.md` to include subscription-specific escalation criteria (e.g., cancel within 14-day trial = auto-process, cancel after 12+ months = offer retention discount before processing).
+2. Add a `.claude/rules/subscription-rules.md` with path-specific frontmatter for subscription code.
+3. Add a `cancel_subscription` tool with prerequisite gate (customer verified) and a status check (only "active" subscriptions can be cancelled).
+4. Update the escalation thresholds: annual subscriptions > $200 route to retention team.
+5. Run 3 test scenarios: trial cancellation (auto-process), long-term cancel (offer retention), cancel with outstanding balance (escalate).
 
 ## Check your understanding
 
-Study the complete agent implementation and answer these questions about each domain:
+**Q1 (Domain 1 -- Agentic Architecture).** In this agent, `process_refund` checks `verified_customer_id` before executing. If you remove this gate and instead add "always verify the customer first" to the system prompt, what happens?
 
-1. **Domain 1 (gates):** What happens if you remove the prerequisite gate? Can `process_refund` be called without customer verification?
-   Answer: yes -- this is Sample Q1's exact failure mode. Prompt-only enforcement fails at a non-zero rate.
+**A.** The agent always verifies first because the system prompt is clear
+**B.** The agent sometimes skips verification (non-zero failure rate) because prompt-based enforcement is probabilistic -- programmatic gates provide deterministic compliance
+**C.** The system prompt is more flexible and better than a gate
+**D.** The gate and the prompt produce identical behavior
 
-2. **Domain 1 (hooks):** What role does the PostToolUse hook play? What happens with mixed date formats without normalization?
-   Answer: inconsistent comparisons -- normalization ensures the model always sees dates in ISO format.
+**Correct: B.** Prompt-based enforcement has a non-zero failure rate. The agent may occasionally call `process_refund` without verifying the customer, potentially refunding the wrong account. Programmatic gates are deterministic -- the code returns an error if the prerequisite is not met. **Why not A:** "Always" is not guaranteed with prompt instructions. **Why not C:** Flexibility is the problem -- financial operations require deterministic compliance. **Why not D:** Gates are deterministic; prompts are probabilistic.
 
-3. **Domain 5 (context):** Why is the case facts block injected into the system prompt on every iteration?
-   Answer: it preserves exact values like $149.99 that progressive summarization would compress to "approximately $150."
+---
 
-4. **Domain 4+5 (escalation):** What makes the escalation criteria in the system prompt reliable? Why not use sentiment analysis?
-   Answer: explicit categorical triggers -- "customer requests human," "policy gap" -- are binary and verifiable. Sentiment doesn't correlate with case complexity.
+**Q2 (Domain 2 -- Tool Design & MCP).** The `escalate_to_human` tool description says "Do NOT use for: frustrated customers whose issue you can resolve." If you remove this negative boundary, what happens?
 
-5. **Domain 2 (tools):** Why does each tool description include "when to use" AND "when NOT to use"?
-   Answer: disambiguation. Without negative examples, similar tools get confused -- the model needs to know the boundaries of each tool's purpose.
+**A.** Nothing changes -- the model reads the positive criteria instead
+**B.** The agent may escalate frustrated customers unnecessarily because without "Do NOT use for" boundaries, similar tools compete and the model lacks clear signal for when to avoid calling this tool
+**C.** The model uses the tool more accurately without the restriction
+**D.** Negative descriptions confuse the model and should always be avoided
 
-## Exam tips
+**Correct: B.** Lab 2.1's five-part template requires "when NOT to use." Without it, the model has no negative signal -- frustrated customers look like escalation candidates because the positive criteria ("customer requests human") is loosely similar to "customer is upset." **Why not A:** Positive criteria alone leave ambiguous cases unresolved. **Why not C:** Removing boundaries increases ambiguity. **Why not D:** Negative boundaries are essential for tool disambiguation.
 
-- This lab combines ALL domains. On the exam, each scenario question can test ANY domain.
-- **The universal rule:** Deterministic compliance = programmatic (gates, hooks, schema). Probabilistic guidance = prompts (few-shot, criteria).
-- **The universal trap:** Using prompts for compliance requirements, or using programmatic enforcement for stylistic preferences.
+---
+
+**Q3 (Domain 3 -- Claude Code Configuration).** You deploy this agent in a CI pipeline using `claude "Run support agent test suite"`. The pipeline hangs indefinitely. What is the fix?
+
+**A.** Set `CLAUDE_HEADLESS=true` environment variable
+**B.** Add the `--batch` flag for CI execution
+**C.** Use the `-p` flag: `claude -p "Run support agent test suite"` for non-interactive mode
+**D.** Redirect stdin: `claude "Run support agent test suite" < /dev/null`
+
+**Correct: C.** The `-p` (print) flag runs Claude Code in non-interactive mode -- processes the prompt and exits. Without it, Claude Code waits for interactive input. **Why not A:** `CLAUDE_HEADLESS=true` is not a real Claude Code environment variable. **Why not B:** `--batch` is not a valid Claude Code flag. **Why not D:** Redirecting stdin is a generic Unix workaround that does not properly invoke Claude Code's non-interactive mode.
+
+---
+
+**Q4 (Domain 4 -- Prompt Engineering & Structured Output).** The agent's `process_refund` tool returns a structured error when the amount exceeds $500. A colleague suggests replacing this with a system prompt instruction: "Do not process refunds over $500." What is wrong with this approach?
+
+**A.** Nothing -- system prompt instructions are just as reliable for financial limits
+**B.** Prompt-based enforcement has a non-zero failure rate. For financial operations requiring 100% compliance, programmatic gates (code that blocks the operation) provide deterministic guarantees that prompts cannot.
+**C.** The system prompt approach is better because it is more flexible
+**D.** The structured error approach is slower than a prompt instruction
+
+**Correct: B.** Financial compliance requires 100% reliability. "Do not process refunds over $500" is a probabilistic instruction -- the agent may occasionally process a $600 refund. The programmatic gate in `execute_tool` returns a structured error deterministically. **Why not A:** Prompt instructions have a measurable failure rate on compliance tasks. **Why not C:** Flexibility is the enemy of compliance. **Why not D:** Speed is irrelevant -- correctness is the requirement.
+
+---
+
+**Q5 (Domain 5 -- Context Management & Reliability).** After 20 turns, the agent says "your order total was approximately $150" instead of "$149.99." A colleague suggests asking the model "how confident are you in that amount?" to catch approximation. What is wrong with this approach?
+
+**A.** The model will correctly report low confidence on approximated values
+**B.** LLM self-reported confidence is not calibrated -- the model reports similar confidence regardless of accuracy. The fix is a case facts block that persists exact values ($149.99) outside summarized history, not confidence-based detection.
+**C.** Confidence scores are reliable after calibration with labeled data
+**D.** The model does not support confidence scoring
+
+**Correct: B.** Self-reported confidence is not calibrated to accuracy (Lab 5.2, 5.5). The model says "I'm 90% confident it's approximately $150" -- which is wrong. The case facts block (Lab 5.1) persists the exact value $149.99 verbatim across all turns, preventing summarization loss entirely. **Why not A:** The model is overconfident on approximated values. **Why not C:** Even with calibration, confidence detection is a patch -- case facts blocks prevent the problem entirely. **Why not D:** The model can produce confidence scores, but they are unreliable.
 
 ## Key takeaways
 
-- A production agent integrates all 5 domains: agentic loops, tool design, configuration, prompt engineering, and context management
-- Prerequisite gates enforce ordering programmatically -- prompt-only enforcement fails at a non-zero rate
-- PostToolUse hooks normalize data before the model sees it, preventing inconsistent comparisons
-- Case facts blocks preserve exact values that progressive summarization would distort
-- Escalation criteria must be explicit and categorical, not sentiment-based
-- Tool descriptions need both "when to use" and "when NOT to use" for reliable selection
+- **Domain 1:** Programmatic gates provide deterministic compliance; prompt-only enforcement has a non-zero failure rate
+- **Domain 2:** Tool descriptions need both "when to use" AND "when NOT to use" boundaries for reliable selection
+- **Domain 3:** CLAUDE.md hierarchy + path-specific rules + `-p` flag for CI = the configuration layer that makes everything shareable and deployable
+- **Domain 4:** Explicit criteria + few-shot examples beat vague instructions; tool_use + JSON schema beats asking for JSON in the prompt
+- **Domain 5:** Case facts blocks preserve exact values; deterministic escalation triggers beat model self-confidence
+
+## Exam tips
+
+**Domain 1 distractors:**
+- "Add CRITICAL to the system prompt" -- still probabilistic, still fails
+- "Reduce temperature to 0" -- temperature controls word choice, not compliance
+- "Add few-shot examples of correct ordering" -- still prompt-based, still can fail
+
+**Domain 2 distractors:**
+- "Add a routing classifier" -- fix descriptions first before adding infrastructure
+- "Consolidate similar tools into one" -- removes useful specialization
+
+**Domain 3 distractors:**
+- "CLAUDE_HEADLESS=true" -- does not exist
+- "--batch flag" -- does not exist
+- "Put personal preferences in project CLAUDE.md" -- use ~/.claude/CLAUDE.md
+
+**Domain 4 distractors:**
+- "Improve the system prompt" -- when programmatic enforcement is needed
+- "Use a bigger model" -- more capability does not fix vague criteria
+- "Add confidence scores" -- model is confidently wrong on false positives
+
+**Domain 5 distractors:**
+- "Increase context window" -- delays but does not prevent summarization loss
+- "Use progressive summarization" -- summarization IS the cause of the problem
+- "Ask the model how confident it is" -- LLM confidence is not calibrated
+
+**The universal rule:** Deterministic compliance = programmatic (gates, hooks, schema). Probabilistic guidance = prompts (few-shot, criteria). Know which situation requires which.
+
+**Next:** Take the 60-question Practice Exam in the PRACTICE EXAM section. Target 900+ before scheduling the real CCA Foundations exam.
 
 ---
 
