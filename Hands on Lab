@@ -8495,7 +8495,7 @@ CI runs `claude -p "Review this code" --output-format json` without `--allowedTo
 
 - **Retry-with-feedback**: When extraction fails validation, send a follow-up with: original document + failed extraction + specific errors. Claude can self-correct.
 - **detected_pattern**: Field added to findings that records which code construct triggered it. Enables analysis of which patterns produce false positives.
-- **Pydantic**: Python library for schema validation. Catches type/schema errors (wrong types, missing fields). Does NOT catch semantic errors (values don't sum correctly).
+- **Pydantic / library validators**: Python libraries (Pydantic, attrs, or similar) for schema validation. Catches type/schema errors (wrong types, missing fields). Does NOT catch semantic errors (values don't sum correctly). This lab uses built-in checks for simplicity; production code would typically use Pydantic here.
 
 - **Message Batches API**: Anthropic API for batch processing. 50% cost savings, up to 24-hour processing window, no latency SLA guarantee. Does NOT support multi-turn tool calling.
 - **custom_id**: Your identifier in batch requests to correlate requests with responses.
@@ -9946,7 +9946,7 @@ You need a retry loop that validates output semantically, and on failure, sends 
 | Layer | What it catches | What it misses |
 |-------|----------------|----------------|
 | **JSON Schema (tool_use)** | Syntax/structure errors | Everything semantic |
-| **Pydantic** | Type constraints, basic rules | Business logic |
+| **Pydantic / library validators** | Type constraints, basic rules | Business logic |
 | **Custom semantic** | Business logic, cross-field | Nothing (you write the rules) |
 
 **Retry with specific feedback** is the core pattern. When validation fails, the retry prompt includes: (1) the original document, (2) the failed extraction, and (3) the SPECIFIC validation errors. "Line items sum to $300 but total_amount is $350. Set conflict_detected=true." This enables targeted correction. Vague retries ("try again") produce random changes.
@@ -10111,6 +10111,8 @@ def extract_with_retry(doc_text, max_retries=2):
 
 ### Step 3: Add the detected_pattern analysis
 
+The `detected_pattern` field applies beyond extraction -- in code review workflows (callback to Lab 4.1), it tracks which code patterns produce false positives that developers dismiss, so you can refine review criteria systematically. Here's how the same validate-and-track structure supports that use case:
+
 ```python
 # ============================================================
 # PART 3: DETECTED_PATTERN FOR FP ANALYSIS
@@ -10170,7 +10172,7 @@ VALIDATION_LAYERS = [
                    "invalid enum",
     },
     {
-        "layer": "Pydantic",
+        "layer": "Pydantic / library validators",
         "catches": "Type constraints + basic rules",
         "misses": "Business logic",
         "example": "String too long, number out of "
@@ -10331,7 +10333,7 @@ Add a new semantic validator that checks: "if invoice_date is present, it must n
 - Retries help for format/arithmetic errors; don't help for absent information
 - Bounded retry (max 3) prevents infinite loops; escalate after exhaustion
 - `detected_pattern` field enables false positive analysis by tracking dismissal rates
-- Three layers: JSON Schema (syntax) -> Pydantic (types) -> Custom (semantics)
+- Three layers: JSON Schema (syntax) -> Pydantic / library validators (types) -> Custom (semantics)
 
 ## Exam tips
 
@@ -13659,6 +13661,7 @@ This lab does not introduce new concepts. It integrates the patterns you practic
 ```bash
 mkdir -p ~/claude-architect-labs/lab-final-capstone/.claude/rules
 mkdir -p ~/claude-architect-labs/lab-final-capstone/.claude/commands
+mkdir -p ~/claude-architect-labs/lab-final-capstone/agents
 cd ~/claude-architect-labs/lab-final-capstone
 ```
 
@@ -13698,8 +13701,8 @@ Create `.claude/rules/support-standards.md`:
 ```markdown
 ---
 paths:
-  - "complete_agent.py"
-  - "**/*.py"
+  - "agents/complete_agent.py"
+  - "agents/**/*.py"
 ---
 # Support Agent Standards
 # (Loads only when editing agent code)
@@ -13740,7 +13743,7 @@ Maintain case facts block across the conversation.
 
 ### Step 5: Build the agent (Domains 1, 2, 4, 5)
 
-Create `complete_agent.py`. This is the core -- all 4 remaining domains integrated:
+Create `agents/complete_agent.py`. This is the core -- all 4 remaining domains integrated:
 
 ```python
 import json
@@ -14303,7 +14306,7 @@ if __name__ == "__main__":
 
 ```bash
 cd ~/claude-architect-labs/lab-final-capstone
-python complete_agent.py
+python agents/complete_agent.py
 ```
 
 You should see 5 scenarios:
