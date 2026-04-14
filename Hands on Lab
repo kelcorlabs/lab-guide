@@ -11563,951 +11563,1215 @@ Take a different long conversation: a 20-turn debugging session where the develo
 ---
 
 
+
 # LAB 5.2: ESCALATION AND AMBIGUITY RESOLUTION
-# Domain 5 — Task Statement 5.2
-# Concept: Escalation triggers, explicit request honoring, policy gaps
-# Time: ~20 minutes | Difficulty: Intermediate 
+# Domain 5 -- Task Statement 5.2
+# Concept: Deterministic escalation triggers, ambiguity detection, policy gaps
+# Time: ~25 minutes | Difficulty: Advanced
 # Prerequisites: Lab 5.1
 
-## Learning objectives
+## Scenario
 
-After completing this lab, you will be able to:
+Your customer support agent handles a refund request: "I want my money back for that thing I ordered last week." No order ID, no product name, no amount. The agent tries to match "that thing" against recent orders, finds 3 matches, and guesses -- refunds the wrong item. The customer is now angrier than before.
 
-- Design explicit escalation criteria with few-shot examples demonstrating when to escalate versus resolve autonomously
-- Distinguish between policy gaps, explicit customer requests, and complex-but-within-policy cases to determine correct escalation behavior
-- Require the agent to ask for additional identifiers when tool results return multiple matches, rather than selecting based on heuristics
+You need escalation logic that triggers on ambiguity (missing required fields, multiple matching records) rather than guessing. And the core insight the exam tests: LLM self-reported confidence is NOT calibrated. "How confident are you?" returns 0.85 regardless of actual accuracy. Use deterministic rules (missing required fields, multi-match count, dollar thresholds) instead.
 
-## Recall
-1. What is the "case facts block" pattern? (Lab 5.1)
-2. Why does progressive summarization lose exact values? (Lab 5.1)
+## What you'll learn
 
-## Overview
+- Detecting ambiguity deterministically: missing required fields, multiple matches, vague references
+- Why LLM self-reported confidence is an unreliable escalation trigger (major exam distractor)
+- The three reliable escalation triggers: explicit customer request, policy gap, no progress
+- The "ask for clarification vs escalate to human" decision tree
+- Structured handoff context when escalating (callback to Lab 1.4)
 
-Your agent escalates 45% of cases (target: 20%). It escalates simple damage replacements while attempting policy exceptions.
+## Concepts
 
-**The problem:** no clear escalation criteria. **The fix:** explicit categorical triggers:
-- Customer requests human
-- Policy gap exists
-- No progress after 3 attempts
+**Ambiguity detection** uses deterministic rules, not model judgment:
+- **Missing required fields:** No order_id, no email, no amount --> ask for clarification
+- **Multiple matches:** 3 customers named "John Smith" --> ask for email to disambiguate
+- **Vague references:** "that thing" matches 3 recent orders --> ask which one
 
-**Exam connection (Sample Q3):** Explicit criteria + few-shot beats sentiment analysis and self-reported confidence. Sentiment doesn't correlate with case complexity.
+**The confidence anti-pattern (exam-critical):** Asking the model "how confident are you?" returns a number that is NOT calibrated. The model says 0.85 whether it's right or wrong. Self-reported confidence does NOT correlate with actual accuracy. The exam specifically tests this -- "add self-reported confidence" is a distractor answer.
 
-## Try it
+**Reliable escalation triggers:**
+1. **Explicit customer request** ("I want a manager") -- binary, verifiable
+2. **Policy gap** (policy is silent on competitor price matching) -- verifiable
+3. **No progress** (3 tool calls with no resolution) -- measurable
 
-Try this in Claude Code:
+**Unreliable triggers:** Sentiment analysis, self-reported confidence, complexity estimates. These are all probabilistic and inconsistent.
 
-```
-> You are a customer support agent. I'm going to give you 4 customer messages.
-> For each, decide: should you escalate to a human agent or handle it yourself?
-> Use these criteria:
-> - Escalate IMMEDIATELY if customer explicitly requests a human
-> - Escalate if the issue falls outside your policy (policy gap)
-> - DO NOT escalate just because the customer is frustrated — if you can resolve it, do so
->
-> Message 1: "I want to speak to a manager right now."
-> Message 2: "I found the same item at Amazon for $20 less. Will you match it?"
-> Message 3: "I'm really frustrated! My order has been processing for 3 days!"
-> Message 4: "I'm John Smith and I have a problem with my account."
->            (Assume 3 customers named John Smith exist in the system)
->
-> Explain your reasoning for each decision.
-```
+**Clarify vs escalate:** If the issue is within policy but ambiguous --> ask for clarification. If the issue is outside policy (policy gap) --> escalate to human. Frustration alone is not an escalation trigger -- frustrated customers with resolvable issues should get resolution, not a handoff.
 
-Notice how explicit criteria produce consistent, correct escalation decisions:
-- **Message 1** is always escalated (explicit request)
-- **Message 2** is escalated (policy gap)
-- **Message 3** is handled (frustration alone is not an escalation trigger)
-- **Message 4** requires disambiguation (ask for email/order number)
+## Walkthrough
 
-## Reference code
+### Step 1: See the problem -- vague request, agent guesses wrong
+
+Create `~/claude-architect-labs/lab-d5-context-reliability/ambiguity_scorer.py`:
 
 ```python
 import json
 
-# -- ESCALATION CRITERIA WITH FEW-SHOT EXAMPLES ------------
-# Vague escalation criteria produce unreliable behavior.
-# Specific criteria + few-shot examples demonstrate edge cases.
 
-SYSTEM_PROMPT = """You are a customer support agent.
-Resolve issues autonomously when possible. Use escalate_to_human only when needed.
+# ============================================================
+# PART 1: THE PROBLEM -- GUESSING ON AMBIGUITY
+# ============================================================
 
-ESCALATION CRITERIA (with examples):
+# Customer says "that thing I ordered last week"
+# Agent finds 3 recent orders and picks one -- WRONG
 
-1. Customer explicitly requests human — ESCALATE IMMEDIATELY
-   Example: "I want to speak to a manager" -> escalate NOW
-   Example: "Let me talk to a real person" -> escalate NOW
-   Do NOT: investigate first; do NOT say "let me try to help first"
-
-2. Policy gap — ESCALATE
-   Example: Customer asks for competitor price match
-     -> Our policy covers own-site adjustments only; policy is silent on competitors
-     -> This is a policy GAP, not a policy violation -> escalate
-   Example: Customer asks for refund on a digital item opened 45 days ago
-     -> Policy only covers 30 days -> policy GAP for special circumstances -> escalate
-   Do NOT escalate for: standard returns within policy, normal refunds
-
-3. Unable to make progress — ESCALATE
-   Example: Same issue persists after 3 tool calls -> escalate
-   Do NOT escalate for: first attempt, trying one approach
-
-DO NOT ESCALATE for (handle autonomously):
-- Standard returns within 30 days -> process the refund
-- Frustrated customer where issue is within your capability
-  -> Acknowledge frustration, offer resolution, escalate ONLY if they repeat request
-
-AMBIGUITY: Multiple customer matches
-- If lookup returns multiple accounts for same name -> ask for additional identifier
-  (email, order number, phone)
-  Do NOT select based on heuristics (most recent, closest match)"""
-
-tools = [
-    {
-        "name": "get_customer",
-        "description": "Gets customer by email or name. Returns customer data. If multiple matches by name, returns list requiring disambiguation.",
-        "input_schema": {"type": "object",
-                         "properties": {
-                             "email": {"type": "string", "description": "Customer email (preferred identifier)"},
-                             "name": {"type": "string", "description": "Customer name (may return multiple matches)"}
-                         }}
-    },
-    {
-        "name": "escalate_to_human",
-        "description": "Escalates to human agent. Use per criteria above.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "reason": {"type": "string",
-                           "enum": ["explicit_customer_request", "policy_gap",
-                                    "no_progress", "high_value_case"]},
-                "customer_id": {"type": ["string", "null"]},
-                "summary": {"type": "string"},
-                "root_cause": {"type": "string"},
-                "recommended_action": {"type": "string"}
-            },
-            "required": ["reason", "summary", "recommended_action"]
-        }
-    }
+RECENT_ORDERS = [
+    {"id": "ORD-101", "item": "Blue Widget",
+     "total": 29.99, "date": "2024-01-10"},
+    {"id": "ORD-102", "item": "Red Gadget",
+     "total": 49.99, "date": "2024-01-11"},
+    {"id": "ORD-103", "item": "Green Thing",
+     "total": 19.99, "date": "2024-01-12"},
 ]
 
-CUSTOMERS = {
-    "jane@email.com": {"id": "CUST-001", "name": "Jane Smith"},
-    "john@email.com": {"id": "CUST-003", "name": "John Smith"},
-}
-
-# Name-based lookup returns MULTIPLE matches (ambiguity scenario)
 CUSTOMERS_BY_NAME = {
     "John Smith": [
-        {"id": "CUST-003", "name": "John Smith", "email": "john@email.com"},
-        {"id": "CUST-004", "name": "John Smith", "email": "jsmith@corp.com"},
-        {"id": "CUST-005", "name": "John Smith", "email": "j.smith@gmail.com"},
+        {"id": "CUST-003", "email": "john@email.com"},
+        {"id": "CUST-004", "email": "jsmith@corp.com"},
+        {"id": "CUST-005", "email": "j.smith@gmail.com"},
+    ],
+    "Jane Doe": [
+        {"id": "CUST-001", "email": "jane@email.com"},
+    ],
+}
+```
+
+### Step 2: Build the ambiguity detector
+
+```python
+# ============================================================
+# PART 2: AMBIGUITY DETECTION (deterministic rules)
+# ============================================================
+
+REQUIRED_FIELDS = {
+    "refund": ["order_id", "reason"],
+    "cancel": ["subscription_id"],
+    "status": ["order_id"],
+}
+
+
+def detect_ambiguity(request_type, provided_fields,
+                     match_count=1):
+    """Score ambiguity using deterministic rules.
+    NOT model self-reported confidence.
+    """
+    issues = []
+    score = 0
+
+    # Check 1: Missing required fields
+    required = REQUIRED_FIELDS.get(request_type, [])
+    for field in required:
+        if field not in provided_fields:
+            issues.append(
+                f"Missing required field: {field}"
+            )
+            score += 2
+
+    # Check 2: Multiple matches
+    if match_count > 1:
+        issues.append(
+            f"Multiple matches: {match_count} records "
+            f"found -- need disambiguation"
+        )
+        score += 3
+
+    # Check 3: Vague references
+    vague_terms = ["that thing", "my order",
+                   "the item", "something"]
+    for field, value in provided_fields.items():
+        if isinstance(value, str):
+            for vague in vague_terms:
+                if vague in value.lower():
+                    issues.append(
+                        f"Vague reference in {field}: "
+                        f"'{value}'"
+                    )
+                    score += 1
+
+    return {
+        "score": score,
+        "issues": issues,
+    }
+```
+
+### Step 3: Build the decision engine
+
+```python
+# ============================================================
+# PART 3: DECISION ENGINE -- RESOLVE / CLARIFY / ESCALATE
+# ============================================================
+
+def decide_action(ambiguity_result, request_context):
+    """Decide action based on ambiguity score and context.
+
+    Returns: RESOLVE, CLARIFY, or ESCALATE with reason.
+    """
+    score = ambiguity_result["score"]
+    issues = ambiguity_result["issues"]
+
+    # Explicit human request -- always escalate
+    if request_context.get("explicit_human_request"):
+        return {
+            "action": "ESCALATE",
+            "reason": "Customer explicitly requested human",
+            "trigger": "explicit_customer_request",
+        }
+
+    # Policy gap -- always escalate
+    if request_context.get("policy_gap"):
+        return {
+            "action": "ESCALATE",
+            "reason": "Policy is silent on this situation",
+            "trigger": "policy_gap",
+        }
+
+    # No progress -- escalate after threshold
+    attempts = request_context.get("tool_attempts", 0)
+    if attempts >= 3:
+        return {
+            "action": "ESCALATE",
+            "reason": "No progress after 3 attempts",
+            "trigger": "no_progress",
+        }
+
+    # Ambiguity-based decisions
+    if score == 0:
+        return {
+            "action": "RESOLVE",
+            "reason": "All required info present, "
+                      "no ambiguity",
+        }
+
+    if score <= 3:
+        return {
+            "action": "CLARIFY",
+            "reason": "Ambiguous but resolvable with "
+                      "more info",
+            "questions": [
+                f"Could you provide: "
+                + ", ".join(
+                    i.split(": ")[1]
+                    for i in issues
+                    if "Missing" in i
+                )
+            ] if any("Missing" in i for i in issues)
+            else ["Could you be more specific?"],
+        }
+
+    return {
+        "action": "ESCALATE",
+        "reason": "High ambiguity -- too many unknowns "
+                  "for safe resolution",
+        "trigger": "high_ambiguity",
+    }
+```
+
+### Step 4: Add the anti-pattern demonstration
+
+```python
+# ============================================================
+# PART 4: ANTI-PATTERN -- SELF-REPORTED CONFIDENCE
+# ============================================================
+
+def demonstrate_confidence_antipattern():
+    """Show why LLM confidence is uncalibrated."""
+    print("=" * 60)
+    print("ANTI-PATTERN: SELF-REPORTED CONFIDENCE")
+    print("=" * 60)
+
+    # Simulated: model always says ~0.85 confidence
+    cases = [
+        {"query": "Refund ORD-555 for $149.99",
+         "correct": True,
+         "model_confidence": 0.87},
+        {"query": "Refund 'that thing' from last week",
+         "correct": False,
+         "model_confidence": 0.83},
+        {"query": "Cancel my subscription",
+         "correct": False,
+         "model_confidence": 0.85},
     ]
-}
 
-def execute_tool(name, input_data):
-    if name == "get_customer":
-        email = input_data.get("email", "")
-        if email:
-            c = CUSTOMERS.get(email)
-            return json.dumps(c) if c else json.dumps({"isError": False, "results": None,
-                                                        "message": "No customer found"})
-        # Name-based lookup -> may return multiple matches
-        cname = input_data.get("name", "")
-        matches = CUSTOMERS_BY_NAME.get(cname, [])
-        if len(matches) > 1:
-            return json.dumps({"multiple_matches": True, "count": len(matches),
-                               "matches": [{"id": m["id"], "name": m["name"],
-                                            "email_hint": m["email"][:3] + "***"} for m in matches],
-                               "message": "Multiple customers found. Ask for additional identifier."})
-        elif len(matches) == 1:
-            return json.dumps(matches[0])
-        return json.dumps({"isError": False, "results": None, "message": "No customer found"})
-    if name == "escalate_to_human":
-        print(f"\n  -> ESCALATED: reason={input_data.get('reason')}")
-        print(f"    Summary: {input_data.get('summary', '')[:80]}")
-        return json.dumps({"escalated": True, "ticket_id": "TKT-1234"})
-    return json.dumps({"error": f"Unknown: {name}"})
+    for case in cases:
+        status = "CORRECT" if case["correct"] else "WRONG"
+        print(f"\n  Query: {case['query']}")
+        print(f"  Model confidence: {case['model_confidence']}")
+        print(f"  Actually correct: {status}")
 
+    print("\n  LESSON: Model says 0.83-0.87 for ALL cases")
+    print("  Confidence does NOT distinguish right from wrong")
+    print("  Use deterministic rules instead:")
+    print("    - Missing fields? -> CLARIFY")
+    print("    - Multiple matches? -> CLARIFY")
+    print("    - Policy gap? -> ESCALATE")
+```
 
-# -- SIMULATED RESPONSES -----------------------------------
-# In production, replace with client.messages.create()
-# Each scenario shows the expected agent behavior.
+### Step 5: Add test scenarios and demo runner
 
-SIMULATED_SCENARIOS = {
-    "explicit_request": {
-        "steps": [
-            {
-                "stop_reason": "tool_use",
-                "tool_calls": [{"name": "escalate_to_human",
-                                "input": {"reason": "explicit_customer_request",
-                                          "summary": "Customer explicitly requested to speak to a manager",
-                                          "root_cause": "Customer preference for human agent",
-                                          "recommended_action": "Connect to available manager immediately"}}]
-            }
-        ],
-        "final_text": "I've escalated your case to a manager. You'll be connected shortly. Your ticket ID is TKT-1234."
+```python
+# ============================================================
+# PART 5: TEST SCENARIOS AND DEMO
+# ============================================================
+
+TEST_SCENARIOS = [
+    {
+        "name": "Clear refund request",
+        "type": "refund",
+        "fields": {"order_id": "ORD-555",
+                   "reason": "damaged"},
+        "matches": 1,
+        "context": {},
     },
-    "policy_gap": {
-        "steps": [
-            {
-                "stop_reason": "tool_use",
-                "tool_calls": [{"name": "get_customer",
-                                "input": {"email": "jane@email.com"}}]
-            },
-            {
-                "stop_reason": "tool_use",
-                "tool_calls": [{"name": "escalate_to_human",
-                                "input": {"reason": "policy_gap",
-                                          "customer_id": "CUST-001",
-                                          "summary": "Customer requests competitor price match; our policy only covers own-site adjustments",
-                                          "root_cause": "Policy gap — competitor price matching not covered",
-                                          "recommended_action": "Manager to evaluate competitor price match request"}}]
-            }
-        ],
-        "final_text": "I understand you found a lower price at Amazon. Our standard policy covers our own site price adjustments, but competitor matching requires manager approval. I've escalated this for you — ticket TKT-1234."
+    {
+        "name": "Vague refund -- no order ID",
+        "type": "refund",
+        "fields": {"reason": "that thing broke"},
+        "matches": 3,
+        "context": {},
     },
-    "frustrated_resolvable": {
-        "steps": [
-            {
-                "stop_reason": "tool_use",
-                "tool_calls": [{"name": "get_customer",
-                                "input": {"email": "jane@email.com"}}]
-            }
-        ],
-        "final_text": "I completely understand your frustration, and I'm sorry for the wait. I've pulled up your account. Could you share your order number so I can look into the status right away and get this resolved for you?"
+    {
+        "name": "Explicit human request",
+        "type": "refund",
+        "fields": {},
+        "matches": 0,
+        "context": {"explicit_human_request": True},
     },
-    "multiple_matches": {
-        "steps": [
-            {
-                "stop_reason": "tool_use",
-                "tool_calls": [{"name": "get_customer",
-                                "input": {"name": "John Smith"}}]
-            }
-        ],
-        "final_text": "I found multiple accounts under the name John Smith. To make sure I pull up the right account, could you provide your email address or order number?"
+    {
+        "name": "Policy gap -- competitor match",
+        "type": "refund",
+        "fields": {"order_id": "ORD-555"},
+        "matches": 1,
+        "context": {"policy_gap": True},
     },
-}
+    {
+        "name": "Multiple customer matches",
+        "type": "status",
+        "fields": {"customer_name": "John Smith"},
+        "matches": 3,
+        "context": {},
+    },
+    {
+        "name": "Frustrated but resolvable",
+        "type": "refund",
+        "fields": {"order_id": "ORD-555",
+                   "reason": "late delivery"},
+        "matches": 1,
+        "context": {},
+    },
+]
 
-def run_escalation_test(scenario_key: str, scenario: str, message: str):
-    print(f"\n{'='*60}")
-    print(f"SCENARIO: {scenario}")
-    print(f"MESSAGE:  {message}")
-    print(f"{'='*60}")
 
-    sim = SIMULATED_SCENARIOS[scenario_key]
+def run_demo():
+    demonstrate_confidence_antipattern()
 
-    for step in sim["steps"]:
-        print(f"  stop_reason: {step['stop_reason']}")
-        for tc in step["tool_calls"]:
-            print(f"  Tool: {tc['name']}")
-            execute_tool(tc["name"], tc["input"])
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("AMBIGUITY SCORING (deterministic rules)")
+    print(sep)
 
-    print(f"  stop_reason: end_turn")
-    print(f"  Response: {sim['final_text'][:200]}")
+    for scenario in TEST_SCENARIOS:
+        ambiguity = detect_ambiguity(
+            scenario["type"],
+            scenario["fields"],
+            scenario["matches"],
+        )
+        decision = decide_action(
+            ambiguity, scenario["context"]
+        )
+
+        action = decision["action"]
+        print(f"\n  {scenario['name']}")
+        print(f"    Ambiguity score: {ambiguity['score']}")
+        if ambiguity["issues"]:
+            for issue in ambiguity["issues"]:
+                print(f"      - {issue}")
+        print(f"    --> {action}: {decision['reason']}")
+
+    print(f"\n{sep}")
+    print("DECISION RULES")
+    print(sep)
+    print("  Score 0:   RESOLVE (all info present)")
+    print("  Score 1-3: CLARIFY (ask for missing info)")
+    print("  Score 4+:  ESCALATE (too many unknowns)")
+    print("  Always:    ESCALATE on explicit request,")
+    print("             policy gap, or no progress")
 
 
 if __name__ == "__main__":
-    run_escalation_test(
-        "explicit_request",
-        "Explicit human request — must escalate immediately",
-        "I want to speak to a manager right now, not a chatbot."
-    )
-
-    run_escalation_test(
-        "policy_gap",
-        "Policy gap — competitor price match",
-        "I'm jane@email.com. I bought the same item at Amazon for $20 less. Will you match it?"
-    )
-
-    run_escalation_test(
-        "frustrated_resolvable",
-        "Frustrated but within capability — should offer to help",
-        "I'm jane@email.com. I'm really frustrated! I've been waiting 3 days for my order."
-    )
-
-    run_escalation_test(
-        "multiple_matches",
-        "Multiple matches — should ask for more info",
-        "I'm John Smith and I have a problem with my account."
-    )
-
-    print("\n\n=== Escalation Patterns Summary ===")
-    print("""
-    Unreliable escalation triggers (don't use):
-    - Sentiment analysis ("escalate when customer is frustrated")
-    - Self-reported confidence ("escalate when I'm not confident")
-    - Complexity estimate ("escalate complex cases")
-
-    Reliable escalation triggers:
-    - Explicit customer request (binary — did they ask or not?)
-    - Policy gap (verifiable — does policy cover this?)
-    - No progress (measurable — N tool calls with no resolution)
-
-    The frustration nuance:
-    Frustrated + issue within capability -> offer resolution
-    Frustrated + repeats human request -> THEN escalate
-    Not: frustration alone -> immediate escalation
-    """)
+    run_demo()
 ```
 
-## Run it
-
-Create the file and run it:
+### Step 6: Run the script
 
 ```bash
-python lab-d5-context-reliability/escalation_patterns.py
+cd ~/claude-architect-labs
+python lab-d5-context-reliability/ambiguity_scorer.py
 ```
 
-**What you should see:**
-- Test 1 ("speak to a manager"): → ESCALATED immediately, reason=explicit_customer_request. No investigation attempted.
-- Test 2 ("competitor price match"): → ESCALATED, reason=policy_gap. Agent recognizes policy is silent on this.
-- Test 3 ("really frustrated, order still processing"): → Agent acknowledges frustration AND offers to help. Does NOT escalate (issue is within capability).
-- Test 4 ("John Smith, problem with account"): → Agent should ask for email or order number to disambiguate (multiple_matches returned). Does NOT guess which John Smith.
+You should see:
+- **Confidence anti-pattern:** 3 cases where model reports 0.83-0.87 confidence regardless of correctness
+- **Clear refund:** Score 0, RESOLVE (all info present)
+- **Vague refund:** Score 5+, ESCALATE (missing order_id + multi-match + vague reference)
+- **Explicit request:** ESCALATE immediately (bypasses scoring)
+- **Policy gap:** ESCALATE (bypasses scoring)
+- **Multiple matches:** Score 3+, CLARIFY (ask for email)
+- **Frustrated but resolvable:** Score 0, RESOLVE (has order_id and reason)
 
-**Key exam distinction (from Sample Question 3):** Sentiment-based escalation is unreliable.
-Explicit categorical criteria (customer request, policy gap, no progress) are reliable.
+## Try it yourself
+
+Take a different ambiguous request: "cancel my subscription" (no subscription_id, customer has 2 active subscriptions).
+
+1. Add it to TEST_SCENARIOS with the missing field and match count.
+2. Run the scorer and predict: should it CLARIFY (ask which subscription) or ESCALATE?
+3. Compare to what happens if the agent guesses (picks the most recent subscription -- wrong 50% of the time).
 
 ## Check your understanding
 
-1. **What happens if you remove escalation criteria entirely?** (Answer: the agent guesses when to escalate — inconsistent behavior, high false escalation rate)
-2. **Why is sentiment analysis an unreliable escalation trigger?** (Answer: frustrated but simple cases get escalated unnecessarily — sentiment doesn't correlate with case complexity. A customer can be furious about a standard return that the agent can easily process)
-3. **What goes wrong if the agent picks from multiple customer matches using heuristics** (e.g., "most recent account")? (Answer: agent picks wrong customer — could process a refund to the wrong person. Always ask for an additional identifier to disambiguate)
+**Q1.** Your agent escalates 45% of cases, well above your 20% target. Logs show it escalates standard damage replacements while attempting to handle complex policy exceptions. What is the best fix?
 
-### Policy Gap vs Complex Case vs Explicit Request
+**A.** Add sentiment analysis to only escalate frustrated customers
+**B.** Add explicit escalation criteria with few-shot examples showing when to escalate vs resolve
+**C.** Have the agent self-report confidence and escalate below a threshold
+**D.** Deploy a classifier trained on historical tickets
 
-The exam tests three distinct escalation triggers. Don't confuse them:
+**Correct: B.** Explicit criteria with few-shot examples addresses the root cause: unclear decision boundaries. **Why not A:** Customer sentiment does not correlate with case complexity -- a calm customer can have a complex exception while a frustrated customer may have a simple replacement. **Why not C:** LLMs are poorly calibrated at self-reporting confidence, and the agent is already confidently making wrong decisions. **Why not D:** Training a classifier requires labeled data and infrastructure -- over-engineered when explicit criteria in the prompt have not been tried.
 
-| Scenario | Action | Why |
-|---|---|---|
-| Customer says "I want to speak to a manager" | **Escalate immediately** | Explicit human request — don't investigate first, don't try to resolve |
-| Customer wants competitor price match; your policy only covers own-site adjustments | **Escalate** | Policy gap — the policy is *silent* on this situation, agent has no authority |
-| Customer wants return on damaged item with photo evidence | **Resolve** | Complex but within policy — standard damage replacement process exists |
-| Customer is furious about a delayed order | **Offer resolution first** | Frustrated but issue is within capability — acknowledge frustration, then help |
-| Agent has tried 3 different tool calls with no progress | **Escalate** | No progress — further attempts are wasting the customer's time |
+---
 
-**The exam trap:** Confusing "complex" with "needs escalation."
+**Q2.** Your escalation logic uses `model.confidence_score > 0.7` to decide whether to handle or escalate. The model reports 0.85 confidence on a case where it refunds the wrong order. What is the root problem?
 
-A complex case that's within policy should be resolved. A simple-sounding case where policy is silent (competitor price match) should be escalated. The trigger is **policy coverage**, not **case complexity**.
+**A.** The confidence threshold should be higher (0.95)
+**B.** LLM self-reported confidence is not calibrated -- the model reports similar confidence regardless of actual accuracy. Use deterministic rules (missing fields, match count) instead.
+**C.** The model needs more training data to improve confidence calibration
+**D.** Confidence scores work but need post-processing normalization
 
-## Exam tips
+**Correct: B.** Self-reported confidence from LLMs is not calibrated. The model says 0.85 whether it is right or wrong. Deterministic rules (is the order_id present? how many matches?) are reliable because they check verifiable conditions, not model self-assessment. **Why not A:** A higher threshold still relies on uncalibrated scores. **Why not C:** Fine-tuning does not fix the fundamental miscalibration of self-reported confidence. **Why not D:** Normalization requires labeled data and still relies on the underlying signal being meaningful, which it is not.
 
-- **If the exam says** "poor escalation calibration" → explicit criteria + few-shot examples
-- **Wrong answer trap:** "Sentiment analysis" — sentiment doesn't correlate with case complexity
-- **Wrong answer trap:** "Self-reported confidence" — model is poorly calibrated on its own confidence
-- **The correct pattern:** Explicit triggers (customer request, policy gap, no progress) + few-shot demonstrations
+---
+
+**Q3.** A customer says "I want my money back for that thing I ordered." No order ID, and 3 recent orders match "last week." What should the agent do?
+
+**A.** Pick the most recent order and process the refund
+**B.** Pick the most expensive order (conservative -- customer gets maximum value)
+**C.** Ask the customer to specify which order by providing the order ID or describing the item
+**D.** Escalate to a human agent immediately
+
+**Correct: C.** The request is ambiguous but resolvable with clarification. Asking for the specific order is safe and efficient. **Why not A:** Picking the most recent is a heuristic that is wrong 67% of the time with 3 matches. **Why not B:** Picking the most expensive refunds the wrong item and costs the company money. **Why not D:** Escalation is premature -- a clarifying question resolves the ambiguity without human involvement.
 
 ## Key takeaways
 
-- Explicit human request → escalate immediately (no investigation first)
-- Policy gap (policy silent on the situation) → escalate
-- Complex but within policy → resolve (agent has the tools and authority)
-- Frustrated but issue within capability → offer resolution first
-- No progress after 3 tool calls → escalate
-- Multiple customer matches → ask for additional identifier (not heuristic selection)
-- Sentiment/confidence → unreliable escalation proxy; explicit criteria is reliable
+- Self-reported LLM confidence is NOT calibrated -- do not use for escalation decisions
+- Deterministic ambiguity rules: missing required fields, multiple matches, vague references
+- Three reliable escalation triggers: explicit customer request, policy gap, no progress
+- Frustrated + resolvable = offer resolution. Frustrated + repeats human request = escalate.
+- Multiple matches = ask for disambiguation, never guess with heuristics
+- Policy gap (policy is silent) is different from policy violation (policy says no)
+
+## Exam tips
+
+- **"Poor escalation calibration"** --> explicit criteria + few-shot examples
+- **"Agent escalates 45% of cases"** --> missing decision boundaries, not sentiment
+- **Wrong answer trap:** "Add self-reported confidence" -- LLM confidence is uncalibrated
+- **Wrong answer trap:** "Sentiment analysis" -- sentiment does not correlate with complexity
+- **Wrong answer trap:** "Confidence scores with threshold" -- uncalibrated scores at any threshold
+- **The core pattern:** deterministic rules for escalation; ask for clarification on ambiguity
+
+**Next:** Lab 5.3 covers error propagation in multi-agent systems -- how a single subagent failure can silently corrupt the entire pipeline when errors propagate as data instead of structured errors.
 
 ---
 
 # LAB 5.3: ERROR PROPAGATION IN MULTI-AGENT SYSTEMS
-# Domain 5 — Task Statement 5.3
-# Concept: Structured error context, partial results, coordinator recovery
+# Domain 5 -- Task Statement 5.3
+# Concept: Structured error propagation, partial results, coordinator recovery
 # Time: ~20 minutes | Difficulty: Intermediate
-# Prerequisites: Lab 5.1
+# Prerequisites: Lab 5.2
 
-## Learning objectives
+## Scenario
 
-After completing this lab, you will be able to:
+Your research coordinator spawns three subagents -- search, analyze, synthesize. The search agent hits a rate limit and returns `"RateLimitError: 429"` as a string. The coordinator passes that string verbatim to the analyze agent, which tries to analyze "RateLimitError: 429" as if it were research content and produces nonsense analysis. The synthesize agent then confidently combines nonsense with real data from the other sources. The failure at step 1 propagated silently through 3 agents and corrupted the final output.
 
-- Return structured error context including failure type, what was attempted, partial results, and potential alternatives to enable coordinator recovery
-- Distinguish access failures from valid empty results in error reporting so the coordinator can make appropriate retry decisions
-- Implement local error recovery within subagents for transient failures, propagating only unresolvable errors with partial results
+Nobody knew the search failed because the error looked like data. You need structured error propagation: each subagent returns either data or a structured error, and the coordinator inspects before passing anything downstream.
 
-## Recall
-1. Name the three explicit escalation triggers. (Lab 5.2)
-2. What's the difference between a policy gap and a complex case? (Lab 5.2)
+## What you'll learn
 
-## Overview
+- Why silent error propagation creates "garbage in, garbage out" cascades across multi-agent pipelines
+- Structured error returns: success/failure flag, error_type, retryable flag, partial results
+- Coordinator inspection: check each subagent result before passing downstream
+- The "route around" pattern: if one source fails, try a fallback
+- Partial-success handling: synthesize with available data and annotate gaps
 
-Your search subagent times out. It returns "error occurred" to the coordinator. The coordinator can't decide: retry? use backup? proceed without?
+## Concepts
 
-**Generic errors force blind decisions.** The fix: structured error context with:
-- Failure type
-- What was attempted
-- Partial results
-- Alternatives
+**The garbage-in-garbage-out cascade:** When a subagent returns an error as a plain string, the next agent treats it as data. The error propagates through the pipeline, getting more corrupted at each stage. By the final output, the error is undetectable.
 
-**Exam connection (Sample Q8):** Structured error context enables intelligent recovery. Generic status hides context. Silent suppression and full termination are both anti-patterns.
+**Two anti-patterns:**
+1. **Silent suppression:** Subagent catches error, returns empty results as success. Coordinator thinks search found nothing (not that search broke).
+2. **Full termination:** One subagent fails, entire workflow aborts. Wastes completed work from other subagents.
 
-## Try it
+**The correct pattern:** Structured error returns with:
+- `success: false` (distinguishes failure from empty results)
+- `error_type` (rate_limit, timeout, invalid_input)
+- `is_retryable` (coordinator knows whether to retry)
+- `partial_results` (anything retrieved before failure)
+- `alternatives` (backup sources, cached versions)
 
-Ask Claude Code about error handling:
+**Partial-success handling:** If 2 of 3 subagents succeed, synthesize with available data and annotate which claims have gaps. "Regional data may be incomplete because one source was unavailable" is more useful than aborting.
 
-```
-When you call a tool and it fails, what do you do? Do you retry? How do you decide whether to try a different approach or give up?
-```
+Callback to Lab 2.2: structured errors for tools. This lab extends the same pattern to multi-agent pipelines. Callback to Lab 1.2: coordinator pattern. This lab shows what happens when the coordinator does not inspect subagent results.
 
-Watch how Claude Code describes its own error handling strategy. Compare this to the anti-patterns in the reference code below:
-- **Silent suppression** -- returning empty as success
-- **Full termination** -- aborting on first failure
+## Walkthrough
 
-Claude Code itself uses structured error context -- failure type, what was attempted, partial results -- to make recovery decisions.
+### Step 1: See the problem -- error treated as data
 
-## Reference code
+Create `~/claude-architect-labs/lab-d5-context-reliability/propagation_tracker.py`:
 
 ```python
 import json
 
-# -- ANTI-PATTERNS vs CORRECT PATTERNS --------------------
 
-def demonstrate_error_patterns():
-    """Show anti-patterns vs correct error propagation."""
+# ============================================================
+# PART 1: THE PROBLEM -- ERROR PROPAGATES AS DATA
+# ============================================================
 
-    print("=== Anti-Pattern 1: Silent Suppression ===\n")
-    # WRONG: Subagent returns empty results as if search succeeded
-    def search_subagent_bad(query: str) -> dict:
-        try:
-            # raise ConnectionError("Search service unavailable")
-            raise ConnectionError("Simulated failure")
-        except ConnectionError:
-            # BAD: silently return empty as if search worked
-            return {"results": [], "total": 0}
+def demo_silent_propagation():
+    """Show how an error string becomes 'data' downstream."""
+    print("=" * 60)
+    print("THE PROBLEM: SILENT ERROR PROPAGATION")
+    print("=" * 60)
 
-    result = search_subagent_bad("EV market trends")
-    print(f"Bad error response: {result}")
-    print("Problem: Coordinator thinks search found nothing vs search FAILED.")
-    print("Coordinator can't distinguish 'no results' from 'search broken'.\n")
+    # Search agent hits rate limit
+    search_result = "RateLimitError: 429 Too Many Requests"
+    print(f"\n  [search] Result: {search_result}")
+    print(f"  [search] This is an ERROR, not data")
 
-    print("=== Anti-Pattern 2: Workflow Termination ===\n")
-    print("""
-    WRONG: Subagent raises exception -> coordinator catches -> aborts entire workflow
-    Problem: One source failure shouldn't abort a multi-source research task.
-    """)
+    # Coordinator passes it to analyze without checking
+    print(f"\n  [coordinator] Passing to analyze agent...")
+    print(f"  [coordinator] (no inspection -- just forwards)")
 
-    print("=== Correct Pattern: Structured Error Context ===\n")
-    # CORRECT: Return structured error with context for coordinator recovery
-    def search_subagent_good(query: str, source: str) -> dict:
-        try:
-            raise ConnectionError(f"Connection timeout to {source}")
-        except ConnectionError as e:
-            # GOOD: Structured error with full context
-            return {
-                "success": False,
-                "error": {
-                    "failure_type": "connection_timeout",
-                    "attempted_query": query,
-                    "source": source,
-                    "partial_results": None,  # or any partial data retrieved
-                    "what_was_attempted": f"HTTP GET to {source}/search?q={query}",
-                    "alternative_approaches": [
-                        f"Try cached version of {source}",
-                        "Use backup source: archive.org",
-                        "Proceed with available sources and note gap"
-                    ],
-                    "is_retryable": True,
-                    "results_may_exist": False
-                }
-            }
+    # Analyze agent treats error as research content
+    analysis = (
+        "The document discusses rate limiting policies "
+        "with a focus on HTTP 429 status codes. Key finding: "
+        "the system uses 429 responses for traffic management."
+    )
+    print(f"\n  [analyze] Analysis: {analysis}")
+    print(f"  [analyze] This is NONSENSE -- analyzed "
+          f"an error string as content")
 
-    error = search_subagent_good("EV market trends", "reuters.com")
-    print(f"Good error response:\n{json.dumps(error, indent=2)}")
+    # Synthesize combines nonsense with real data
+    synthesis = (
+        "Market analysis indicates strong growth (source: "
+        "bloomberg). Additionally, rate limiting with HTTP "
+        "429 codes is a key infrastructure trend "
+        "(source: reuters)."
+    )
+    print(f"\n  [synthesize] Output: {synthesis}")
+    print(f"  [synthesize] Corrupted -- error became a "
+          f"'finding'")
+    print(f"\n  RESULT: Silent garbage-in, garbage-out cascade")
+```
 
-    print("\n\n=== Access Failure vs Valid Empty Result ===\n")
-    print("""
-    Access failure (success: False):
-      Service didn't respond, timed out, threw exception
-      -> Coordinator: decide whether to retry, use backup source, or proceed without
+### Step 2: Add structured error returns
 
-    Valid empty result (success: True, results: []):
-      Search executed successfully; genuinely no matches
-      -> Coordinator: this topic has no data at this source (not a failure)
+```python
+# ============================================================
+# PART 2: STRUCTURED ERROR RETURNS
+# ============================================================
 
-    This distinction enables intelligent recovery:
-    Access failure -> retry or use backup
-    Empty result   -> note gap in coverage, continue with other sources
-    """)
-
-
-def demonstrate_partial_results():
-    print("=== Partial Results Pattern ===\n")
-
-    def analysis_subagent_with_partial(docs: list) -> dict:
-        """Process documents, return partial results if some fail."""
-        results = []
-        errors = []
-
-        for doc in docs:
-            try:
-                if doc["id"] == "doc-3":  # Simulate one failure
-                    raise ValueError(f"Document {doc['id']} is corrupted")
-                results.append({
-                    "doc_id": doc["id"],
-                    "findings": f"Analysis of {doc['text'][:20]}...",
-                    "confidence": 0.85
-                })
-            except ValueError as e:
-                errors.append({
-                    "doc_id": doc["id"],
-                    "error": str(e),
-                    "is_retryable": False
-                })
-
+def search_agent(query, source):
+    """Subagent that returns structured errors."""
+    if source == "reuters.com":
+        # Simulate rate limit failure
         return {
-            "success": True,  # Overall operation didn't fail
-            "partial_results": results,
-            "errors": errors,
-            "coverage": f"{len(results)}/{len(docs)} documents processed",
-            "note": "Coordinator should note which documents have gaps"
+            "success": False,
+            "error": {
+                "type": "rate_limit",
+                "source": source,
+                "query": query,
+                "is_retryable": True,
+                "partial_results": None,
+                "alternatives": [
+                    "Try cached version",
+                    "Use backup: archive.org",
+                    "Proceed without this source",
+                ],
+            },
         }
+    # Success case
+    return {
+        "success": True,
+        "source": source,
+        "data": {
+            "query": query,
+            "findings": [
+                f"Market grew 35% in 2023 ({source})",
+            ],
+        },
+    }
 
+
+def analyze_agent(data):
+    """Analyze agent that only processes real data."""
+    if not data.get("success", False):
+        # Don't analyze errors -- pass through
+        return data
+    return {
+        "success": True,
+        "analysis": f"Analyzed {len(data['data']['findings'])} "
+                    f"findings from {data['source']}",
+        "source": data["source"],
+    }
+```
+
+### Step 3: Add coordinator with inspection
+
+```python
+# ============================================================
+# PART 3: COORDINATOR WITH INSPECTION
+# ============================================================
+
+def coordinator_run(query, sources):
+    """Coordinator that inspects each subagent result."""
+    print("\n" + "=" * 60)
+    print("STRUCTURED ERROR PROPAGATION")
+    print("=" * 60)
+
+    results = {}
+    errors = {}
+
+    # Phase 1: Search all sources
+    print("\n  Phase 1: Search")
+    for source in sources:
+        result = search_agent(query, source)
+
+        if result["success"]:
+            print(f"  [OK] {source}: "
+                  f"{len(result['data']['findings'])} "
+                  f"findings")
+            results[source] = result
+        else:
+            err = result["error"]
+            print(f"  [FAIL] {source}: "
+                  f"{err['type']}")
+            errors[source] = err
+
+            # Try route-around if retryable
+            if err["is_retryable"]:
+                print(f"    Retryable -- trying "
+                      f"alternatives:")
+                for alt in err["alternatives"][:1]:
+                    print(f"      -> {alt}")
+
+    # Phase 2: Analyze only successful results
+    print("\n  Phase 2: Analyze (only successes)")
+    analyses = {}
+    for source, result in results.items():
+        analysis = analyze_agent(result)
+        analyses[source] = analysis
+        print(f"  [OK] Analyzed: {source}")
+
+    # Phase 3: Synthesize with gap annotations
+    print("\n  Phase 3: Synthesize with gaps noted")
+    coverage = {
+        "sources_available": list(results.keys()),
+        "sources_failed": list(errors.keys()),
+        "coverage_note": (
+            f"{len(results)}/{len(sources)} sources "
+            f"available"
+        ),
+    }
+    print(f"  Coverage: {coverage['coverage_note']}")
+    if errors:
+        for source, err in errors.items():
+            print(f"  Gap: {source} -- {err['type']}")
+
+    return {
+        "analyses": analyses,
+        "errors": errors,
+        "coverage": coverage,
+    }
+```
+
+### Step 4: Add partial-success handling
+
+```python
+# ============================================================
+# PART 4: PARTIAL SUCCESS HANDLING
+# ============================================================
+
+def demo_partial_success():
+    """Show that 2-of-3 success is better than abort."""
+    print("\n" + "=" * 60)
+    print("PARTIAL SUCCESS: 2 OF 3 SOURCES")
+    print("=" * 60)
+
+    # 3 documents, 1 fails
     docs = [
         {"id": "doc-1", "text": "EV market growth report"},
         {"id": "doc-2", "text": "Battery cost analysis"},
-        {"id": "doc-3", "text": "Corrupted file"},
-        {"id": "doc-4", "text": "Regional adoption data"},
+        {"id": "doc-3", "text": None},  # Corrupted
     ]
 
-    result = analysis_subagent_with_partial(docs)
-    print(f"Partial results response:\n{json.dumps(result, indent=2)}")
+    results = []
+    errors = []
 
+    for doc in docs:
+        if doc["text"] is None:
+            errors.append({
+                "doc_id": doc["id"],
+                "error": "Document corrupted",
+                "is_retryable": False,
+            })
+            print(f"  [FAIL] {doc['id']}: corrupted")
+        else:
+            results.append({
+                "doc_id": doc["id"],
+                "summary": f"Analyzed: {doc['text'][:30]}",
+            })
+            print(f"  [OK] {doc['id']}: analyzed")
+
+    print(f"\n  Result: {len(results)}/{len(docs)} "
+          f"documents processed")
+    print(f"  Errors: {len(errors)} "
+          f"(annotated, not hidden)")
+    print(f"\n  ANTI-PATTERN: abort all because 1 failed")
+    print(f"  CORRECT: proceed with {len(results)} docs, "
+          f"note gap for doc-3")
+```
+
+### Step 5: Add the decision table and demo runner
+
+```python
+# ============================================================
+# PART 5: DEMO
+# ============================================================
+
+def run_demo():
+    # Show the problem
+    demo_silent_propagation()
+
+    # Show the fix
+    result = coordinator_run(
+        "EV market trends 2024",
+        ["bloomberg.com", "reuters.com", "iea.org"],
+    )
+
+    # Show partial success
+    demo_partial_success()
+
+    # Error handling decision table
+    print("\n" + "=" * 60)
+    print("ERROR HANDLING DECISIONS")
+    print("=" * 60)
     print("""
-    Coordinator receives partial results:
-    - Knows doc-3 failed (and can note gap in synthesis)
-    - Has 3/4 documents analyzed (useful, not all-or-nothing)
-    - Can decide: proceed with 3 docs, or retry doc-3 with different approach
-    """)
+  Subagent returns error:
+    rate_limit (retryable) -> retry with backoff
+    timeout (retryable)    -> retry once, then skip
+    invalid_input (not retryable) -> fix input, retry
+    not_found (not error)  -> genuine empty result
 
+  Coordinator decisions:
+    All succeed    -> synthesize normally
+    Some fail      -> synthesize with gap annotations
+    All fail       -> return structured error to user
+    Error as data  -> NEVER (inspect before forwarding)
 
-def demonstrate_coverage_annotations():
-    print("\n=== Coverage Annotations in Synthesis Output ===\n")
-    print("""
-    Synthesis output should annotate which findings are well-supported
-    vs which have gaps due to unavailable sources:
+  Anti-patterns:
+    [BAD] Return empty as success (silent suppression)
+    [BAD] Abort on first failure (wastes other work)
+    [BAD] Pass error string to next agent (cascade)
 
-    {
-      "topic": "EV market growth",
-      "findings": [
-        {
-          "claim": "35% market growth in 2023",
-          "sources": ["iea.org", "bloomberg.com"],
-          "confidence": "high",
-          "coverage": "well_supported"
-        },
-        {
-          "claim": "Regional breakdown by country",
-          "sources": ["partial - reuters.com unavailable"],
-          "confidence": "low",
-          "coverage": "gap - reuters search failed, data may be incomplete"
-        }
-      ],
-      "overall_coverage": "3 of 4 sources available; regional data has gaps"
-    }
-
-    Coordinator then: includes coverage annotation in final report
-    User understands: "regional data may be incomplete because one source was unavailable"
-    """)
+  Correct pattern:
+    [OK] Structured error with type + retryable flag
+    [OK] Coordinator inspects before forwarding
+    [OK] Partial results with coverage annotations
+""")
 
 
 if __name__ == "__main__":
-    demonstrate_error_patterns()
-    demonstrate_partial_results()
-    demonstrate_coverage_annotations()
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the script
 
-Ask Claude Code to create and run this file:
-
+```bash
+cd ~/claude-architect-labs
+python lab-d5-context-reliability/propagation_tracker.py
 ```
-Create lab-d5-context-reliability/error_propagation.py with the code above and run it
-```
 
-**What you should see:**
-- "Anti-Pattern 1" showing a bad error response (`{"error": "Search failed"}`) that is indistinguishable from an empty result, followed by the correct structured error with `failure_type`, `attempted_query`, `alternative_approaches`, and `is_retryable` fields
-- "Partial Results Pattern" showing 4 documents processed where doc-3 fails but 3/4 succeed, returning `partial_results` alongside `errors` with per-document coverage
-- "Coverage Annotations in Synthesis Output" showing how the final synthesis tags each claim as `well_supported` or flags gaps due to unavailable sources
+You should see:
+- **Silent propagation:** Error string "RateLimitError: 429" analyzed as content, nonsense output
+- **Structured propagation:** bloomberg and iea succeed, reuters fails with structured error, coordinator routes around
+- **Partial success:** 2/3 documents analyzed, 1 annotated as gap (not aborted)
+- **Decision table:** When to retry, skip, or annotate gaps
+
+## Try it yourself
+
+Inject a different failure: the analyze agent fails with "invalid JSON in document."
+
+1. Modify `analyze_agent` to return a structured error for doc-2.
+2. Run the coordinator and verify: doc-1 and doc-3 are synthesized, doc-2's gap is annotated.
+3. Confirm no silent propagation -- the synthesis output explicitly notes the gap.
 
 ## Check your understanding
 
-1. **What happens if a subagent returns a generic "error" string?** The coordinator can't decide recovery strategy — retry, backup, or skip are all blind guesses without structured error context.
-2. **What happens if errors are suppressed and empty results returned as success?** Downstream agents produce incomplete reports without knowing data is missing — this is silent failure, the worst anti-pattern.
-3. **What happens if the entire workflow terminates on one subagent failure?** It wastes all other subagents' completed work — one source failure shouldn't abort a multi-source task.
+**Q1.** Your search subagent hits a rate limit and returns the string "RateLimitError: 429." The coordinator passes this to the analyze agent, which produces an analysis about "rate limiting policies." What went wrong?
 
-## Exam tips
+**A.** The analyze agent needs better input validation
+**B.** The search agent should return a structured error (success: false, error_type: rate_limit) instead of an error string. The coordinator should inspect the result before forwarding.
+**C.** The coordinator should catch exceptions from subagents
+**D.** The search agent should retry automatically before returning
 
-- **If the exam says** "subagent fails, coordinator can't recover" → structured error context
-- **Wrong answer trap:** "Return empty result as success" — silent suppression hides failures
-- **Wrong answer trap:** "Terminate entire workflow" — wastes completed work from other subagents
-- **The correct pattern:** Structured error with failure_type, partial_results, alternatives, is_retryable
+**Correct: B.** The root cause is the error being indistinguishable from data. A structured error with `success: false` tells the coordinator "this is a failure, not research content." The coordinator inspects and routes around instead of forwarding garbage. **Why not A:** The analyze agent cannot distinguish error strings from unusual research topics without a structured format. **Why not C:** The error was not an exception -- it was a return value that looked like data. **Why not D:** Automatic retry helps for transient failures but does not fix the propagation problem when retry also fails.
+
+---
+
+**Q2.** Your multi-agent research system has 3 subagents: search, analyze, synthesize. The search agent fails for one of three sources. What should the coordinator do?
+
+**A.** Abort the entire workflow and return an error to the user
+**B.** Proceed with the 2 successful sources, annotate the gap in the synthesis output, and note which claims may be incomplete
+**C.** Silently drop the failed source and return results as if all 3 succeeded
+**D.** Retry the failed source indefinitely until it succeeds
+
+**Correct: B.** Partial success is better than total failure. The synthesis should note "regional data may be incomplete because reuters was unavailable" so the user understands coverage limitations. **Why not A:** Aborting wastes the completed work from 2 successful sources. **Why not C:** Silent dropping hides the gap -- the user believes all 3 sources were consulted. **Why not D:** Indefinite retry can hang the pipeline and does not guarantee success.
+
+---
+
+**Q3.** A subagent catches a `ConnectionError` and returns `{"results": [], "total": 0}`. The coordinator treats this as "search found nothing." What anti-pattern is this?
+
+**A.** Full termination -- the workflow should abort on connection errors
+**B.** Silent suppression -- the error is hidden behind a success-shaped response, making it impossible for the coordinator to distinguish "search failed" from "search found no results"
+**C.** Structured error propagation -- this is the correct pattern
+**D.** Partial results -- the subagent correctly returned empty results
+
+**Correct: B.** Silent suppression makes failures invisible. The coordinator cannot decide whether to retry (connection error) or proceed (genuine empty results) because both look identical. The correct response is `{"success": false, "error_type": "connection_error", "is_retryable": true}`. **Why not A:** Full termination is also an anti-pattern -- the correct approach is structured error return. **Why not C:** This is the opposite of structured error propagation. **Why not D:** The results are not "partial" -- the search never executed, so there are no results at all.
 
 ## Key takeaways
 
-- Never silently suppress errors — return structured error context
-- Never terminate entire workflow on single subagent failure
-- Structured error: failure_type, attempted_query, partial_results, alternatives, is_retryable
-- Distinguish access failure (service down) from valid empty result (no data)
-- Return partial results with coverage annotations — all-or-nothing is an anti-pattern
-- Coordinator uses error context to decide: retry, use backup, or proceed with gap noted
+- Never pass error strings to downstream agents -- they become "data" and corrupt output
+- Structured error returns: success flag, error_type, is_retryable, partial_results, alternatives
+- Coordinator inspects every subagent result before forwarding downstream
+- Silent suppression (empty as success) is the worst anti-pattern -- failures become invisible
+- Full termination (abort on first failure) wastes completed work
+- Partial success with gap annotations is better than all-or-nothing
+
+## Exam tips
+
+- **"Subagent fails, coordinator cannot recover"** --> structured error context
+- **"Output contains nonsense from a failed source"** --> error propagated as data
+- **Wrong answer trap:** "Return empty result as success" -- silent suppression
+- **Wrong answer trap:** "Terminate entire workflow" -- wastes completed work
+- **The core pattern:** structured error + coordinator inspection + partial success with gap annotations
+
+**Next:** Lab 5.4 covers context management in large codebase exploration -- how to navigate thousands of files without exhausting context, using the map-zoom-summarize pattern.
 
 ---
 
 # LAB 5.4: CONTEXT MANAGEMENT IN LARGE CODEBASE EXPLORATION
-# Domain 5 — Task Statement 5.4
-# Concept: Scratchpad files, subagent delegation, crash recovery
-# Time: ~20 minutes | Difficulty: Guided 
-# Prerequisites: Lab 5.1
+# Domain 5 -- Task Statement 5.4
+# Concept: Map-zoom-summarize, scratchpad files, Explore subagent
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 5.3
 
-## Learning objectives
+## Concepts
 
-After completing this lab, you will be able to:
+Codebase exploration is NOT "read every file." A 2000-file monolith has maybe 20 files relevant to your question. The rest is noise that fills context and degrades responses.
 
-- Implement scratchpad files to persist key findings across context boundaries and counteract context degradation
-- Design subagent delegation patterns that isolate verbose exploration output while the main agent coordinates high-level understanding
-- Structure crash recovery using agent state exports (manifests) that the coordinator loads on resume and injects into agent prompts
+**The map-zoom-summarize pattern:**
+1. **Map:** Use Grep and Glob to find entry points (callbacks to Lab 2.5). Do not read files yet.
+2. **Zoom:** Read only the matched files. Extract findings.
+3. **Summarize:** Write key findings to a running notes file (scratchpad). Prune the raw file content from context.
+4. **Repeat:** Grep again to follow imports/references from what you found.
 
-## Recall
-1. What two anti-patterns should you avoid in multi-agent error handling? (Lab 5.3)
-2. What does structured error context enable the coordinator to do? (Lab 5.3)
+**Running notes as external state:** Context degrades in extended sessions -- the model starts saying "typically X" instead of citing specific code. A scratchpad file persists findings beyond the context window. When you need earlier findings, read the file instead of relying on fading context memory.
 
-## Overview
+**Explore subagent vs main context:** For deep-dives that would generate 20+ file reads, spawn an Explore subagent. The subagent runs in an isolated context and returns only a summary. Your main context stays clean for the actual work.
 
-Two hours into exploring a 50-file codebase, you ask Claude about the first class it found. It says "the codebase typically uses the factory pattern" instead of naming the specific class from turn 3.
+**When to use each approach:**
+| Situation | Approach |
+|-----------|----------|
+| Quick lookup (1-3 files) | Stay in main context |
+| Moderate exploration (5-10 files) | Main context + /compact after |
+| Deep dive (20+ files) | Explore subagent, summary back |
+| Extended session (2+ hours) | Scratchpad file for persistence |
 
-**This is context degradation** -- and the fixes are:
-- **Scratchpad files** for persistent findings
-- **Subagent delegation** for isolated exploration
-- **Crash recovery manifests** for resilient resume
+## Scenario
 
-**Exam connection:** The exam tests scratchpad files for persistence, subagent delegation for isolation, and manifest-based recovery for crash resilience.
+You are exploring a 2000-file monolith to understand how authentication flows through the app. Your first approach: "read all files in src/auth/" -- all 50 files get loaded into context. By the time you reach file 40, the agent cannot remember what file 5 contained. The "lost in the middle" effect destroys early findings. You ask about the first auth class and the agent says "the codebase typically uses the factory pattern" instead of naming the specific class from the files it read.
 
-### Key concepts in this lab
+You need incremental exploration: Grep to find entry points, Read only files that matter, summarize into running notes, prune raw content.
 
-- **Extended sessions** — cause context degradation; model references "typical patterns" not specific code
-- **Scratchpad files** — persist findings across context boundaries
-- **Manifest-based crash recovery** — enables graceful resume after failures
+## What you'll learn
 
-## Try it
+- The map-zoom-summarize loop for efficient codebase navigation
+- Using Grep and Glob as navigation tools instead of reading everything
+- Scratchpad files for persisting findings beyond context limits
+- When to use Explore subagent vs staying in main context
+- Pruning raw file content after extracting insights to reclaim context
 
-Ask Claude Code to explore this project:
+## Walkthrough
 
-```
-Give me a high-level overview of what this project contains — what are the main files and directories?
-```
+### Step 1: See the problem -- read 50 files, remember 5
 
-Notice how Claude Code uses Glob to find files, then Read to inspect key ones, building understanding incrementally.
-
-In a long session, it would start referencing "typical patterns" instead of specific findings -- that's context degradation, and the scratchpad pattern in this lab fixes it.
-
-### Step 1: Practice the scratchpad pattern
-
-In Claude Code, start a codebase exploration session:
-
-```
-> Let's explore the lab codebase. Create a scratchpad file at
-  /tmp/exploration-scratchpad.md to record key findings as we go.
-  Start by mapping the directory structure.
-```
-
-As Claude explores, it will write to the scratchpad:
-```markdown
-# Exploration Scratchpad
-
-## Directory Structure
-- lab-d1-agentic-arch/: Agentic loop labs (basic_loop.py, multi_agent.py...)
-- lab-d2-tool-design/: Tool quality and MCP integration
-...
-
-## Key Patterns Found
-- All agents use while True + stop_reason pattern
-- Error responses use isError/errorCategory/isRetryable structure
-...
-```
-
-Later, when asking about earlier findings:
-```
-> What was the key pattern in the agentic loop files?
-```
-
-Instead of relying on fading context memory:
-```
-> Read /tmp/exploration-scratchpad.md and tell me about the agentic loop pattern
-```
-
-**Why this matters:** After 2+ hours of exploration, the model may say "typically agents use X pattern" instead of "the lab files use Y pattern at line Z" -- it's using generic knowledge instead of specific findings.
-
-
-## Reference code
-
-### Step 2: Create a crash recovery manifest
-
-Create `lab-d5-context-reliability/crash_recovery.py`:
+Create `~/claude-architect-labs/lab-d5-context-reliability/codebase_explorer.py`:
 
 ```python
 import json
-import os
-from pathlib import Path
-import tempfile
-
-# -- SCRATCHPAD PATTERN -----------------------------------
-# In long sessions, write key findings to a file as you go.
-# When context degrades, read the scratchpad to restore knowledge.
-
-SCRATCHPAD_PATH = Path(tempfile.gettempdir()) / "exploration-scratchpad.md"
-
-def demonstrate_scratchpad():
-    print("=== Scratchpad Pattern Demo ===\n")
-
-    # Simulate finding things during exploration
-    findings = [
-        ("Turn 3", "Found agentic loop in basic_loop.py — uses stop_reason for control flow"),
-        ("Turn 7", "Coordinator in multi_agent.py delegates to 3 subagents"),
-        ("Turn 12", "Error handling uses 4 categories: transient, validation, business, permission"),
-        ("Turn 18", "Session management: --resume for continuation, --fork-session for branching"),
-        ("Turn 25", "Human review uses stratified sampling + field-level confidence scores"),
-    ]
-
-    # Write findings to scratchpad as we discover them
-    scratchpad_content = "# Exploration Scratchpad\n\n"
-    for turn, finding in findings:
-        scratchpad_content += f"## {turn}\n{finding}\n\n"
-        print(f"  [{turn}] Found: {finding[:60]}...")
-        print(f"  [{turn}] -> Written to scratchpad")
-
-    SCRATCHPAD_PATH.write_text(scratchpad_content)
-    print(f"\n  Scratchpad saved: {SCRATCHPAD_PATH}")
-
-    # Now simulate context degradation
-    print("\n  --- After 30 turns, context is degraded ---")
-    print("  Without scratchpad: 'The codebase typically uses standard patterns...'")
-    print("  With scratchpad:")
-
-    # Read scratchpad to restore knowledge
-    restored = SCRATCHPAD_PATH.read_text()
-    lines = [l for l in restored.split("\n") if l.startswith("Found") or l.startswith("Coordinator") or l.startswith("Error") or l.startswith("Session") or l.startswith("Human")]
-    for line in lines[:3]:
-        print(f"    -> {line}")
-    print(f"  [OK] Specific findings restored from scratchpad (not 'typical patterns')")
 
 
-# -- MANIFEST-BASED CRASH RECOVERY ------------------------
-# Each agent exports its state to a known location.
-# On resume, coordinator loads the manifest and injects state into agent prompts.
+# ============================================================
+# PART 1: THE PROBLEM -- READING EVERYTHING
+# ============================================================
 
-MANIFEST_PATH = Path(tempfile.gettempdir()) / "research-manifest.json"
+# Simulated: 50 auth files in a monolith
+AUTH_FILES = {
+    f"src/auth/handler_{i}.py": f"class AuthHandler{i}: "
+    f"# handles auth flow step {i}"
+    for i in range(1, 51)
+}
 
-def save_agent_state(agent_name: str, state: dict):
-    """Save agent state to manifest for crash recovery."""
-    manifest = {}
-    if MANIFEST_PATH.exists():
-        manifest = json.loads(MANIFEST_PATH.read_text())
+def demo_read_everything():
+    """Show what happens when you read all 50 files."""
+    print("=" * 60)
+    print("THE PROBLEM: READ EVERYTHING")
+    print("=" * 60)
 
-    manifest[agent_name] = {
-        **state,
-        "saved_at": "2024-01-15T10:30:00Z",
-        "completed": state.get("completed", False)
+    total_chars = 0
+    for path, content in AUTH_FILES.items():
+        total_chars += len(content)
+
+    print(f"\n  Files read: {len(AUTH_FILES)}")
+    print(f"  Total chars in context: {total_chars}")
+    print(f"\n  After reading 50 files:")
+    print(f"  Q: 'What was in handler_5.py?'")
+    print(f"  A: 'The codebase typically uses handler "
+          f"patterns...'")
+    print(f"  [BAD] Generic answer -- lost-in-the-middle")
+    print(f"\n  Q: 'What specific auth class is in handler_1?'")
+    print(f"  A: 'Based on standard patterns, auth handlers "
+          f"usually...'")
+    print(f"  [BAD] Model references generic knowledge, "
+          f"not the file it read")
+```
+
+### Step 2: Grep for entry points instead
+
+```python
+# ============================================================
+# PART 2: MAP -- GREP FOR ENTRY POINTS
+# ============================================================
+
+# Simulated codebase with specific patterns
+CODEBASE = {
+    "src/auth/middleware.py":
+        "from .verify import verify_token\n"
+        "@requires_auth\n"
+        "def auth_middleware(request): ...",
+    "src/auth/verify.py":
+        "def verify_token(token):\n"
+        "    return jwt.decode(token, SECRET_KEY)",
+    "src/auth/permissions.py":
+        "def check_permission(user, resource):\n"
+        "    return user.role in ALLOWED_ROLES[resource]",
+    "src/api/users.py":
+        "from auth.verify import verify_token\n"
+        "def get_user(request): ...",
+    "src/api/orders.py":
+        "from auth.middleware import requires_auth\n"
+        "@requires_auth\n"
+        "def get_orders(request): ...",
+    "src/utils/logging.py":
+        "def log_request(request): ...",
+    "src/utils/cache.py":
+        "def get_cached(key): ...",
+}
+
+
+def grep_codebase(pattern):
+    """Simulate Grep -- find files containing pattern."""
+    matches = []
+    for path, content in CODEBASE.items():
+        if pattern.lower() in content.lower():
+            # Find matching line
+            for i, line in enumerate(
+                content.split("\n"), 1
+            ):
+                if pattern.lower() in line.lower():
+                    matches.append({
+                        "file": path,
+                        "line": i,
+                        "content": line.strip(),
+                    })
+    return matches
+
+
+def glob_codebase(pattern_suffix):
+    """Simulate Glob -- find files by path pattern."""
+    return [p for p in CODEBASE.keys()
+            if p.endswith(pattern_suffix)]
+```
+
+### Step 3: Build the scratchpad and map-zoom-summarize loop
+
+```python
+# ============================================================
+# PART 3: THE MAP-ZOOM-SUMMARIZE LOOP
+# ============================================================
+
+SCRATCHPAD = []
+
+
+def add_to_scratchpad(finding):
+    """Persist a finding to the scratchpad."""
+    SCRATCHPAD.append(finding)
+
+
+def read_file(path):
+    """Simulate Read -- returns file content."""
+    return CODEBASE.get(path, "File not found")
+
+
+def explore_auth_flow():
+    """Demonstrate the map-zoom-summarize loop."""
+    global SCRATCHPAD
+    SCRATCHPAD = []
+
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("MAP-ZOOM-SUMMARIZE LOOP")
+    print(sep)
+
+    # STEP 1: MAP -- Grep for entry points
+    print("\n  STEP 1: MAP (Grep for entry points)")
+    patterns = ["verify_token", "@requires_auth",
+                "authenticate"]
+    all_matches = []
+    for pattern in patterns:
+        matches = grep_codebase(pattern)
+        all_matches.extend(matches)
+        for m in matches:
+            print(f"    [{m['file']}:{m['line']}] "
+                  f"{m['content']}")
+
+    # Only 4-5 files match, not all 50
+    matched_files = list(set(
+        m["file"] for m in all_matches
+    ))
+    print(f"\n  Found {len(matched_files)} relevant files "
+          f"(not all {len(CODEBASE)})")
+
+    # STEP 2: ZOOM -- Read only matched files
+    print("\n  STEP 2: ZOOM (Read only matched files)")
+    for path in matched_files:
+        content = read_file(path)
+        # Extract the finding, not the raw content
+        finding = {
+            "file": path,
+            "summary": content.split("\n")[0][:60],
+            "auth_role": "entry point"
+            if "verify_token" in content
+            else "consumer",
+        }
+        add_to_scratchpad(finding)
+        print(f"    Read: {path}")
+        print(f"    Finding: {finding['summary']}")
+
+    # STEP 3: SUMMARIZE -- Write to scratchpad
+    print("\n  STEP 3: SUMMARIZE (Write to scratchpad)")
+    for entry in SCRATCHPAD:
+        print(f"    [{entry['auth_role']:12s}] "
+              f"{entry['file']}: {entry['summary']}")
+
+    # STEP 4: PRUNE raw content from context
+    print("\n  STEP 4: PRUNE (raw content removed)")
+    print(f"    Scratchpad entries: {len(SCRATCHPAD)}")
+    print(f"    Raw file content: PRUNED from context")
+    print(f"    Token savings: ~80% vs reading all files")
+
+    return SCRATCHPAD
+```
+
+### Step 4: Add Explore subagent simulation
+
+```python
+# ============================================================
+# PART 4: EXPLORE SUBAGENT (isolated context)
+# ============================================================
+
+def explore_subagent(question):
+    """Simulate an Explore subagent doing deep-dive
+    in isolated context. Returns only summary.
+    """
+    # In production: Claude Code spawns isolated agent
+    # that reads 20+ files -- output stays in its context
+    print(f"\n  [Subagent] Deep-dive: {question}")
+    print(f"  [Subagent] Reading 20+ files in "
+          f"isolated context...")
+    print(f"  [Subagent] (verbose output stays isolated)")
+
+    # Only the summary comes back
+    return {
+        "summary": "Auth flow: middleware.py intercepts "
+                   "requests -> verify.py decodes JWT -> "
+                   "permissions.py checks role-based access",
+        "entry_points": [
+            "src/auth/middleware.py",
+            "src/auth/verify.py",
+        ],
+        "consumers": [
+            "src/api/users.py",
+            "src/api/orders.py",
+        ],
+        "files_examined": 23,
+        "tokens_used_in_subagent": 8500,
+        "tokens_returned_to_main": 200,
     }
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
-    print(f"[{agent_name}] State saved to manifest")
+```
 
+### Step 5: Add demo runner
 
-def load_manifest() -> dict:
-    """Load manifest on resume."""
-    if not MANIFEST_PATH.exists():
-        return {}
-    return json.loads(MANIFEST_PATH.read_text())
+```python
+# ============================================================
+# PART 5: DEMO
+# ============================================================
 
+def run_demo():
+    # Show the problem
+    demo_read_everything()
 
-def build_resume_prompt(agent_name: str, manifest: dict, new_task: str) -> str:
-    """Build prompt that injects prior state for resumed agent."""
-    prior_state = manifest.get(agent_name, {})
+    # Show the fix
+    scratchpad = explore_auth_flow()
 
-    if not prior_state:
-        return f"New task: {new_task}"
-
-    return f"""
-RESUMED SESSION: Prior work context below.
-
-Prior state for {agent_name}:
-- Last saved: {prior_state.get('saved_at')}
-- Completed steps: {prior_state.get('completed_steps', [])}
-- Key findings: {json.dumps(prior_state.get('findings', []), indent=2)}
-- In progress at crash: {prior_state.get('in_progress_step', 'unknown')}
-
-Continue from where the session was interrupted.
-Do NOT re-do completed steps listed above.
-
-Remaining task: {new_task}
-"""
-
-
-def demonstrate_crash_recovery():
-    print("=== Crash Recovery Demo ===\n")
-
-    # Simulate agent saving state mid-execution
-    print("Simulating research agent running...")
-    save_agent_state("search_agent", {
-        "completed_steps": ["search_iea", "search_bloomberg"],
-        "findings": [
-            {"claim": "35% growth", "source": "iea.org"},
-            {"claim": "$139/kWh", "source": "bloomberg.com"}
-        ],
-        "in_progress_step": "search_reuters",
-        "completed": False
-    })
-
-    save_agent_state("analysis_agent", {
-        "completed_steps": ["analyze_doc_1", "analyze_doc_2"],
-        "findings": [
-            {"claim": "Regional variation 3x", "doc": "report.pdf", "page": 12}
-        ],
-        "in_progress_step": "analyze_doc_3",
-        "completed": False
-    })
-
-    print("\nSimulating crash...\n")
-
-    # Resume: load manifest, build resume prompts
-    print("Resuming after crash...")
-    manifest = load_manifest()
-    print(f"Manifest loaded: {list(manifest.keys())} agents with saved state\n")
-
-    resume_prompt = build_resume_prompt(
-        "search_agent",
-        manifest,
-        "Continue searching: reuters.com, ft.com, wsj.com"
+    # Show Explore subagent
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("EXPLORE SUBAGENT (deep-dive)")
+    print(sep)
+    result = explore_subagent(
+        "How does authentication flow through the app?"
     )
-    print("Resume prompt for search_agent:")
-    print(resume_prompt[:400])
+    print(f"\n  Summary returned to main context:")
+    print(f"    {result['summary']}")
+    print(f"    Files examined: {result['files_examined']}")
+    print(f"    Tokens in subagent: "
+          f"{result['tokens_used_in_subagent']}")
+    print(f"    Tokens to main: "
+          f"{result['tokens_returned_to_main']}")
+    print(f"    Savings: "
+          f"{result['tokens_used_in_subagent'] - result['tokens_returned_to_main']} "
+          f"tokens kept out of main context")
 
-    # Clean up
-    if MANIFEST_PATH.exists():
-        MANIFEST_PATH.unlink()
+    # Decision table
+    print(f"\n{sep}")
+    print("EXPLORATION STRATEGY")
+    print(sep)
+    print("""
+  Quick lookup (1-3 files):
+    -> Stay in main context. Grep + Read.
+
+  Moderate exploration (5-10 files):
+    -> Main context + /compact after.
+    -> Write key findings to scratchpad.
+
+  Deep dive (20+ files):
+    -> Explore subagent. Summary back.
+    -> Main context stays clean.
+
+  Extended session (2+ hours):
+    -> Scratchpad file for persistence.
+    -> Read scratchpad to restore findings.
+
+  NEVER:
+    -> Read all files in a directory
+    -> Keep raw file content in context
+    -> Trust model memory after 30+ turns
+""")
 
 
 if __name__ == "__main__":
-    demonstrate_scratchpad()
-    print()
-    demonstrate_crash_recovery()
-
-    print("\n\n=== Context Degradation Patterns ===")
-    print("""
-    Symptoms of context degradation (extended sessions):
-    - Model says "typically X" instead of "in file Y at line Z"
-    - Model references "standard patterns" not the specific code
-    - Answers become less specific over time
-    - Model contradicts its own earlier findings
-
-    Solutions:
-    1. Scratchpad files: write key findings -> reference later
-    2. /compact: summarize context when full of verbose tool outputs
-    3. Subagent delegation: spawn subagent for deep exploration,
-       get summary back, keep main context clean
-    4. Start fresh: when prior tool results are stale (code changed),
-       start new session with injected summary
-
-    Subagent delegation pattern:
-    "Spawn a subagent to find all test files and count test cases per module.
-     Return only a summary — I don't need the raw file contents."
-    -> Verbose exploration happens in isolated context
-    -> Main session only receives the summary
-    """)
-
-    # === Subagent Delegation Pattern (executable) ===
-    print("\n=== Subagent Delegation Pattern ===")
-
-    def simulate_subagent_exploration(task: str) -> dict:
-        """
-        Simulates a subagent doing verbose exploration and returning only a summary.
-        In production, this would be a separate Claude instance via Agent tool.
-        """
-        # Simulate verbose exploration (would be 20+ file reads in reality)
-        verbose_output = [
-            "Read lab-d1-agentic-arch/basic_loop.py -> found agentic loop with stop_reason",
-            "Read lab-d1-agentic-arch/multi_agent.py -> found coordinator pattern",
-            "Read lab-d2-tool-design/structured_errors.py -> found 4 error categories",
-            "Read lab-d3-claude-code/refinement_demo.py -> found interview pattern",
-            "Read lab-d4-prompt-eng/structured_output.py -> found tool_use + JSON schema",
-            "Read lab-d5-context-reliability/human_review.py -> found stratified sampling",
-        ]
-        print(f"  [Subagent] Exploring: {task}")
-        print(f"  [Subagent] Read {len(verbose_output)} files (verbose output isolated)")
-
-        # Return ONLY the summary — not all the verbose file contents
-        return {
-            "summary": f"Found {len(verbose_output)} relevant files across 5 domains",
-            "key_patterns": [
-                "Agentic loop: stop_reason-based control flow",
-                "Multi-agent: hub-and-spoke coordinator",
-                "Error handling: 4 categories with isRetryable",
-                "Structured output: tool_use + JSON schema",
-                "Human review: stratified sampling + confidence calibration",
-            ],
-            "files_examined": len(verbose_output),
-            # NOTE: Raw file contents NOT included — saves context budget
-        }
-
-    def main_agent_with_delegation():
-        """Main agent delegates verbose exploration, preserves context."""
-        print("\n  [Main Agent] I need to understand the full lab codebase...")
-        print("  [Main Agent] Delegating exploration to subagent...")
-
-        # Subagent does the heavy lifting in isolated context
-        summary = simulate_subagent_exploration("Map all lab files and identify patterns")
-
-        # Main agent only sees the summary — context stays clean
-        print(f"\n  [Main Agent] Received summary: {summary['summary']}")
-        print(f"  [Main Agent] Key patterns: {len(summary['key_patterns'])} found")
-        print(f"  [Main Agent] My context is still clean — ready for the next task")
-
-        return summary
-
-    result = main_agent_with_delegation()
-    print(f"\n  Benefit: Main agent context consumed ~200 tokens (summary)")
-    print(f"  Without delegation: would have consumed ~10,000 tokens (all file contents)")
+    run_demo()
 ```
 
-## Run it
-
-Ask Claude Code to create and run this file:
+### Step 6: Run the script
 
 ```bash
-python lab-d5-context-reliability/crash_recovery.py
+cd ~/claude-architect-labs
+python lab-d5-context-reliability/codebase_explorer.py
 ```
 
-**What you should see:**
-- Scratchpad demo: 5 findings written to scratchpad file, then restored after simulated context degradation
-- Crash recovery: agent state saved to manifest → simulated crash → manifest loaded → resume prompt built with prior state injected
-- Context degradation symptoms listed (says "typically" instead of specific findings)
-- Subagent delegation: subagent reads 6 files in isolated context, returns 200-token summary vs 10,000 tokens without delegation
+You should see:
+- **Problem:** 50 files read, model gives generic answers
+- **Map:** Grep finds 4-5 relevant files from 7 total (not all 50)
+- **Zoom:** Only matched files read, findings extracted
+- **Summarize:** Scratchpad with concise entries
+- **Prune:** Raw content removed, ~80% token savings
+- **Explore subagent:** 23 files read in isolation, 200-token summary returned vs 8500 tokens of raw output
 
-### Step 3: Practice /compact in Claude Code
+## Try it yourself
 
-After a long exploration session:
-```
-> /compact
-```
+Explore a different codebase concern: "how does pagination work across the API layer?"
 
-Watch Claude summarize the context. Key findings are preserved; verbose tool output is removed.
-Then continue the session with a clean context.
+1. Define search patterns for Grep: "page", "limit", "offset", "cursor", "paginate".
+2. Run the map-zoom-summarize loop.
+3. Compare: how many files did Grep find vs how many exist in the API directory?
+4. Measure: summary length vs total file content length (token savings).
 
 ## Check your understanding
 
-1. **Skip the scratchpad file.** Run a 30-turn exploration session. Does Claude remember findings from turn 5? (Answer: no — context degradation causes it to say "typically" instead of citing specific code from earlier)
-2. **Don't use the manifest for crash recovery.** Restart mid-exploration. What's lost? (Answer: everything since last checkpoint — manifest-based recovery is the only way to resume gracefully)
-3. **Run verbose exploration in the main context** instead of delegating to a subagent. What fills up? (Answer: your context window — verbose discovery output crowds out the actual work. Subagent delegation keeps main context clean)
+**Q1.** A developer asks Claude Code to "read all files in src/auth/ and explain the auth flow." The response gives detailed analysis of the first 5 files but generic descriptions of files 30-50. What is the problem and fix?
 
-## Exam tips
+**A.** The model needs a larger context window
+**B.** Reading all files causes context bloat and lost-in-the-middle degradation. Use Grep to find entry points, Read only matched files, summarize to a scratchpad, and prune raw content.
+**C.** The developer should split the request into smaller chunks
+**D.** The model should re-read the files it missed
 
-- **If the exam says** "agent says 'typically uses X' instead of naming specific code" → context degradation
-- **Wrong answer trap:** "Increase context window" — delays but doesn't prevent progressive summarization
-- **Wrong answer trap:** "Re-read all prior tool results" — duplicates verbose output in context, accelerating degradation
-- **The correct pattern:** Scratchpad files persist findings. Subagent delegation isolates verbose output. /compact reduces context usage.
+**Correct: B.** Reading all files fills context with irrelevant content. Grep-first navigation finds the 4-5 relevant files without reading all 50. The map-zoom-summarize loop keeps context focused. **Why not A:** Larger context delays but does not prevent attention degradation. **Why not C:** Splitting requests loses cross-file context. **Why not D:** Re-reading adds more content to an already full context.
+
+---
+
+**Q2.** During a 2-hour exploration session, you ask about a class found in turn 5. The model says "the codebase typically uses the factory pattern" instead of naming the specific class. What should you do?
+
+**A.** Start a new session and re-explore from scratch
+**B.** Read the scratchpad file where you recorded findings earlier -- specific findings persist in the file even when context memory has degraded
+**C.** Increase the context window
+**D.** Ask the model to think harder about its earlier findings
+
+**Correct: B.** Scratchpad files persist findings beyond the context window. Reading the scratchpad restores specific details that fading context memory has generalized. **Why not A:** Starting fresh loses all exploration progress. **Why not C:** Context window size does not fix degradation of earlier findings. **Why not D:** The model cannot recall what it has forgotten -- it genuinely does not have the information in accessible context anymore.
+
+---
+
+**Q3.** You need to understand the full dependency graph of a module. This requires reading 25+ files. Should you do this in the main context or spawn an Explore subagent?
+
+**A.** Main context -- you need the full details available for follow-up questions
+**B.** Explore subagent -- the verbose output stays isolated and only a summary returns to main context, keeping it clean for the actual work
+**C.** Main context with /compact after every 5 files
+**D.** Neither -- ask the model to infer dependencies without reading files
+
+**Correct: B.** 25+ file reads would fill the main context with raw content, degrading quality for subsequent work. The Explore subagent does the heavy reading in isolation and returns a concise dependency summary. **Why not A:** Full details from 25 files would overwhelm context and degrade response quality. **Why not C:** /compact helps but 25 files is too many -- better to isolate entirely. **Why not D:** Accurate dependency analysis requires reading the actual code, not guessing.
 
 ## Key takeaways
 
-- Scratchpad files persist findings across context boundaries (write-as-you-go)
-- Context degradation: model references generic patterns instead of specific findings
-- Subagent delegation: verbose exploration in isolated context, summary returned to main
-- Crash recovery: manifest-based state export → coordinator loads on resume
-- /compact: reduces context during extended sessions
+- Codebase exploration is NOT "read every file" -- Grep first, then Read only matched files
+- Map-zoom-summarize: Grep entry points -> Read matched files -> Summarize to scratchpad -> Prune raw content
+- Scratchpad files persist findings beyond context limits -- read the file to restore knowledge
+- Explore subagent for deep dives (20+ files) -- keeps main context clean
+- /compact for moderate sessions -- summarizes verbose tool output
+- Context degradation symptom: model says "typically X" instead of citing specific code
+
+## Exam tips
+
+- **"Model says 'typically uses X pattern' instead of specific code"** --> context degradation, use scratchpad
+- **"Context fills up during exploration"** --> map-zoom-summarize or Explore subagent
+- **Wrong answer trap:** "Read all files in the directory" -- causes context bloat and lost-in-the-middle
+- **Wrong answer trap:** "Increase context window" -- delays but does not prevent degradation
+- **Wrong answer trap:** "Re-read files to refresh memory" -- adds more content to already-full context
+- **The core pattern:** Grep to find, Read to trace, Scratchpad to persist, Prune to reclaim
+
+**Next:** Lab 5.5 covers human review workflows and confidence calibration -- how to route findings to human reviewers based on calibrated confidence scores, not uncalibrated model self-assessment.
 
 ---
 
