@@ -7426,719 +7426,811 @@ Create a rule file at `rules/testing.md` instead of `.claude/rules/testing.md`. 
 # LAB 3.4: PLAN MODE VS DIRECT EXECUTION
 # Domain 3 — Task Statement 3.4
 # Concept: When to plan first, when to act directly, Explore subagent
-# Time: ~15 minutes | Difficulty: Guided
-# Prerequisites: Lab 3.1
+# Time: ~20 minutes | Difficulty: Intermediate
+# Prerequisites: Lab 3.3
 
-> **Prerequisite:** Complete Labs 3.1-3.3 first.
+## Scenario
 
-## Learning objectives
+Your manager asks you to "restructure the monolith into microservices." You open Claude Code and start making changes directly. Three files in, you realize the service boundaries are wrong -- the payment module depends on the user module in ways you didn't see. You have to undo everything and start over. You wasted an hour because you didn't explore the dependency graph first.
 
-- Select plan mode for tasks with architectural implications (e.g., microservice restructuring, library migrations affecting 45+ files)
-- Select direct execution for well-understood changes with clear scope (e.g., a single-file bug fix with a clear stack trace)
-- Use the Explore subagent for verbose discovery phases to prevent context window exhaustion
-- Combine plan mode for investigation with direct execution for implementation
+Meanwhile, a teammate enters plan mode for "fix the off-by-one error on line 42 of parser.py." Five minutes later, Claude is still exploring the codebase. The fix is one line. Plan mode was overkill.
 
-## Recall
-1. When are path-specific rules better than directory-level CLAUDE.md? (Lab 3.3)
-2. What YAML frontmatter field activates conditional rule loading? (Lab 3.3)
+You need a decision rule: when to explore and design before touching code, and when to act immediately.
 
-## Overview
+## What you'll learn
 
-**The problem:** Your manager asks you to "restructure the monolith into microservices." You
-open Claude Code and start making changes directly. Three files in, you realize the service
-boundaries are wrong — the payment module depends on the user module in ways you didn't see.
-Now you have to undo everything and start over.
+- Selecting plan mode (`/plan`) for tasks with architectural implications or multiple valid approaches
+- Selecting direct execution for well-understood changes with clear scope
+- Using the Explore subagent to isolate verbose discovery output from the main conversation
+- Combining plan mode for investigation with direct execution for implementation
+- Using `/compact` to manage context growth during extended exploration sessions
 
-**The other problem:** Someone asks you to "fix the off-by-one error on line 42 of parser.py."
-You enter plan mode, spend 5 minutes exploring the codebase and designing an approach...
-for a one-line fix. Total waste of time.
+## Concepts
 
-**The rule:**
-- Complex tasks with multiple valid approaches → **plan first, then execute**
-- Clear, well-scoped tasks → **execute directly**
+**Plan mode** (`/plan`) tells Claude to explore and design before making changes. Claude reads files, maps dependencies, considers approaches, and presents a plan for your approval. No files are modified until you approve.
 
-The Explore subagent lets you investigate without polluting your main conversation with verbose discovery output.
+**Direct execution** is normal mode -- Claude acts immediately. Best for simple, well-scoped changes where the approach is obvious.
 
-**Exam connection (Sample Q5):** "Restructure a monolith" → plan mode. "Fix an off-by-one error" → direct execution. The exam tests your judgment about when each mode is appropriate.
+**The decision rule:**
 
-## Try it
+| Signal | Mode |
+|--------|------|
+| 5+ files affected | Plan |
+| Multiple valid approaches | Plan |
+| Architectural implications | Plan |
+| Unknown blast radius | Plan |
+| Single file, known location | Direct |
+| Clear stack trace | Direct |
+| Mechanical change (rename, add check) | Direct |
 
-Try both modes in Claude Code:
+**Explore subagent** isolates verbose discovery (reading 20+ files) in a sub-session. Only a summary returns to your main context. Without it, verbose file reads fill your context and degrade subsequent responses.
 
-**Direct execution** — give a simple, specific task:
-```
-Add a comment to the top of lab-d1-agentic-arch/basic_loop.py explaining what this file does
-```
+**`/compact`** summarizes the current context, clearing verbose tool outputs while preserving key findings. Use after extended exploration to reclaim context space.
 
-**Plan mode** — give a complex, open-ended task:
+## Walkthrough
+
+### Step 1: Identify a complex task and enter /plan
+
+In Claude Code, try a complex task in plan mode:
+
 ```
 /plan How should I restructure the lab files to separate production code from test utilities?
 ```
 
-Notice the difference: direct execution acts immediately. Plan mode explores first, considers approaches, then presents a plan for your approval before making changes.
+Claude explores without making changes. It reads files, maps structure, and proposes approaches with tradeoffs. You review the plan before anything is modified.
 
-The decision of which to use is an exam-tested concept.
+### Step 2: Observe Claude exploring without changing files
 
-### What you will learn
+Watch Claude's behavior in plan mode:
+1. It reads files to understand the current structure
+2. It identifies dependencies and cross-file relationships
+3. It proposes 2-3 approaches with tradeoffs
+4. It does NOT create, modify, or delete any files
 
-- **Plan mode:** Explore and design before committing — prevents costly rework on complex tasks
-- **Direct execution:** Act immediately on clear, well-scoped changes
-- **Explore subagent:** Isolates verbose discovery output so your main context stays clean
-- **Combined pattern:** Plan → execute → /compact when context fills up
+This is the key benefit: exploration without commitment. If the plan reveals unexpected dependencies (like the monolith example), you adjust the approach before touching code.
 
-### Step 1: Decision guide
+### Step 3: Compare with direct execution
 
-Create `lab-d3-claude-code/plan_vs_direct.md`:
-
-```markdown
-# Plan Mode vs Direct Execution Decision Guide
-
-## Use Plan Mode (/plan) when:
-- Task has architectural implications
-  Example: "Migrate from SQLite to PostgreSQL" — multiple files, schema changes, ORM config
-- Multiple valid approaches exist and you need to evaluate tradeoffs
-  Example: "Add authentication" — JWT vs sessions vs OAuth2
-- Large-scale changes affecting many files (5+ files)
-  Example: "Rename the Customer class to Client throughout the codebase"
-- Infrastructure changes with different requirements
-  Example: "Add caching" — Redis vs in-memory vs CDN have different infra needs
-- Refactoring with unclear blast radius
-  Example: "Restructure the module hierarchy"
-
-## Use Direct Execution when:
-- Simple, well-scoped single-file change
-  Example: "Fix the off-by-one error on line 47 of auth.py"
-- Clear stack trace pointing to specific location
-  Example: "KeyError: 'user_id' at api.py:83 — add a check"
-- Adding a simple conditional or validation
-  Example: "Add a null check before accessing order.tracking"
-- Change has no cross-file effects
-  Example: "Update the error message in process_refund"
-
-## The Explore Subagent (for plan mode):
-When exploration generates verbose output (reading 20+ files):
-→ Use Explore subagent to isolate discovery output
-→ Explore returns a SUMMARY, not all the raw tool call outputs
-→ Main conversation context stays clean
-
-In Claude Code: "Use an Explore subagent to map the codebase structure,
-then report back with a summary before we plan the migration."
-
-## Pattern: Plan → Execute
-1. Enter plan mode for architectural decisions
-2. Get Claude's proposed plan + tradeoffs
-3. Review and approve (or modify) the plan
-4. Exit plan mode → execute the approved approach
-```
-
-### Step 2: Practice in Claude Code
+Now try a simple task in normal mode:
 
 ```
-# SCENARIO A: Direct execution (simple fix)
-> The validate_email function in lab-d2-tool-design/tool_descriptions.py
-  doesn't handle None input. Fix it.
-```
-Claude should act directly — no planning needed, clear scope, single file.
-
-```
-# SCENARIO B: Plan mode (architectural decision)
-> I want to add persistent storage to my lab agents so they can
-  save and reload conversation history between runs. Plan this out.
-```
-Claude should enter plan mode. You'll see it explore options:
-- File-based (JSON) vs SQLite vs Redis
-- Where to store the history
-- How to handle backward compatibility
-
-### Step 3: Using the Explore subagent
-
-The Explore subagent isolates verbose discovery output so your main context stays clean.
-
-```
-# Request an Explore subagent for verbose discovery
-> Use an Explore subagent to map the entire lab codebase structure:
-  find all Python files, identify which domain each belongs to,
-  count test cases per module. Return only a summary.
+Add a comment to the top of lab-d1-agentic-arch/basic_loop.py explaining what this file does
 ```
 
-What happens:
-1. Claude spawns an Explore subagent (isolated context)
-2. The subagent reads 20+ files, runs Grep/Glob — verbose output stays in its context
-3. Only the **summary** comes back to your main session
-4. Your main conversation context stays clean for the next task
+Claude acts immediately -- no planning needed. Clear scope, single file, obvious approach. Plan mode would be overkill here.
 
-**Without Explore**: All those file reads fill your context → model degrades.
-**With Explore**: You get just the summary → context stays clean for planning.
+### Step 4: Use Explore subagent for verbose discovery
 
-### Step 4: Combining plan mode + direct execution
-
-The real power is using plan mode for investigation, then switching to direct execution:
+For tasks requiring reading 20+ files, use the Explore subagent to keep your main context clean:
 
 ```
-# Phase 1: Plan mode — investigate and design
-> /plan
-> I need to add a caching layer to all tool calls in the agent.
-  Explore the codebase first, then propose an approach.
-```
-Claude investigates without making changes. You review the plan.
-
-```
-# Phase 2: Direct execution — implement the approved plan
-> /exitplan
-> Implement option A from the plan: add an in-memory LRU cache
-  to execute_tool() in basic_loop.py with a 5-minute TTL.
-```
-Now Claude executes the specific, well-scoped implementation.
-
-**Exam concept**: Plan mode prevents costly rework on complex tasks.
-Direct execution is efficient for clear, well-scoped changes.
-Combining them = best of both worlds.
-
-### Step 5: Observe context preservation with /compact
-
-In a long exploration session:
-```
-> Let's explore the entire lab codebase — read every file and understand all the patterns.
+Use an Explore subagent to map the entire lab codebase structure:
+find all Python files, identify which domain each belongs to,
+count test cases per module. Return only a summary.
 ```
 
-Watch context fill up with verbose tool outputs.
-Then try:
+The subagent reads files in an isolated context. Only the summary returns to your main session. Without the Explore subagent, all those file reads would fill your context and degrade quality.
+
+### Step 5: Combine plan mode with direct execution
+
+The most effective pattern uses both:
+
 ```
-> /compact
+# Phase 1: Plan mode -- investigate and design
+/plan I need to add a caching layer to all tool calls.
+Explore the codebase first, then propose an approach.
 ```
-Claude summarizes what's in context, clearing verbose tool outputs.
-The key findings are preserved; the noise is removed.
 
-### Step 6: Test your judgment
+Review and approve the plan. Then:
 
-Ask Claude Code to create and run this quiz script:
+```
+# Phase 2: Direct execution -- implement the approved plan
+Implement option A from the plan: add an in-memory LRU cache
+to execute_tool() in basic_loop.py with a 5-minute TTL.
+```
 
-> "Create the file `lab-d3-claude-code/plan_vs_direct_quiz.py` with the code below and run it."
+Plan mode prevents rework. Direct execution is efficient for the scoped implementation.
+
+### Step 6: Build the task complexity scorer
+
+Create `~/claude-architect-labs/lab-d3-claude-code/task_complexity_scorer.py`:
 
 ```python
+import json
+
+
+# ============================================================
+# TASK COMPLEXITY SCORER
+# ============================================================
+
+def score_task(files_affected, approach_known,
+               architectural, reversibility):
+    """Score task complexity and recommend plan vs direct.
+
+    Args:
+        files_affected: estimated number of files (int)
+        approach_known: is the approach obvious? (bool)
+        architectural: changes service boundaries/APIs? (bool)
+        reversibility: "trivial", "moderate", "difficult"
+
+    Returns:
+        dict with score, recommendation, and reasoning
+    """
+    score = 0
+    reasons = []
+
+    # File count scoring
+    if files_affected >= 10:
+        score += 3
+        reasons.append(f"{files_affected} files (codebase-wide)")
+    elif files_affected >= 5:
+        score += 2
+        reasons.append(f"{files_affected} files (multi-file)")
+    elif files_affected > 1:
+        score += 1
+        reasons.append(f"{files_affected} files")
+
+    # Approach uncertainty
+    if not approach_known:
+        score += 3
+        reasons.append("approach unknown -- need exploration")
+
+    # Architectural impact
+    if architectural:
+        score += 3
+        reasons.append("architectural implications")
+
+    # Reversibility
+    if reversibility == "difficult":
+        score += 2
+        reasons.append("hard to reverse")
+    elif reversibility == "moderate":
+        score += 1
+        reasons.append("moderately reversible")
+
+    # Recommendation
+    if score <= 1:
+        recommendation = "direct"
+        mode = "Execute directly -- clear scope"
+    elif score <= 3:
+        recommendation = "direct (consider plan)"
+        mode = "Probably direct, but plan if unsure"
+    elif score <= 5:
+        recommendation = "plan"
+        mode = "Plan first -- moderate complexity"
+    else:
+        recommendation = "plan (strongly)"
+        mode = "Plan mode required -- high complexity"
+
+    return {
+        "score": score,
+        "recommendation": recommendation,
+        "mode": mode,
+        "reasons": reasons,
+    }
+
+
+# ============================================================
+# SCENARIOS
+# ============================================================
+
 SCENARIOS = [
-    {"task": "Fix the off-by-one error on line 42 of parser.py",
-     "answer": "direct", "why": "Clear scope, single file, known location"},
-    {"task": "Restructure the monolith into microservices",
-     "answer": "plan", "why": "Multiple valid approaches, architectural decisions, many files"},
-    {"task": "Add a null check to the validate_email function",
-     "answer": "direct", "why": "Simple fix, single function, well-scoped"},
-    {"task": "Migrate from SQLite to PostgreSQL across the project",
-     "answer": "plan", "why": "45+ files affected, multiple migration strategies, need to explore dependencies"},
-    {"task": "Update the README with the new API endpoint",
-     "answer": "direct", "why": "Single file, known content, straightforward"},
-    {"task": "Add caching to all API endpoints with appropriate invalidation",
-     "answer": "plan", "why": "Multiple cache strategies, need to understand data flow first"},
-    {"task": "Rename 'userId' to 'user_id' in models.py",
-     "answer": "direct", "why": "Mechanical change, clear scope"},
-    {"task": "Investigate why tests are flaky and fix root causes",
-     "answer": "plan", "why": "Open-ended investigation, unknown root causes, need exploration"},
+    {
+        "task": "Fix off-by-one error on line 42 of parser.py",
+        "files": 1, "approach_known": True,
+        "architectural": False, "reversibility": "trivial",
+        "expected": "direct",
+    },
+    {
+        "task": "Restructure the monolith into microservices",
+        "files": 45, "approach_known": False,
+        "architectural": True, "reversibility": "difficult",
+        "expected": "plan",
+    },
+    {
+        "task": "Add a null check to validate_email function",
+        "files": 1, "approach_known": True,
+        "architectural": False, "reversibility": "trivial",
+        "expected": "direct",
+    },
+    {
+        "task": "Migrate from SQLite to PostgreSQL",
+        "files": 20, "approach_known": False,
+        "architectural": True, "reversibility": "difficult",
+        "expected": "plan",
+    },
+    {
+        "task": "Update the README with the new API endpoint",
+        "files": 1, "approach_known": True,
+        "architectural": False, "reversibility": "trivial",
+        "expected": "direct",
+    },
+    {
+        "task": "Add caching to all API endpoints",
+        "files": 12, "approach_known": False,
+        "architectural": True, "reversibility": "moderate",
+        "expected": "plan",
+    },
+    {
+        "task": "Rename 'userId' to 'user_id' in models.py",
+        "files": 1, "approach_known": True,
+        "architectural": False, "reversibility": "trivial",
+        "expected": "direct",
+    },
+    {
+        "task": "Investigate and fix flaky tests",
+        "files": 8, "approach_known": False,
+        "architectural": False, "reversibility": "moderate",
+        "expected": "plan",
+    },
 ]
 
-def run_quiz():
-    print("=== Plan Mode vs Direct Execution Quiz ===")
-    print("For each task, answer: 'plan' or 'direct'\n")
 
-    score = 0
-    for i, s in enumerate(SCENARIOS):
-        print(f"\n{i+1}. {s['task']}")
-        answer = input("   plan or direct? ").strip().lower()
+def run_demo():
+    """Score all scenarios and show recommendations."""
+    sep = "=" * 60
+    print(sep)
+    print("TASK COMPLEXITY SCORER")
+    print(sep)
 
-        if answer == s["answer"]:
-            print(f"   [OK] Correct! {s['why']}")
-            score += 1
-        else:
-            print(f"   [BLOCKED] Wrong. Answer: {s['answer']} — {s['why']}")
+    correct = 0
+    for s in SCENARIOS:
+        result = score_task(
+            s["files"], s["approach_known"],
+            s["architectural"], s["reversibility"],
+        )
+        # Check if recommendation matches expected
+        matches = s["expected"] in result["recommendation"]
+        marker = "[OK]" if matches else "[!!]"
+        if matches:
+            correct += 1
 
-    print(f"\nScore: {score}/{len(SCENARIOS)}")
-    print("\nRule: Known steps + clear scope -> direct. Unknown complexity + multiple approaches -> plan.")
+        print(f"\n  {marker} {s['task']}")
+        print(f"      Score: {result['score']}  "
+              f"-> {result['recommendation']}")
+        print(f"      Reasons: "
+              f"{', '.join(result['reasons'])}")
+
+    print(f"\n{sep}")
+    print(f"RESULTS: {correct}/{len(SCENARIOS)} correct")
+    print(sep)
+    print("""
+  DECISION RULE:
+    Score 0-1: Direct execution (clear scope)
+    Score 2-3: Direct, but consider plan if unsure
+    Score 4-5: Plan mode (moderate complexity)
+    Score 6+:  Plan mode required (high complexity)
+
+  SIGNALS:
+    Many files + unknown approach + architectural = PLAN
+    Single file + known approach + trivial reversal = DIRECT
+""")
+
 
 if __name__ == "__main__":
-    run_quiz()
+    run_demo()
 ```
 
-## Run it
+Run the scorer:
 
-If Claude Code created the file but did not run it, ask:
+```bash
+cd ~/claude-architect-labs
+mkdir -p lab-d3-claude-code
+python lab-d3-claude-code/task_complexity_scorer.py
+```
 
-> "Run the plan_vs_direct_quiz.py script you just created."
+You should see 8 scenarios scored with recommendations. The off-by-one fix scores 0 (direct). The monolith restructuring scores 11 (plan strongly). Each shows the scoring factors that drove the recommendation.
 
-**What you should see:** 8 real-world scenarios where you decide plan vs direct. Immediate feedback with reasoning.
+## Break it / Debug it
+
+**1. Use direct execution for a multi-file refactor:**
+
+Start restructuring a module without plan mode. Three files in, you discover the dependency graph is more complex than expected. You've already modified files that need to be reverted. Plan mode would have revealed the dependencies before any changes were made.
+
+**2. Use plan mode for a one-line fix:**
+
+Enter `/plan` for "fix the off-by-one error on line 42." Claude spends 5 minutes exploring the codebase, reading 15 files, mapping the call graph -- for a change that's literally `range(n)` to `range(n+1)`. Direct execution would have taken 30 seconds.
+
+**3. Forget /compact after verbose exploration:**
+
+Run a large exploration task without the Explore subagent. Read 25 files in your main session. Now ask a simple question -- the response quality degrades because context is filled with verbose file contents. Fix: run `/compact` to summarize and reclaim context, or use the Explore subagent to isolate discovery output.
 
 ## Check your understanding
 
-1. **Use direct execution for a monolith-to-microservices migration.** What happens? (Answer: costly rework — you discover dependencies 3 files in and have to undo everything)
-2. **Use plan mode for a one-line bug fix.** What happens? (Answer: 5 minutes wasted exploring when you could have fixed it in 30 seconds)
-3. **Skip the Explore subagent** and do verbose file discovery in your main session. What fills up? (Answer: your context — 20+ file reads crowd out your actual work. Explore keeps main context clean)
+**Q1.** Your manager asks you to "migrate the database from SQLite to PostgreSQL." This affects 20+ files, requires schema changes, ORM reconfiguration, and has multiple migration strategies. What is the correct approach?
 
-## Exam tips
+**A.** Start making changes directly and refactor if the approach doesn't work
+**B.** Enter plan mode (`/plan`) to explore the codebase, map dependencies, and evaluate migration strategies before making any changes
+**C.** Use the Explore subagent to read all files, then make changes directly
+**D.** Split the migration into 20 separate direct-execution tasks, one per file
 
-- **If the exam says** "restructure a monolith" or "migration affecting 45+ files" → plan mode
-- **If the exam says** "fix off-by-one error" or "add one validation check" → direct execution
-- **Wrong answer trap:** "Start with direct execution and switch if needed" — for known-complex tasks, plan mode upfront prevents costly rework
-- **The correct pattern:** Architectural decisions and multi-file changes → plan mode. Single-file, clear-scope fixes → direct.
+**Correct: B.** Plan mode explores without modifying files, revealing dependencies and tradeoffs before you commit to an approach. A database migration has multiple valid strategies (dump/restore, incremental, ORM migration) that need evaluation first. **Why not A:** Direct execution on a 20-file migration risks costly rework when you discover unexpected dependencies. **Why not C:** The Explore subagent helps with discovery but doesn't create a plan with tradeoff analysis. **Why not D:** Splitting into 20 tasks loses the holistic view -- files have cross-dependencies that require coordinated changes.
+
+---
+
+**Q2.** After a long plan-mode exploration, Claude has read 30 files and your context is full of verbose file contents. Your next question gets a degraded response. What should you do?
+
+**A.** Start a new Claude Code session
+**B.** Run `/compact` to summarize context, preserving key findings while clearing verbose tool outputs
+**C.** Delete the CLAUDE.md to reduce context
+**D.** Increase the max_tokens setting
+
+**Correct: B.** `/compact` summarizes the current context, clearing verbose tool outputs while preserving the key findings from exploration. This reclaims context space for your next task. **Why not A:** Starting a new session loses all the exploration findings -- you'd have to redo the investigation. **Why not C:** CLAUDE.md contains project configuration, not exploration output -- deleting it removes useful context. **Why not D:** max_tokens controls output length, not context capacity.
+
+---
+
+**Q3.** A developer uses plan mode for every task, including single-file bug fixes with clear stack traces. What is the impact?
+
+**A.** No impact -- plan mode is always beneficial
+**B.** Wasted time and tokens -- plan mode explores the codebase unnecessarily for tasks where the approach is already obvious
+**C.** Plan mode is faster than direct execution for simple tasks
+**D.** Plan mode produces better code quality regardless of task complexity
+
+**Correct: B.** Plan mode adds exploration overhead that's valuable for complex tasks but wasteful for simple ones. A single-file bug fix with a clear stack trace doesn't need dependency mapping or approach evaluation. **Why not A:** Plan mode has real overhead -- reading files, mapping structure, evaluating approaches. **Why not C:** Plan mode is slower than direct execution because it explores before acting. **Why not D:** Code quality depends on the task and prompt, not the mode -- plan mode's value is in preventing rework, not improving code.
 
 ## Key takeaways
 
-- Plan mode: complex/architectural tasks, multiple valid approaches, 5+ files
+- Plan mode (`/plan`): complex tasks, multiple approaches, 5+ files, architectural changes
 - Direct execution: simple, well-scoped, clear location, single file
-- Explore subagent: isolates verbose discovery output → returns summary to main context
-- Combining plan + execute: investigate in plan mode → implement in direct execution
-- /compact: reduces context during extended exploration sessions
+- Explore subagent: isolates verbose discovery -- returns only summary to main context
+- `/compact`: reclaims context after verbose exploration while preserving findings
+- Combined pattern: plan mode for investigation, then direct execution for implementation
+
+## Exam tips
+
+- **"Restructure a monolith" or "migration affecting 45+ files"** --> plan mode
+- **"Fix off-by-one error" or "add one validation check"** --> direct execution
+- **"Context fills up during exploration"** --> Explore subagent or /compact
+- **Wrong answer trap:** "Start with direct execution and switch if needed" -- for complex tasks, plan mode upfront prevents costly rework
+- **The core pattern:** unknown complexity = plan first. Known scope = execute directly.
+
+**Next:** Lab 3.5 covers iterative refinement techniques -- how to improve prompt quality through systematic evaluate-refine-repeat cycles and context management with /compact.
 
 ---
 
 # LAB 3.5: ITERATIVE REFINEMENT TECHNIQUES
 # Domain 3 — Task Statement 3.5
-# Concept: Examples > descriptions, test-driven iteration, interview pattern
+# Concept: Examples > descriptions, test-driven iteration, prompt versioning
 # Time: ~20 minutes | Difficulty: Intermediate
-# Prerequisites: Lab 3.1
+# Prerequisites: Lab 3.4
 
-> **Prerequisite:** Complete Lab 3.4 first (plan mode).
+## Scenario
 
-## Learning objectives
+Your first draft of a code review prompt produces shallow feedback -- "this code could be improved" instead of specific findings with line numbers and severity. You rewrite the prompt with more detail, but now it flags everything including style issues you don't care about. You need a systematic way to refine: evaluate output against a rubric, identify gaps, tighten the prompt, use `/compact` to manage context growth, and repeat until the quality threshold is met.
 
-- Use 2-3 concrete input/output examples to clarify transformation requirements when natural language descriptions produce inconsistent results
-- Create test suites covering expected behavior and edge cases before implementation, then iterate by sharing test failures
-- Use the interview pattern to surface design considerations before implementing solutions in unfamiliar domains
-- Choose between addressing multiple interacting issues in a single message versus sequential iteration for independent issues
+The same problem applies to any prompt: extraction, test generation, analysis. The first draft is never production-ready. Iterative refinement with concrete examples and scoring is how you get there.
 
-## Recall
-1. When should you use plan mode vs direct execution? (Lab 3.4)
-2. What does the Explore subagent prevent? (Lab 3.4)
+## What you'll learn
 
-## Overview
+- The iterative refinement loop: prompt, evaluate against a rubric, identify gaps, refine, repeat
+- Why 2-3 concrete input/output examples beat verbose prose descriptions for consistency
+- Test-driven iteration: write tests first, share failures to guide improvement
+- Using `/compact` to manage context growth during multi-iteration refinement sessions
+- Tracking prompt versions with scores to know when to stop iterating
 
-You tell Claude "handle edge cases gracefully." It produces code that crashes on null input. You say "be more robust." It adds try/except everywhere.
+## Concepts
 
-**The problem:** prose instructions are ambiguous. **The fix:** show concrete input/output examples -- Claude replicates the pattern exactly.
+**The refinement loop:**
+1. **Prompt** -- write the initial version
+2. **Evaluate** -- score output against a rubric (specificity, examples, coverage, anti-patterns, format)
+3. **Identify gaps** -- which rubric items scored 0?
+4. **Refine** -- add the missing elements (examples, explicit criteria, format spec)
+5. **Repeat** -- until all rubric items pass or you hit diminishing returns
 
-### What you will learn
+**Examples beat prose:** "Handle edge cases gracefully" is ambiguous. `input: None -> output: None` is exact. When prose produces inconsistent results, 2-3 concrete input/output examples fix it.
 
-- **Examples beat prose:** When prose instructions produce inconsistent results, examples fix it.
-- **Test-driven iteration:** Write tests first, share failures to guide improvement.
-- **Interview pattern:** Have Claude ask questions before implementing.
+**Test-driven iteration:** Write tests that define expected behavior. Run them. Share specific failures with Claude (`FAIL: input=None -> got exception, expected None`). Claude fixes the exact gap. More effective than describing the problem in prose.
 
-## Try it
+**`/compact`** reclaims context during multi-iteration refinement. After 3-4 rounds of evaluate-refine, verbose outputs from earlier iterations fill context. `/compact` summarizes while preserving the current prompt version and key findings.
 
-Try these two prompts in Claude Code and compare the results:
+**When to stop:** When the score plateaus across two consecutive iterations, or all rubric items pass. Diminishing returns means you're done.
 
-**Prompt 1 (vague):**
-> "Normalize these customer names from a CRM export. Make them properly formatted: JONES, BOB / dr. LISA PARK / MCDONALD, RONALD"
+## Walkthrough
 
-**Prompt 2 (examples-based):**
-> "Normalize these customer names. Follow this pattern: 'SMITH, JOHN' becomes 'John Smith', 'mary-jane watson' becomes 'Mary-Jane Watson', 'DR. CHEN, ALICE' becomes 'Dr. Alice Chen', 'O'BRIEN, PATRICK' becomes 'Patrick O'Brien'. Now apply the same transformation to: JONES, BOB / dr. LISA PARK / MCDONALD, RONALD"
+### Step 1: Define the code review task with initial prompt
 
-Notice how the vague prompt produces inconsistent formatting, while the examples-based prompt produces consistent results that match the demonstrated pattern exactly.
+Start with a minimal prompt:
 
-**This is the core principle:** 2-3 concrete examples beat verbose prose descriptions.
+```
+Version 1: "Review this code for issues."
+```
 
-## Reference code
+This is deliberately vague -- it's the starting point for refinement.
 
-`lab-d3-claude-code/refinement_demo.py`:
+### Step 2: Evaluate output quality with a scoring rubric
+
+Score the output against 5 criteria (0 = missing, 1 = present):
+
+| Criterion | Description | V1 Score |
+|-----------|-------------|----------|
+| **Specificity** | Defines specific issue categories, not vague guidelines | 0 |
+| **Examples** | Includes concrete input/output examples | 0 |
+| **Coverage** | Covers all target categories (security, bugs, API misuse) | 0 |
+| **Anti-patterns** | Specifies what to skip (style, formatting) | 0 |
+| **Format** | Defines output structure precisely | 0 |
+
+Version 1 scores 0/5. Every criterion is a gap.
+
+### Step 3: Refine the prompt based on gaps
+
+Address the three biggest gaps (specificity, coverage, format):
+
+```
+Version 2: "Review this code for: (1) security issues,
+(2) bug risks, (3) API misuse. Report as JSON array:
+[{file, line, severity, issue, suggestion}]."
+```
+
+Re-score: specificity 1, examples 0, coverage 1, anti-patterns 0, format 1 = **3/5**.
+
+### Step 4: Use /compact to manage context growth
+
+After 2-3 refinement iterations, run:
+
+```
+/compact
+```
+
+This summarizes verbose outputs from earlier iterations while preserving your current prompt version and scoring. Without `/compact`, context fills with stale evaluation outputs.
+
+### Step 5: Build the prompt refinement tracker
+
+Create `~/claude-architect-labs/lab-d3-claude-code/prompt_refinement_tracker.py`:
 
 ```python
 import json
 
-# No API key needed — this lab uses simulated responses to demonstrate the pattern.
-# In production, replace with client.messages.create()
 
-def demo_examples_vs_description():
-    """
-    When a transformation produces inconsistent results,
-    2-3 concrete input/output examples fix it better than more prose.
-    """
+# ============================================================
+# PROMPT REFINEMENT TRACKER
+# ============================================================
 
-    # VAGUE INSTRUCTION (produces inconsistent results):
-    vague_prompt = """
-    Normalize customer names from our CRM export.
-    Make them properly formatted.
-    """
+RUBRIC = {
+    "specificity": "Defines specific criteria, not vague",
+    "examples": "Includes concrete input/output examples",
+    "coverage": "Covers all target categories",
+    "anti_patterns": "Specifies what to skip",
+    "format": "Defines output structure precisely",
+}
 
-    # EXAMPLES-BASED INSTRUCTION (consistent results):
-    examples_prompt = """
-    Normalize customer names from our CRM export.
-
-    Examples:
-    Input:  "SMITH, JOHN"      -> Output: "John Smith"
-    Input:  "mary-jane watson" -> Output: "Mary-Jane Watson"
-    Input:  "DR. CHEN, ALICE"  -> Output: "Dr. Alice Chen"
-    Input:  "O'BRIEN, PATRICK" -> Output: "Patrick O'Brien"
-
-    Apply the same transformation to: $NAMES
-    """
-
-    test_names = ["JONES, BOB", "dr. LISA PARK", "MCDONALD, RONALD"]
-
-    # Simulated: vague prompt produces INCONSISTENT results across runs
-    # In production, replace with client.messages.create()
-    print("=== Vague instruction ===")
-    print("Here are the normalized names:\n- Jones, Bob\n- Dr. Lisa Park\n- McDonald, Ronald")
-    print("  ^ Notice: inconsistent formatting (comma kept? title case varies?)")
-
-    # Simulated: examples-based prompt produces CONSISTENT results matching the pattern
-    # In production, replace with client.messages.create()
-    print("\n=== Examples-based instruction ===")
-    print('Applying the demonstrated pattern:\n- "JONES, BOB" -> "Bob Jones"\n- "dr. LISA PARK" -> "Dr. Lisa Park"\n- "MCDONALD, RONALD" -> "Ronald McDonald"')
-    print("  ^ Notice: consistent with the examples (Last, First -> First Last; titles preserved)")
-
-
-def demo_test_driven_iteration():
-    """
-    Write tests first -> share failures -> guide model to fix issues.
-    More effective than describing the problem in prose.
-    """
-    print("\n=== Test-Driven Iteration Pattern ===")
-
-    # Step 1: Write tests that define expected behavior
-    tests = [
-        {"input": None,         "expected": None,       "case": "null input"},
-        {"input": "",           "expected": None,       "case": "empty string"},
-        {"input": "2024-01-15", "expected": "Jan 15, 2024", "case": "ISO date"},
-        {"input": "01/15/2024", "expected": "Jan 15, 2024", "case": "US format"},
-        {"input": "15-01-2024", "expected": "Jan 15, 2024", "case": "EU format"},
-    ]
-
-    # Step 2: Run tests against current implementation
-    # (Simulate failures — in practice, run your test suite)
-    failures = [
-        t for t in tests
-        if t["input"] in [None, ""]  # pretend null handling is broken
-    ]
-
-    if failures:
-        # Step 3: Share specific test failures with Claude
-        failure_msg = "\n".join([
-            f"FAIL: input={t['input']!r} -> got exception, expected {t['expected']!r}"
-            for t in failures
-        ])
-
-        print("Sharing test failures with Claude...")
-        print(f"\n{failure_msg}\n")
-
-        # Simulated: Claude returns a fixed function that handles null/empty
-        # In production, replace with client.messages.create()
-        print("Claude's fix:")
-        print("""def normalize_date(date_str):
-    if date_str is None or date_str.strip() == "":
-        return None
-    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y'):
-        try:
-            return datetime.strptime(date_str, fmt).strftime('%b %d, %Y')
-        except ValueError:
-            continue
-    raise ValueError(f"Unrecognized date format: {date_str}")""")
+ITERATIONS = [
+    {
+        "version": 1,
+        "prompt": "Review this code for issues.",
+        "scores": {
+            "specificity": 0, "examples": 0,
+            "coverage": 0, "anti_patterns": 0,
+            "format": 0,
+        },
+        "gaps": [
+            "No specific criteria",
+            "No examples",
+            "No output format defined",
+        ],
+    },
+    {
+        "version": 2,
+        "prompt": (
+            "Review this code for: (1) security issues, "
+            "(2) bug risks, (3) API misuse. Report as "
+            "JSON: [{file, line, severity, issue, "
+            "suggestion}]."
+        ),
+        "scores": {
+            "specificity": 1, "examples": 0,
+            "coverage": 1, "anti_patterns": 0,
+            "format": 1,
+        },
+        "gaps": [
+            "No examples of what counts as an issue",
+            "No anti-patterns (still flags style issues)",
+        ],
+    },
+    {
+        "version": 3,
+        "prompt": (
+            "Review this code for: (1) security issues "
+            "(hardcoded secrets, injection), (2) bug risks "
+            "(unhandled exceptions, off-by-one), (3) API "
+            "misuse (wrong model name, missing params). "
+            "Example: line 42 has `token = 'sk-...'` -> "
+            "severity: high, issue: hardcoded secret. "
+            "SKIP: style, naming, formatting. "
+            "Return JSON: [{file, line, severity, issue, "
+            "suggestion}]."
+        ),
+        "scores": {
+            "specificity": 1, "examples": 1,
+            "coverage": 1, "anti_patterns": 1,
+            "format": 1,
+        },
+        "gaps": [],
+    },
+]
 
 
-def demo_interview_pattern():
-    """
-    Interview pattern: Claude asks YOU questions before implementing.
-    Surfaces design considerations you haven't thought of.
-    """
-    print("\n=== Interview Pattern ===")
+def run_demo():
+    """Show 3 refinement iterations with scoring."""
+    sep = "=" * 60
+    print(sep)
+    print("PROMPT REFINEMENT TRACKER")
+    print(sep)
 
-    # Simulated: Claude asks clarifying questions before implementing
-    # In production, replace with client.messages.create()
-    print("Claude's questions:")
-    print("""Before implementing the caching layer, I have a few questions:
+    print(f"\nRubric ({len(RUBRIC)} criteria):")
+    for key, desc in RUBRIC.items():
+        print(f"  - {key}: {desc}")
 
-1. **Cache invalidation**: Should the cache use TTL-based expiration, event-driven
-   invalidation (e.g., webhook on customer update), or manual invalidation?
-2. **Failure mode**: If the cache is unavailable, should the system fall through
-   to the API directly, or return an error?
-3. **Consistency**: Is it acceptable to serve stale data for a short period, or
-   do you need strong consistency guarantees?
-4. **Scale**: Is this a single-process in-memory cache, or do you need a
-   distributed cache (e.g., Redis) shared across multiple instances?
-5. **Scope**: Should all API calls be cached, or only specific endpoints?""")
+    for iteration in ITERATIONS:
+        v = iteration["version"]
+        scores = iteration["scores"]
+        total = sum(scores.values())
+        max_score = len(scores)
 
-    print("""
-    Why the interview pattern matters:
-    - Cache invalidation strategies (TTL? Event-driven? Manual?)
-    - Failure modes (what if cache is down? Fall through or error?)
-    - Consistency requirements (is stale data acceptable?)
-    - Scale (single process? Distributed?)
+        print(f"\n{'-' * 60}")
+        print(f"  VERSION {v}  (score: {total}/{max_score})")
+        print(f"{'-' * 60}")
+        print(f"  Prompt: {iteration['prompt'][:80]}...")
 
-    These questions surface requirements you may not have specified.
-    Answering them BEFORE implementation prevents costly rework.
-    """)
+        print(f"  Scores:")
+        for key, val in scores.items():
+            marker = "[OK]" if val == 1 else "[  ]"
+            print(f"    {marker} {key}")
+
+        if iteration["gaps"]:
+            print(f"  Gaps to fix:")
+            for gap in iteration["gaps"]:
+                print(f"    - {gap}")
+        else:
+            print(f"  No gaps -- all criteria met!")
+
+    # Summary
+    print(f"\n{sep}")
+    print("REFINEMENT SUMMARY")
+    print(sep)
+    print("  V1: 0/5 -> V2: 3/5 -> V3: 5/5")
+    print("  3 iterations to reach full rubric coverage")
+    print("")
+    print("  Techniques applied:")
+    print("    V1->V2: Added specificity (categories), "
+          "coverage, format")
+    print("    V2->V3: Added examples (concrete finding), "
+          "anti-patterns (skip style)")
+    print("")
+    print("  RULE: Stop iterating when score plateaus")
+    print("  across 2 consecutive iterations or all")
+    print("  rubric items pass.")
 
 
 if __name__ == "__main__":
-    demo_examples_vs_description()
-    demo_test_driven_iteration()
-    demo_interview_pattern()
-
-    print("\n=== Multi-issue Message Strategy ===")
-    print("""
-    Multiple INTERACTING issues -> one message with all issues:
-    "Fix these three issues together: [issue1], [issue2], [issue3].
-     Note: fixing issue1 affects issue2 — handle them as a unit."
-
-    Multiple INDEPENDENT issues -> sequential messages:
-    Message 1: "Fix the null handling in validate_email"
-    Message 2: (after fix confirmed) "Now fix the date parsing in normalize_date"
-
-    Why: Interacting issues need to be seen together to be fixed correctly.
-         Independent issues are safer to fix one at a time — easier to review.
-    """)
+    run_demo()
 ```
 
-## Run it
+### Step 6: Run the tracker
 
-Ask Claude Code to create and run this file (no API key needed):
+```bash
+cd ~/claude-architect-labs
+python lab-d3-claude-code/prompt_refinement_tracker.py
+```
 
-> "Create the file `lab-d3-claude-code/refinement_demo.py` with the code above and run it."
+You should see:
 
-**What you should see:**
-- "Vague instruction" output shows inconsistent name formatting (simulated), then "Examples-based instruction" output shows names consistently transformed (e.g., "JONES, BOB" becomes "Bob Jones")
-- A "Test-Driven Iteration Pattern" section where specific test failures (null input, empty string) are printed, followed by a simulated fixed Python function that handles those edge cases
-- An "Interview Pattern" section where simulated Claude asks 3-5 clarifying questions about caching requirements (TTL, failure modes, consistency, scale) before implementing anything
-- A "Multi-issue Message Strategy" summary explaining when to combine interacting issues vs send independent issues sequentially
+```
+============================================================
+PROMPT REFINEMENT TRACKER
+============================================================
+
+Rubric (5 criteria):
+  - specificity: Defines specific criteria, not vague
+  - examples: Includes concrete input/output examples
+  - coverage: Covers all target categories
+  - anti_patterns: Specifies what to skip
+  - format: Defines output structure precisely
+
+------------------------------------------------------------
+  VERSION 1  (score: 0/5)
+------------------------------------------------------------
+  Prompt: Review this code for issues....
+  Scores:
+    [  ] specificity
+    [  ] examples
+    [  ] coverage
+    [  ] anti_patterns
+    [  ] format
+  Gaps to fix:
+    - No specific criteria
+    - No examples
+    - No output format defined
+
+------------------------------------------------------------
+  VERSION 2  (score: 3/5)
+------------------------------------------------------------
+  Prompt: Review this code for: (1) security issues, (2) bug risks, (3) API misuse...
+  Scores:
+    [OK] specificity
+    [  ] examples
+    [OK] coverage
+    [  ] anti_patterns
+    [OK] format
+  Gaps to fix:
+    - No examples of what counts as an issue
+    - No anti-patterns (still flags style issues)
+
+------------------------------------------------------------
+  VERSION 3  (score: 5/5)
+------------------------------------------------------------
+  Prompt: Review this code for: (1) security issues (hardcoded secrets, injection), (...
+  Scores:
+    [OK] specificity
+    [OK] examples
+    [OK] coverage
+    [OK] anti_patterns
+    [OK] format
+  No gaps -- all criteria met!
+
+============================================================
+REFINEMENT SUMMARY
+============================================================
+  V1: 0/5 -> V2: 3/5 -> V3: 5/5
+  3 iterations to reach full rubric coverage
+
+  Techniques applied:
+    V1->V2: Added specificity (categories), coverage, format
+    V2->V3: Added examples (concrete finding), anti-patterns (skip style)
+
+  RULE: Stop iterating when score plateaus
+  across 2 consecutive iterations or all
+  rubric items pass.
+```
+
+## Try it yourself
+
+Take a different task -- test generation -- and apply the refinement loop:
+
+1. Write a V1 prompt: "Generate tests for this file."
+2. Define a rubric: does the output cover happy path, error cases, edge cases, naming conventions, assertions?
+3. Score V1. Identify gaps.
+4. Write V2 addressing the top 2-3 gaps. Score again.
+5. Write V3 if needed. Track scores across versions.
+6. Stop when the score plateaus or all rubric items pass.
+
+**Expected:** V1 scores 1-2/5 (minimal test coverage). V2 scores 3-4/5 (covers more paths). V3 scores 5/5 (complete coverage with naming conventions and edge cases).
 
 ## Check your understanding
 
-1. **Why do prose instructions ("handle null input gracefully") produce inconsistent results across runs?** Prose is ambiguous -- "gracefully" could mean return `None`, return an empty string, raise a custom exception, log and skip, or any number of interpretations. Each time the model generates, it may pick a different interpretation.
+**Q1.** Your code review prompt produces inconsistent output -- sometimes it returns JSON, sometimes prose, sometimes a mix. What is the most effective fix?
 
-   **Concrete input/output examples** (e.g., `input: None -> output: None`) eliminate ambiguity by showing the exact expected behavior.
+**A.** Add "IMPORTANT: always return JSON" to the prompt
+**B.** Add 2-3 concrete input/output examples showing the exact JSON format you expect
+**C.** Set temperature to 0 for deterministic output
+**D.** Use a longer, more detailed prose description of the format
 
-2. **Why does the interview pattern surface better requirements than jumping straight to implementation?** Without the interview pattern, Claude guesses at requirements instead of surfacing them. For a caching layer, critical questions include:
-   - Cache invalidation strategy (TTL? event-driven?)
-   - Failure mode (fall through or error if cache is down?)
-   - Consistency requirements (is stale data acceptable?)
-   - Scale (single process or distributed?)
+**Correct: B.** Concrete examples show the exact format by demonstration. Claude replicates the pattern consistently. **Why not A:** Emphasis words like "IMPORTANT" improve compliance probabilistically but don't guarantee format consistency. **Why not C:** Temperature 0 makes token selection more deterministic but doesn't fix format ambiguity -- the model can still interpret "return JSON" differently across prompts. **Why not D:** More prose adds more ambiguity -- each additional sentence can be interpreted multiple ways.
 
-   These questions prevent costly rework by catching missing requirements before implementation begins.
+---
 
-3. **Why share failing tests rather than passing tests when iterating?** Failing tests show the EXACT gap between current behavior and expected behavior. Passing tests confirm what already works but do not reveal what is broken. Sharing `FAIL: input=None -> got exception, expected None` gives Claude a precise target to fix.
+**Q2.** After 3 refinement iterations, your prompt scores 4/5 on the rubric. Iteration 4 also scores 4/5 with the same gap. What should you do?
 
-**Exam connection:** The exam tests whether you know that concrete examples beat prose for consistency, test-driven iteration surfaces exact gaps, and the interview pattern surfaces requirements you haven't considered.
+**A.** Keep iterating -- more refinement will eventually fix the last gap
+**B.** Stop iterating -- the score has plateaued across two consecutive iterations, indicating diminishing returns on this approach
+**C.** Start over with a completely different prompt
+**D.** Add more rubric criteria to find new gaps
 
-## Exam tips
+**Correct: B.** A plateau across two consecutive iterations signals diminishing returns. The remaining gap may require a different technique (e.g., tool_choice enforcement, schema validation) rather than more prompt refinement. **Why not A:** Repeating the same refinement approach won't fix a gap it's already failed to address twice. **Why not C:** Starting over discards the 4/5 progress -- the issue is one specific gap, not the whole prompt. **Why not D:** Adding criteria doesn't fix the existing gap -- it just reveals more work.
 
-- **If the exam says** "output format is inconsistent across runs" → add 2-3 concrete input/output examples
-- **Wrong answer trap:** "Write more detailed prose instructions" — prose is interpreted inconsistently
-- **Wrong answer trap:** "Use temperature 0 for deterministic output" — temperature affects randomness, not format compliance
-- **The correct pattern:** Examples beat descriptions for format consistency and ambiguous case handling
+---
+
+**Q3.** You're iterating on a date parsing function. The current implementation crashes on `None` input. Which approach gives Claude the most precise fix target?
+
+**A.** "Handle null input gracefully"
+**B.** "Make the function more robust"
+**C.** Share the specific test failure: `FAIL: input=None -> got exception, expected None`
+**D.** Add a comment in the code: `# TODO: handle None`
+
+**Correct: C.** A specific test failure shows the exact input, the actual behavior (exception), and the expected behavior (return None). Claude fixes the precise gap. **Why not A:** "Gracefully" is ambiguous -- return None? Empty string? Log and skip? Different interpretations each run. **Why not B:** "More robust" is even more vague -- Claude might add try/except everywhere. **Why not D:** A TODO comment tells Claude what to fix but not what the expected behavior should be.
 
 ## Key takeaways
 
-- 2-3 examples beat verbose prose descriptions for transformation tasks
-- Test-driven: write tests first → run → share specific failures → iterate
-- Interview pattern: ask questions BEFORE implementing in unfamiliar domains
-- Interacting issues → one message; independent issues → sequential messages
+- The refinement loop: prompt -> evaluate against rubric -> identify gaps -> refine -> repeat
+- 2-3 concrete examples beat verbose prose for format consistency
+- Test-driven iteration: share specific failures, not vague descriptions
+- `/compact` manages context growth during multi-iteration sessions
+- Stop when score plateaus across two iterations -- diminishing returns
+
+## Exam tips
+
+- **"Output format is inconsistent"** --> add 2-3 concrete input/output examples
+- **"Function crashes on edge case"** --> share specific test failure, not prose description
+- **Wrong answer trap:** "Write more detailed prose instructions" -- prose adds ambiguity
+- **Wrong answer trap:** "Use temperature 0"** -- temperature affects randomness, not format compliance
+- **The core pattern:** examples beat descriptions. Test failures beat prose bug reports. Score to know when to stop.
+
+**Next:** Lab 3.6 covers CI/CD integration -- the `-p` flag for non-interactive mode, `--output-format json` for machine-parseable output, and `--json-schema` for enforced output structure.
 
 ---
 
 # LAB 3.6: CI/CD INTEGRATION
 # Domain 3 — Task Statement 3.6
-# Concept: -p flag, --output-format json, independent review instances
-# Time: ~20 minutes | Difficulty: Advanced
-# Prerequisites: Lab 3.1
+# Concept: -p flag, --output-format json, --json-schema, independent review
+# Time: ~25 minutes | Difficulty: Advanced
+# Prerequisites: Lab 3.5
 
-> **Prerequisite:** Complete Labs 3.1-3.5 first.
+## Scenario
 
-## Learning objectives
+Your CI pipeline runs `claude "Review this PR for security issues"` and the build hangs indefinitely. Logs show Claude Code is waiting for interactive input -- but there’s no human at the keyboard in CI. Your PR is blocked, developers are waiting, and the pipeline times out after 30 minutes.
 
-- Configure Claude Code to run in CI with the -p flag to prevent interactive input hangs
-- Use --output-format json with --json-schema to produce machine-parseable structured findings for automated PR comments
-- Configure re-review workflows that include prior findings in context to avoid duplicate comments
-- Document testing standards, valuable test criteria, and available fixtures in CLAUDE.md to improve CI-driven test generation quality
+After fixing the hang with the `-p` flag, a second problem appears: Claude returns prose text that your automation script can’t parse reliably into structured PR comments. You need `--output-format json` for machine-parseable output and `--json-schema` to guarantee the output matches your exact schema.
 
-## Recall
-1. What are the three iterative refinement techniques? (Lab 3.5)
-2. When should you provide all issues in one message vs sequentially? (Lab 3.5)
+## What you’ll learn
 
-## Overview
+- Using the `-p` flag for non-interactive mode (the #1 CI integration fix)
+- Producing machine-parseable output with `--output-format json`
+- Enforcing output structure with `--json-schema` for reliable downstream parsing
+- Restricting tool access with `allowed_tools` for CI security (Lab 2.5 pattern applied)
+- Configuring independent review instances to catch what self-review misses
 
-**The problem:** You add Claude to your CI pipeline: `claude "Review this PR for security issues"`.
-The build hangs forever. Logs show Claude Code is waiting for interactive input — but there's no
-human at the keyboard in CI. Your PR is blocked, developers are waiting.
+## Concepts
 
-**The second problem:** Claude reviews the PR and outputs prose text. Your automation script
-needs to parse it into structured comments for the GitHub PR. Parsing prose is fragile and breaks
-when Claude changes its formatting.
+**CI/CD flags:**
 
-**The solutions:**
-- **`-p` flag** → non-interactive mode (processes prompt, outputs result, exits)
-- **`--output-format json`** → structured output your scripts can parse reliably
-- **`--json-schema`** → guarantees the output matches your exact schema
-- **Independent review instances** → catch bugs that self-review misses (the generator's reasoning makes it blind to its own mistakes)
+| Flag | Purpose | When to use |
+|------|---------|-------------|
+| `-p` | Non-interactive mode (process prompt, output, exit) | Always in CI -- prevents hang |
+| `--output-format json` | Machine-parseable JSON output | When downstream tools need to parse |
+| `--json-schema <file>` | Validates output against a JSON schema | When output structure must be guaranteed |
 
-**Exam connection (Sample Q10):** "Pipeline hangs" → `-p` flag. This is directly tested.
+**`-p` (print) flag** is required for any automated pipeline. Without it, Claude Code waits for interactive input and the job hangs. This is the most commonly tested CI concept on the exam.
 
-**(Sample Q11):** "Reduce costs" → Batch API for overnight reports, synchronous for blocking checks.
+**`--output-format json` vs `--json-schema`:**
+- `--output-format json` alone = best-effort JSON (may vary between runs)
+- `--output-format json --json-schema <file>` = JSON validated against your schema (guaranteed structure)
 
-### What you will learn
+**Independent review instances:** The generator’s reasoning context makes it blind to its own mistakes. A separate Claude Code session with no prior context is more effective at catching bugs. Pattern: generate with one `-p` call, review with a second independent `-p` call.
 
-- **`-p` flag:** Non-interactive mode for CI/CD — the #1 pipeline integration fix
-- **`--output-format json` + `--json-schema`:** Machine-parseable, schema-validated output
-- **Independent review:** Why a separate instance catches what self-review misses
-- **Re-review pattern:** Pass prior findings to avoid duplicate comments
+**`allowed_tools` in CI:** Restrict tools for security. Review-only CI should use `Read, Grep, Glob` only -- no Bash (prevents destructive commands on the CI runner). Same principle as Lab 2.5.
 
-## Try it
+## Walkthrough
 
-Try non-interactive mode right now:
+### Step 1: See the hanging CI problem
+
+This command hangs in CI because it starts an interactive session:
 
 ```bash
-claude -p "What is the -p flag used for in Claude Code?"
+# THIS HANGS IN CI -- no human at the keyboard
+claude "Review this PR for security issues"
 ```
 
-Notice how it processes the prompt, outputs the answer, and exits -- no interactive session. This is exactly what CI/CD pipelines need.
+The build times out. Developers are blocked. The fix is one flag.
 
-Without `-p`, the job would hang waiting for interactive input (the #1 CI integration bug).
-
-### Step 1: Create the CI review script
-
-Ask Claude Code to create the file `lab-d3-claude-code/ci_review.sh` with the following content:
-
-> "Create the file `lab-d3-claude-code/ci_review.sh` with the content below and make it executable."
+### Step 2: Fix with the -p flag
 
 ```bash
-#!/bin/bash
-# CI Code Review Script
-# Usage: ./ci_review.sh <file_to_review>
+# THIS WORKS IN CI -- non-interactive mode
+claude -p "Review this PR for security issues"
+```
 
-FILE=${1:-"lab-d1-agentic-arch/basic_loop.py"}
+`-p` processes the prompt, outputs the result, and exits. No interactive session. No hang.
 
-echo "=== Running Claude Code Review in CI Mode ==="
-echo "File: $FILE"
-echo ""
+### Step 3: Add --output-format json for machine parsing
 
-# -p flag: non-interactive mode (no stdin needed — won't hang in CI)
-# --output-format json: machine-parseable for automated processing
-claude -p "Review this Python file for:
-1. Security issues (hardcoded credentials, injection vulnerabilities)
-2. Bug risks (unhandled exceptions, off-by-one errors)
-3. API misuse (wrong model name, missing required parameters)
+```bash
+claude -p "Review lab-d1-agentic-arch/basic_loop.py for:
+1. Security issues (hardcoded credentials, injection)
+2. Bug risks (unhandled exceptions, off-by-one)
+3. API misuse (wrong model name, missing params)
 
-File to review: $FILE
-
-Return ONLY a JSON array of findings:
+Return a JSON array of findings:
 [{\"file\": \"...\", \"line\": N, \"severity\": \"high/medium/low\",
   \"issue\": \"...\", \"suggestion\": \"...\"}]
-Skip style/formatting issues." \
+Skip style issues." \
   --output-format json \
   < /dev/null
-
-echo ""
-echo "=== Review complete ==="
 ```
 
-To try it (requires Claude Code CLI installed):
+`--output-format json` wraps the response in machine-parseable JSON. `< /dev/null` ensures no stdin in the automated environment.
 
-> "Run `./lab-d3-claude-code/ci_review.sh`"
+### Step 4: Add --json-schema for enforced structure
 
-**What you should see:** A JSON array of findings with file, line, severity, issue, and suggestion fields. The -p flag causes Claude to process the prompt and exit without waiting for input. The --output-format json wraps the response in a machine-parseable JSON structure.
-
-### Step 2: Create the CLAUDE.md for CI context
-
-Create this file in your project to give CI reviews the right context:
-
-> "Create the file `lab-d3-claude-code/CLAUDE.md` with the content below."
-
-```markdown
-# CI Review Context
-
-## Review Criteria
-Flag ONLY: bugs, security vulnerabilities, API misuse
-SKIP: style, formatting, minor naming issues
-
-## Severity Definitions
-high:   Will cause errors in production (wrong model name, missing error handling)
-medium: May cause errors in edge cases (unhandled None, missing validation)
-low:    Best practice violations that could cause future issues
-
-## Testing Standards
-Available fixtures: CUSTOMERS dict, ORDERS dict, execute_tool function
-Don't suggest tests that duplicate: basic_loop_test.py (already exists)
-
-## Prior Review Findings (for re-review after commits)
-Include these when re-reviewing to avoid duplicate comments.
-```
-
-### Step 3: Practice the independent review pattern
-
-This pattern uses two separate Claude Code sessions. Study how the `-p` flag enables this:
-
-```bash
-# Generate code with one Claude instance
-claude -p "Write a Python function that validates customer email addresses" > generated_code.py
-
-# Review with an INDEPENDENT instance (different session, no prior context)
-claude -p "Review this code for bugs and security issues: $(cat generated_code.py)" \
-  --output-format json
-```
-
-**Why independent?** The generator's reasoning context makes it less likely to question its own decisions. An independent reviewer has no attachment to the original approach.
-
-### Step 4: The re-review pattern (avoid duplicate comments)
-
-Ask Claude Code to create this re-review script:
-
-> "Create the file `lab-d3-claude-code/re_review.sh` with the content below and make it executable."
-
-```bash
-#!/bin/bash
-# Re-review after new commits — only report NEW or STILL-UNADDRESSED issues
-
-PRIOR_FINDINGS=$1
-NEW_CODE=$2
-
-claude -p "Review this updated code.
-
-PRIOR REVIEW FINDINGS (already reported — do NOT repeat these unless still present):
-$PRIOR_FINDINGS
-
-UPDATED CODE:
-$NEW_CODE
-
-Report ONLY:
-1. New issues not in the prior findings
-2. Prior issues that are STILL present (unaddressed)
-Do NOT repeat prior issues that have been fixed." \
-  --output-format json < /dev/null
-```
-
-### Step 5: Understand the CI pipeline config
-
-```yaml
-# .github/workflows/claude-review.yml
-# name: Claude Code Review
-# on: [pull_request]
-# jobs:
-#   review:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - name: Run Claude Code Review
-#         run: |
-#           claude -p "$(cat .claude/commands/ci-review.md)" \
-#             --output-format json \
-#             < /dev/null > findings.json
-#       - name: Post PR Comments
-#         run: python scripts/post_review_comments.py findings.json
-```
-
-**Key CI patterns:**
-- `-p` flag: prevents interactive input hang in CI
-- `< /dev/null`: ensures no stdin in automated environment
-- `--output-format json`: machine-parseable for automated processing
-- CLAUDE.md in project: provides testing standards, fixtures, review criteria
-- Independent instance: generates code in one run, reviews in separate run
-
-**Prerequisite:** This lab requires the Claude Code CLI (`claude` command). Install it first:
-`npm install -g @anthropic-ai/claude-code` (or see https://docs.anthropic.com/en/docs/claude-code).
-
-If you can't install it, study the bash scripts and YAML configs -- the exam tests the CONCEPTS (when to use `-p`, what `--json-schema` does), not the exact CLI output.
-
-### Step 6: The --json-schema flag
-
-The `--json-schema` flag enforces a specific output schema in CI — guarantees machine-parseable structure:
-
-First, create a schema file. Ask Claude Code:
-
-> "Create the file `lab-d3-claude-code/review-schema.json` with the content below."
+Create a schema file `lab-d3-claude-code/review-schema.json`:
 
 ```json
 {
@@ -8148,7 +8240,8 @@ First, create a schema file. Ask Claude Code:
     "properties": {
       "file":       {"type": "string"},
       "line":       {"type": "integer"},
-      "severity":   {"type": "string", "enum": ["high", "medium", "low"]},
+      "severity":   {"type": "string",
+                     "enum": ["high", "medium", "low"]},
       "issue":      {"type": "string"},
       "suggestion": {"type": "string"}
     },
@@ -8157,49 +8250,229 @@ First, create a schema file. Ask Claude Code:
 }
 ```
 
-Then run Claude Code with schema enforcement (requires CLI installed):
+Run with schema enforcement:
 
 ```bash
-claude -p "Review lab-d1-agentic-arch/basic_loop.py for bugs and security issues.
-Return ONLY a JSON array of findings. Empty array if no issues." \
+claude -p "Review basic_loop.py for bugs and security issues.
+Return a JSON array of findings. Empty array if no issues." \
   --output-format json \
   --json-schema lab-d3-claude-code/review-schema.json \
   < /dev/null
 ```
 
-The `--json-schema` flag validates that output conforms to the schema. Your CI pipeline can safely parse the result without try/except for malformed JSON. The schema is your contract between Claude Code and downstream tooling.
+`--json-schema` validates the output against your schema. Your CI pipeline can safely parse the result without try/except for malformed JSON.
 
-**Exam key:**
-- `--output-format json` alone = JSON output (best-effort)
-- `--output-format json --json-schema <file>` = JSON output validated against schema
+### Step 5: Restrict tools with allowed_tools for CI
 
-## Run it
+For review-only CI, restrict tools so Claude Code can’t execute commands or modify files:
 
-Run `./lab-d3-claude-code/ci_review.sh` to see the `-p` flag and `--output-format json` in action. If you cannot install the Claude Code CLI, study the bash scripts and YAML configs -- the exam tests the concepts, not the exact CLI output.
+```bash
+claude -p "Review this file for bugs" \
+  --output-format json \
+  --allowedTools "Read,Grep,Glob" \
+  < /dev/null
+```
+
+Without Bash, Claude Code can’t run `rm -rf`, `curl`, or `pip install` on the CI runner. Same principle as Lab 2.5’s `review_only` profile.
+
+### Step 6: Build the CI config validator
+
+Create `~/claude-architect-labs/lab-d3-claude-code/ci_config_validator.py`:
+
+```python
+import re
+
+
+# ============================================================
+# CI CONFIG VALIDATOR
+# ============================================================
+
+def validate_ci_command(command):
+    """Check a claude CLI command for common CI mistakes."""
+    print(f"\n  Command: {command[:70]}...")
+    issues = []
+
+    # Check 1: Missing -p flag
+    if " -p " not in command and not command.startswith("claude -p"):
+        issues.append(
+            "MISSING -p FLAG -- job will hang in CI "
+            "waiting for interactive input"
+        )
+
+    # Check 2: No --output-format json
+    if "--output-format json" not in command:
+        issues.append(
+            "No --output-format json -- output will be "
+            "prose, hard to parse in automation"
+        )
+
+    # Check 3: --output-format json without --json-schema
+    if ("--output-format json" in command
+            and "--json-schema" not in command):
+        issues.append(
+            "Has --output-format json but no "
+            "--json-schema -- output structure not "
+            "guaranteed between runs"
+        )
+
+    # Check 4: No stdin redirect
+    if "< /dev/null" not in command:
+        issues.append(
+            "No < /dev/null -- may read from stdin "
+            "in some CI environments"
+        )
+
+    # Check 5: Unrestricted Bash in review context
+    if ("review" in command.lower()
+            and "--allowedTools" not in command):
+        issues.append(
+            "Review command without --allowedTools -- "
+            "Claude Code has unrestricted Bash access "
+            "on CI runner"
+        )
+
+    if issues:
+        for issue in issues:
+            print(f"    [WARNING] {issue}")
+    else:
+        print(f"    [OK] All CI checks pass")
+
+    return issues
+
+
+def run_demo():
+    """Validate example CI commands."""
+    sep = "=" * 60
+    print(sep)
+    print("CI CONFIG VALIDATOR")
+    print(sep)
+
+    commands = [
+        {
+            "label": "BAD: Missing -p flag (will hang)",
+            "cmd": ‘claude "Review this PR for bugs"’,
+        },
+        {
+            "label": "BAD: No JSON output (prose is hard "
+                     "to parse)",
+            "cmd": ‘claude -p "Review this PR" < /dev/null’,
+        },
+        {
+            "label": "BETTER: JSON but no schema enforcement",
+            "cmd": (‘claude -p "Review this PR" ‘
+                    ‘--output-format json < /dev/null’),
+        },
+        {
+            "label": "BEST: All flags for production CI",
+            "cmd": (‘claude -p "Review this PR" ‘
+                    ‘--output-format json ‘
+                    ‘--json-schema review-schema.json ‘
+                    ‘--allowedTools "Read,Grep,Glob" ‘
+                    ‘< /dev/null’),
+        },
+    ]
+
+    for entry in commands:
+        print(f"\n  --- {entry[‘label’]} ---")
+        issues = validate_ci_command(entry["cmd"])
+
+    # Summary table
+    print(f"\n{sep}")
+    print("CI FLAG REFERENCE")
+    print(sep)
+    print("""
+  -p                    Non-interactive (REQUIRED for CI)
+  --output-format json  Machine-parseable JSON output
+  --json-schema <file>  Validates JSON against your schema
+  --allowedTools "..."  Restricts tool access (security)
+  < /dev/null           Ensures no stdin in CI
+
+  MINIMUM for CI:  claude -p "..." < /dev/null
+  RECOMMENDED:     + --output-format json --json-schema
+  PRODUCTION:      + --allowedTools "Read,Grep,Glob"
+""")
+
+
+if __name__ == "__main__":
+    run_demo()
+```
+
+Run the validator:
+
+```bash
+cd ~/claude-architect-labs
+python lab-d3-claude-code/ci_config_validator.py
+```
+
+You should see 4 CI commands validated with increasingly better configurations: the first fails on all checks, the last passes all checks. The reference table shows the recommended flag progression.
+
+## Break it / Debug it
+
+**1. Forget the -p flag:**
+
+Run `claude "Review this PR"` in CI. The job hangs immediately -- Claude Code is waiting for interactive input. No timeout, no error message, just a stuck build. Fix: add `-p`.
+
+**2. Use --output-format json without --json-schema:**
+
+Output is JSON but structure varies between runs. One run returns `[{file, line, issue}]`, the next returns `{findings: [{...}], summary: "..."}`. Your parser breaks. Fix: add `--json-schema` to guarantee structure.
+
+**3. Allow Bash in review-only CI:**
+
+CI runs `claude -p "Review this code" --output-format json` without `--allowedTools`. Claude Code has unrestricted Bash on the CI runner -- it could run `rm -rf /`, install packages, or exfiltrate data. Fix: add `--allowedTools "Read,Grep,Glob"`.
 
 ## Check your understanding
 
-1. **Remove the -p flag in CI** — pipeline hangs waiting for interactive input. No human at the keyboard. Build times out.
-2. **Use the same instance for generate + review** — Claude’s reasoning context makes it blind to its own mistakes. It defends its choices instead of finding bugs.
-3. **Skip --json-schema** — output format varies between runs. Your parser breaks when Claude changes its response structure.
+**Q1.** Your CI pipeline runs `claude "Review this PR for security issues"` but the job hangs indefinitely. What is the fix?
 
-## Exam tips
+**A.** Add the `--batch` flag: `claude --batch "Review this PR"`
+**B.** Set `CLAUDE_HEADLESS=true` environment variable
+**C.** Redirect stdin: `claude "Review this PR" < /dev/null`
+**D.** Use the `-p` flag: `claude -p "Review this PR"`
 
-- **If the exam says** "CI job hangs" → -p flag for non-interactive mode
-- **If the exam says** "review misses issues the generator should have caught" → independent review instance
-- **Wrong answer trap:** "CLAUDE_HEADLESS=true" — doesn't exist
-- **Wrong answer trap:** "Self-review with extended thinking" — same session context makes self-review blind
-- **The correct pattern:** Separate generation and review into independent sessions
+**Correct: D.** The `-p` (--print) flag runs Claude Code in non-interactive mode -- processes the prompt and exits. **Why not A:** `--batch` is not a valid Claude Code flag. **Why not B:** `CLAUDE_HEADLESS=true` is not a real Claude Code environment variable. **Why not C:** Redirecting stdin from `/dev/null` is a generic Unix workaround that doesn’t properly invoke Claude Code’s non-interactive mode.
+
+---
+
+**Q2.** Your CI review uses `--output-format json` but downstream parsing breaks intermittently because the JSON structure varies between runs. What should you add?
+
+**A.** A try/except block in the parser to handle different structures
+**B.** `--json-schema <file>` to validate output against a fixed schema
+**C.** Temperature 0 to make output deterministic
+**D.** A post-processing script that normalizes the JSON
+
+**Correct: B.** `--json-schema` enforces a specific output structure. The output is validated against your schema before being returned, guaranteeing consistent structure. **Why not A:** try/except handles failures but doesn’t prevent them -- the root cause is unvalidated output. **Why not C:** Temperature 0 affects token selection, not JSON structure compliance. **Why not D:** Post-processing adds complexity and still breaks on unexpected structures.
+
+---
+
+**Q3.** Your CI pipeline generates code with one `claude -p` call and reviews it with the same session. The review rarely finds issues. What is the problem and fix?
+
+**A.** The review prompt needs more detail about what to look for
+**B.** The generator’s reasoning context makes the same session less likely to question its own decisions. Use a separate independent `claude -p` call for review.
+**C.** Increase max_tokens so the review has more room to report findings
+**D.** Add `--json-schema` to force the review to find issues
+
+**Correct: B.** Self-review is limited because the generator’s reasoning context creates bias -- the session is less likely to question decisions it already made. An independent review instance (separate `claude -p` call with no prior context) has no attachment to the original approach and catches more issues. **Why not A:** More detailed prompts help but don’t fix the fundamental bias of reviewing your own work. **Why not C:** max_tokens controls output length, not review thoroughness. **Why not D:** `--json-schema` enforces output format, not review quality.
 
 ## Key takeaways
 
-- `-p` flag runs Claude Code non-interactively (required for CI)
-- `--output-format json` produces machine-parseable findings
-- `--json-schema <file>` enforces a specific JSON schema on the output (use with --output-format json)
-- CLAUDE.md provides project context (test standards, fixtures, review criteria) to CI
-- Include existing test files in context so Claude doesn't suggest duplicate test scenarios
-- Independent review instances: generator and reviewer are separate sessions
-- Re-review: pass prior findings to avoid duplicate PR comments
+- `-p` flag is required for CI -- prevents interactive input hang
+- `--output-format json` produces machine-parseable output for automation
+- `--json-schema` guarantees output matches your schema -- your contract with downstream tools
+- Restrict tools in CI with `--allowedTools "Read,Grep,Glob"` -- no Bash on CI runners
+- Independent review instances catch what self-review misses (separate sessions, no shared context)
+- Re-review pattern: pass prior findings to avoid duplicate PR comments
+
+## Exam tips
+
+- **"CI job hangs"** --> `-p` flag for non-interactive mode
+- **"Review misses issues"** --> independent review instance (separate session)
+- **"Output structure varies"** --> `--json-schema` for enforced structure
+- **Wrong answer trap:** "CLAUDE_HEADLESS=true" -- doesn’t exist
+- **Wrong answer trap:** "Self-review with extended thinking" -- same session = biased review
+- **Wrong answer trap:** "`--batch` flag" -- not a valid Claude Code flag
+- **The core pattern:** `-p` + `--output-format json` + `--json-schema` + `--allowedTools` = production CI
+
+**Next:** Lab 4.1 begins Module 4 (Prompt Engineering & Structured Output) with explicit criteria to reduce false positives -- how to replace vague review instructions with specific, categorical criteria that eliminate the 60% false positive rate.
 
 ---
 
