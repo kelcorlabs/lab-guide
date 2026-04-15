@@ -91,7 +91,13 @@ If you see `Python 3.8` or higher, move to Step 3. If not, download and install 
 
 ## Step 3: Create your lab workspace
 
-Open a terminal and run this block to create the folder structure for all 31 labs:
+Create the folder structure for all 31 labs, then open it as your workspace.
+
+**If you're using VS Code (Option A):**
+
+1. Open VS Code
+2. Open the integrated terminal: **Terminal > New Terminal** (or Ctrl+\` / Cmd+\`)
+3. Paste and run this block:
 
 ```bash
 mkdir -p ~/claude-architect-labs
@@ -104,18 +110,40 @@ mkdir -p lab-d5-context-reliability
 mkdir -p lab-final-capstone
 ```
 
-Then open this folder in VS Code: **File > Open Folder** and select `~/claude-architect-labs`. This is your workspace for the entire course.
+4. Open the folder as your workspace: **File > Open Folder**, navigate to your home directory, and select `claude-architect-labs`
+5. VS Code will reload with the lab folders visible in the Explorer sidebar
+
+**If you're using the CLI (Option B):**
+
+Run the same block in your terminal:
+
+```bash
+mkdir -p ~/claude-architect-labs
+cd ~/claude-architect-labs
+mkdir -p lab-d1-agentic-arch
+mkdir -p lab-d2-tool-design
+mkdir -p lab-d3-claude-code
+mkdir -p lab-d4-prompt-engineering
+mkdir -p lab-d5-context-reliability
+mkdir -p lab-final-capstone
+```
+
+Stay in `~/claude-architect-labs` — this is your working directory for the entire course.
 
 ## Step 4: Verify everything works
 
-Open the Claude Code panel in VS Code (click the Claude icon in the sidebar) or start it from the terminal:
+Start Claude Code and confirm it can create and run a Python file.
+
+**If you're using VS Code:** Click the Claude icon in the sidebar to open the Claude Code panel.
+
+**If you're using the CLI:** Run `claude` from your lab workspace:
 
 ```bash
 cd ~/claude-architect-labs
 claude
 ```
 
-Test that Claude Code and Python both work by giving Claude this prompt:
+Then give Claude this prompt:
 
 ```
 Create a file called lab-d1-agentic-arch/hello.py with a single print statement, then run it.
