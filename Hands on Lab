@@ -51,7 +51,7 @@ Complete all 3 steps below before starting any labs.
 
 ## Step 1: Install Claude Code
 
-You need Claude Code — Anthropic's official CLI and IDE extension. Choose one:
+You need Claude Code — Anthropic's official CLI or IDE extension. Choose one:
 
 **Option A — CLI (recommended)**
 
@@ -87,9 +87,9 @@ cd ~/claude-architect-labs
 mkdir -p lab-d1-agentic-arch
 mkdir -p lab-d2-tool-design
 mkdir -p lab-d3-claude-code
-mkdir -p lab-d4-prompt-eng
+mkdir -p lab-d4-prompt-engineering
 mkdir -p lab-d5-context-reliability
-mkdir -p lab-final-scenario
+mkdir -p lab-final-capstone
 ```
 
 Then start Claude Code from inside that directory:
