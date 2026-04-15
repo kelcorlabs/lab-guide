@@ -12732,433 +12732,535 @@ Explore a different codebase concern: "how does pagination work across the API l
 - **Wrong answer trap:** "Re-read files to refresh memory" -- adds more content to already-full context
 - **The core pattern:** Grep to find, Read to trace, Scratchpad to persist, Prune to reclaim
 
-**Next:** Lab 5.5 covers human review workflows and confidence calibration -- how to route findings to human reviewers based on calibrated confidence scores, not uncalibrated model self-assessment.
+**Next:** Lab 5.5 covers human review workflows and confidence calibration -- how to validate extraction accuracy by document type and field, implement stratified sampling for ongoing measurement, and calibrate confidence thresholds using labeled data.
 
 ---
 
 
 # LAB 5.5: HUMAN REVIEW WORKFLOWS AND CONFIDENCE CALIBRATION
 # Domain 5 -- Task Statement 5.5
-# Concept: Deterministic routing rules, structured handoff, review queues
-# Time: ~25 minutes | Difficulty: Advanced
+# Concept: Field-level accuracy validation, stratified sampling, confidence calibration
+# Time: ~30 minutes | Difficulty: Advanced
 # Prerequisites: Lab 5.4
 
 ## Scenario
 
-Your loan approval agent autonomously approves or denies 80% of applications and routes the remaining 20% to human review. The problem: it is flagging the wrong 20%. Clear approvals (high income, excellent credit, low amount) get routed to humans unnecessarily. Meanwhile, edge cases (credit score of 605 in the 580-620 gray zone, amount just below the $10k threshold, missing income verification) get auto-approved without review.
+Your document extraction system processes invoices, handwritten receipts, and purchase orders. It extracts fields like vendor_name, total_amount, invoice_date, and line_items. Management sees 94% overall accuracy on your test set and wants to fully automate -- no more human review.
 
-The agent uses self-assessed confidence to route: "I am 92% confident this should be approved." But 92% confidence on an edge case is no more reliable than 92% on a clear case -- LLM confidence is not calibrated to decision difficulty. You need deterministic routing rules based on observable case properties, not model self-assessment.
+But 94% overall is a weighted average. Most of your documents are standard invoices (99% accurate). Handwritten receipts are only 62% accurate -- and they are 8% of volume. The aggregate metric hides the problem. If you automate everything, one in three handwritten receipts will have wrong data flowing into your accounting system.
+
+You need to validate accuracy by document type and field before automating, implement stratified random sampling to catch novel error patterns in high-confidence extractions, and calibrate confidence thresholds using a labeled validation set -- not the model's self-assessed confidence.
 
 ## What you'll learn
 
-- Why LLM self-assessed confidence is unreliable for routing decisions (callback to Lab 5.2)
-- Defining deterministic routing rules based on case properties (dollar thresholds, gray-zone ranges, missing documentation)
-- Structured handoff context for human reviewers (summary, reasoning, specific concerns, recommendation)
-- The review queue pattern: priority ordering by risk, not FIFO
-- When to route for review vs when to auto-decide
+- How aggregate accuracy metrics (e.g., 96% overall) mask poor performance on specific document types or fields
+- Stratified random sampling for ongoing measurement of high-confidence extractions and detection of novel error patterns
+- Field-level and document-type accuracy analysis to find where your extraction actually fails
+- Calibrating confidence thresholds using labeled validation sets, not uncalibrated model self-assessment
+- The complete accuracy validation workflow: aggregate metric --> document-type breakdown --> field-level breakdown --> stratified sampling --> threshold calibration
 
 ## Concepts
 
-**The confidence calibration problem:** LLMs report similar confidence (0.85-0.95) regardless of actual decision difficulty. A clear approval and a gray-zone edge case both get "92% confident." Self-assessed confidence does NOT correlate with case difficulty. This is the same anti-pattern from Lab 5.2 (escalation), now applied to review routing.
+**Aggregate accuracy masks per-type and per-field failures.** A system reporting 94% overall accuracy might be 99% on standard invoices, 94% on purchase orders, and 62% on handwritten receipts. If standard invoices are 80% of your test set, the weighted average looks fine. But the 62% on handwritten receipts means one in three receipts has errors. Always break down accuracy by document type before deciding to automate.
 
-**Deterministic routing rules** check observable properties:
-- Dollar amount > $10,000 --> human review (high stakes)
-- Credit score 580-620 --> human review (gray zone)
-- Missing income verification --> human review (incomplete data)
-- All criteria clearly met --> auto-approve
-- All criteria clearly failed --> auto-deny
+**Document-type stratification.** Divide your test set by document type and compute accuracy separately for each. Random sampling alone can miss rare types -- if handwritten receipts are 8% of volume, a random 25-document sample might include 0-2 receipts. Stratified sampling guarantees you test every type: pick N samples per type regardless of volume proportion.
 
-**Structured handoff context:** A human reviewer receiving a case needs: (1) summary of the application, (2) the agent's reasoning, (3) specific concerns flagged, (4) the agent's recommendation (approve/deny). Without this, the reviewer starts from scratch. Callback to Lab 1.4's structured handoff summaries.
+**Field-level accuracy.** Even within a document type, some fields are harder to extract than others. Your system might be 100% accurate on total_amount (always in a standard location) but 45% on vendor_name (varies in formatting, location, and abbreviation). Computing per-field accuracy reveals which fields need improvement -- or human review -- even when the document-type accuracy looks acceptable.
 
-**Priority ordering:** Route gray-zone cases first (highest risk of wrong decision), not FIFO. A $50k application in the gray zone is more urgent than a $500 clear approval that was unnecessarily flagged.
+**Calibration with labeled validation sets.** Build a labeled test set (100-500 documents with human-verified ground truth). Run your extraction system, compare outputs to ground truth, and measure accuracy per type and per field. This tells you where the system is actually reliable vs where it claims to be reliable. Calibration answers: "Among extractions the model says are 95% confident, how many are actually correct?"
+
+**Stratified random sampling for ongoing measurement.** After initial validation, you still need ongoing monitoring. New document formats, vendor changes, and data drift can introduce novel error patterns the model is confidently wrong about. Stratified random sampling -- pulling N high-confidence extractions per document type per review cycle -- catches these before they cause downstream damage. This is the safety net that enables confident automation.
+
+**Relationship to deterministic routing.** Routing rules (Lab 5.2) decide which individual cases get human review based on observable properties. Accuracy validation decides whether your *routing itself* is correct -- whether the cases you are auto-approving are actually being extracted correctly. They work together: routing catches known edge cases; stratified sampling catches unknown ones.
 
 ## Walkthrough
 
-### Step 1: See the problem -- wrong 20% routed
+### Step 1: See the problem -- 94% hides 62%
 
-Create `~/claude-architect-labs/lab-d5-context-reliability/review_router.py`:
+Create `~/claude-architect-labs/lab-d5-context-reliability/accuracy_validator.py`:
 
 ```python
 import json
+import random
+
+random.seed(42)
 
 
-# ============================================================
-# PART 1: THE PROBLEM -- WRONG CASES ROUTED
-# ============================================================
+# -- Simulated extraction results with ground truth --------
+# Each document has: type, extracted fields, ground truth,
+# and model confidence score.
 
-APPLICATIONS = [
-    {
-        "id": "APP-001",
-        "applicant": "Alice Chen",
-        "amount": 5000,
-        "credit_score": 780,
-        "income_verified": True,
-        "employment_years": 8,
-        "description": "Clear approval -- high credit, "
-                       "low amount, verified income",
-    },
-    {
-        "id": "APP-002",
-        "applicant": "Bob Diaz",
-        "amount": 15000,
-        "credit_score": 605,
-        "income_verified": True,
-        "employment_years": 2,
-        "description": "Gray zone -- score 605 in "
-                       "580-620 range, amount > $10k",
-    },
-    {
-        "id": "APP-003",
-        "applicant": "Carol Evans",
-        "amount": 8000,
-        "credit_score": 720,
-        "income_verified": False,
-        "employment_years": 5,
-        "description": "Missing docs -- income not "
-                       "verified",
-    },
-    {
-        "id": "APP-004",
-        "applicant": "Dan Foster",
-        "amount": 3000,
-        "credit_score": 450,
-        "income_verified": True,
-        "employment_years": 1,
-        "description": "Clear denial -- very low credit",
-    },
-    {
-        "id": "APP-005",
-        "applicant": "Eve Garcia",
-        "amount": 25000,
-        "credit_score": 690,
-        "income_verified": True,
-        "employment_years": 4,
-        "description": "High amount -- $25k needs "
-                       "review regardless of credit",
-    },
-]
+DOCUMENTS = []
 
-# Simulated: model confidence (uncalibrated)
-MODEL_CONFIDENCE = {
-    "APP-001": 0.94,  # Clear case, high confidence -- OK
-    "APP-002": 0.91,  # Edge case, ALSO high confidence -- BAD
-    "APP-003": 0.88,  # Missing docs, still confident -- BAD
-    "APP-004": 0.93,  # Clear denial, high confidence -- OK
-    "APP-005": 0.87,  # High amount, moderate -- OK-ish
-}
+def generate_documents():
+    """Generate 100 simulated extraction results."""
+    doc_id = 0
+
+    # 72 standard invoices (99% field accuracy)
+    for i in range(72):
+        doc_id += 1
+        correct = random.random() < 0.99
+        DOCUMENTS.append({
+            "id": f"DOC-{doc_id:03d}",
+            "doc_type": "standard_invoice",
+            "fields": {
+                "vendor_name": {
+                    "extracted": "Acme Corp",
+                    "ground_truth": "Acme Corp",
+                    "correct": random.random() < 0.97,
+                },
+                "total_amount": {
+                    "extracted": "$1,234.56",
+                    "ground_truth": "$1,234.56",
+                    "correct": random.random() < 0.995,
+                },
+                "invoice_date": {
+                    "extracted": "2025-03-15",
+                    "ground_truth": "2025-03-15",
+                    "correct": random.random() < 0.99,
+                },
+            },
+            "confidence": round(
+                random.uniform(0.92, 0.99), 2),
+        })
+
+    # 20 purchase orders (94% field accuracy)
+    for i in range(20):
+        doc_id += 1
+        DOCUMENTS.append({
+            "id": f"DOC-{doc_id:03d}",
+            "doc_type": "purchase_order",
+            "fields": {
+                "vendor_name": {
+                    "extracted": "Beta LLC",
+                    "ground_truth": "Beta LLC",
+                    "correct": random.random() < 0.90,
+                },
+                "total_amount": {
+                    "extracted": "$5,678.00",
+                    "ground_truth": "$5,678.00",
+                    "correct": random.random() < 0.97,
+                },
+                "invoice_date": {
+                    "extracted": "2025-04-01",
+                    "ground_truth": "2025-04-01",
+                    "correct": random.random() < 0.95,
+                },
+            },
+            "confidence": round(
+                random.uniform(0.88, 0.96), 2),
+        })
+
+    # 8 handwritten receipts (62% field accuracy)
+    for i in range(8):
+        doc_id += 1
+        DOCUMENTS.append({
+            "id": f"DOC-{doc_id:03d}",
+            "doc_type": "handwritten_receipt",
+            "fields": {
+                "vendor_name": {
+                    "extracted": "Unclear",
+                    "ground_truth": "Corner Deli",
+                    "correct": random.random() < 0.45,
+                },
+                "total_amount": {
+                    "extracted": "$23.50",
+                    "ground_truth": "$32.50",
+                    "correct": random.random() < 0.70,
+                },
+                "invoice_date": {
+                    "extracted": "2025-03-20",
+                    "ground_truth": "2025-03-20",
+                    "correct": random.random() < 0.75,
+                },
+            },
+            "confidence": round(
+                random.uniform(0.85, 0.95), 2),
+        })
+
+generate_documents()
 ```
 
-### Step 2: Build deterministic routing rules
+### Step 2: Compute aggregate accuracy -- the misleading metric
 
 ```python
-# ============================================================
-# PART 2: DETERMINISTIC ROUTING RULES
-# ============================================================
+# -- STEP 2: Aggregate accuracy --------------------------
 
-ROUTING_RULES = {
-    "high_amount": {
-        "condition": "amount > 10000",
-        "action": "REVIEW",
-        "reason": "High-value application requires "
-                  "human oversight",
-    },
-    "gray_zone_credit": {
-        "condition": "credit_score between 580-620",
-        "action": "REVIEW",
-        "reason": "Credit score in gray zone -- "
-                  "borderline approval/denial",
-    },
-    "missing_docs": {
-        "condition": "income_verified is False",
-        "action": "REVIEW",
-        "reason": "Missing income verification -- "
-                  "cannot auto-decide without docs",
-    },
-    "clear_denial": {
-        "condition": "credit_score < 550",
-        "action": "DENY",
-        "reason": "Credit score below minimum "
-                  "threshold",
-    },
-    "clear_approval": {
-        "condition": "All criteria met, no flags",
-        "action": "APPROVE",
-        "reason": "All requirements clearly satisfied",
-    },
-}
+def compute_aggregate_accuracy(docs):
+    """Overall accuracy across all documents and fields."""
+    total_fields = 0
+    correct_fields = 0
+    for doc in docs:
+        for field_name, field_data in doc["fields"].items():
+            total_fields += 1
+            if field_data["correct"]:
+                correct_fields += 1
+    return correct_fields / total_fields if total_fields else 0
 
 
-def route_application(app):
-    """Route using deterministic rules, NOT model
-    confidence."""
-    flags = []
+def demo_aggregate():
+    acc = compute_aggregate_accuracy(DOCUMENTS)
+    print("=" * 60)
+    print("STEP 2: AGGREGATE ACCURACY")
+    print("=" * 60)
+    print(f"\n  Overall accuracy: {acc:.1%}")
+    print(f"  Total documents: {len(DOCUMENTS)}")
+    print(f"  Management says: 'Ship it, no review needed.'")
+    print(f"\n  But is 94% accurate EVERYWHERE?")
+```
 
-    # Rule 1: High amount
-    if app["amount"] > 10000:
-        flags.append(("high_amount",
-                       ROUTING_RULES["high_amount"]))
+### Step 3: Break it down by document type -- the reveal
 
-    # Rule 2: Gray zone credit
-    if 580 <= app["credit_score"] <= 620:
-        flags.append(("gray_zone_credit",
-                       ROUTING_RULES["gray_zone_credit"]))
+```python
+# -- STEP 3: Per-document-type accuracy -------------------
 
-    # Rule 3: Missing documentation
-    if not app["income_verified"]:
-        flags.append(("missing_docs",
-                       ROUTING_RULES["missing_docs"]))
-
-    # Decision
-    if flags:
-        return {
-            "action": "REVIEW",
-            "flags": flags,
-            "priority": len(flags) * app["amount"],
+def compute_accuracy_by_type(docs):
+    """Accuracy broken down by document type."""
+    by_type = {}
+    for doc in docs:
+        dt = doc["doc_type"]
+        if dt not in by_type:
+            by_type[dt] = {"total": 0, "correct": 0,
+                           "count": 0}
+        by_type[dt]["count"] += 1
+        for field_data in doc["fields"].values():
+            by_type[dt]["total"] += 1
+            if field_data["correct"]:
+                by_type[dt]["correct"] += 1
+    result = {}
+    for dt, data in by_type.items():
+        result[dt] = {
+            "accuracy": (data["correct"] / data["total"]
+                         if data["total"] else 0),
+            "doc_count": data["count"],
+            "field_count": data["total"],
+            "correct_count": data["correct"],
         }
+    return result
 
-    if app["credit_score"] < 550:
-        return {
-            "action": "DENY",
-            "flags": [("clear_denial",
-                        ROUTING_RULES["clear_denial"])],
-            "priority": 0,
-        }
 
-    return {
-        "action": "APPROVE",
-        "flags": [("clear_approval",
-                    ROUTING_RULES["clear_approval"])],
-        "priority": 0,
-    }
+def demo_by_type():
+    by_type = compute_accuracy_by_type(DOCUMENTS)
+    print("\n" + "=" * 60)
+    print("STEP 3: ACCURACY BY DOCUMENT TYPE")
+    print("=" * 60)
+    for dt, stats in sorted(by_type.items()):
+        marker = ""
+        if stats["accuracy"] < 0.80:
+            marker = " <-- FAILING"
+        print(f"\n  {dt}:")
+        print(f"    Documents: {stats['doc_count']}")
+        print(f"    Field accuracy: "
+              f"{stats['accuracy']:.1%}{marker}")
+    print(f"\n  The 94% aggregate was hiding a critical "
+          f"failure")
+    print(f"  on handwritten receipts.")
 ```
 
-### Step 3: Build structured handoff context
+### Step 4: Break it down by field -- find the weak spots
 
 ```python
-# ============================================================
-# PART 3: STRUCTURED HANDOFF FOR REVIEWERS
-# ============================================================
+# -- STEP 4: Per-field accuracy ---------------------------
 
-def build_handoff(app, routing_result):
-    """Build structured context for human reviewer."""
-    if routing_result["action"] != "REVIEW":
-        return None
+def compute_accuracy_by_field(docs, doc_type=None):
+    """Accuracy broken down by field name."""
+    by_field = {}
+    for doc in docs:
+        if doc_type and doc["doc_type"] != doc_type:
+            continue
+        for field_name, field_data in doc["fields"].items():
+            if field_name not in by_field:
+                by_field[field_name] = {"total": 0,
+                                        "correct": 0}
+            by_field[field_name]["total"] += 1
+            if field_data["correct"]:
+                by_field[field_name]["correct"] += 1
+    result = {}
+    for fn, data in by_field.items():
+        result[fn] = (data["correct"] / data["total"]
+                      if data["total"] else 0)
+    return result
 
-    return {
-        "application_id": app["id"],
-        "applicant": app["applicant"],
-        "summary": (
-            f"${app['amount']:,} loan request. "
-            f"Credit: {app['credit_score']}. "
-            f"Employment: {app['employment_years']}yr. "
-            f"Income verified: {app['income_verified']}."
-        ),
-        "routing_flags": [
-            f["reason"] for _, f in routing_result["flags"]
-        ],
-        "recommendation": (
-            "Approve with conditions"
-            if app["credit_score"] >= 600
-            else "Needs additional review"
-        ),
-        "priority_score": routing_result["priority"],
-    }
+
+def demo_by_field():
+    print("\n" + "=" * 60)
+    print("STEP 4: ACCURACY BY FIELD")
+    print("=" * 60)
+
+    # All documents
+    print("\n  --- All document types ---")
+    by_field = compute_accuracy_by_field(DOCUMENTS)
+    for fn, acc in sorted(by_field.items()):
+        marker = ""
+        if acc < 0.80:
+            marker = " <-- WEAK"
+        print(f"    {fn}: {acc:.1%}{marker}")
+
+    # Handwritten receipts only
+    print("\n  --- Handwritten receipts only ---")
+    by_field_hw = compute_accuracy_by_field(
+        DOCUMENTS, "handwritten_receipt")
+    for fn, acc in sorted(by_field_hw.items()):
+        marker = ""
+        if acc < 0.70:
+            marker = " <-- CRITICAL"
+        print(f"    {fn}: {acc:.1%}{marker}")
+    print(f"\n  vendor_name on handwritten receipts is "
+          f"the weakest link.")
 ```
 
-### Step 4: Compare model confidence vs deterministic routing
+### Step 5: Stratified random sampling -- catch what confidence misses
 
 ```python
-# ============================================================
-# PART 4: CONFIDENCE VS DETERMINISTIC COMPARISON
-# ============================================================
+# -- STEP 5: Stratified vs random sampling ----------------
 
-def compare_approaches():
-    """Show why deterministic rules beat confidence."""
-    sep = "=" * 60
-    print(sep)
-    print("MODEL CONFIDENCE VS DETERMINISTIC RULES")
-    print(sep)
+def stratified_sample(docs, n_per_type=3):
+    """Pick n samples per document type."""
+    by_type = {}
+    for doc in docs:
+        dt = doc["doc_type"]
+        if dt not in by_type:
+            by_type[dt] = []
+        by_type[dt].append(doc)
 
-    # Confidence-based routing (threshold = 0.90)
-    print("\n  --- Confidence-based (threshold 0.90) ---")
-    conf_reviews = 0
-    for app in APPLICATIONS:
-        conf = MODEL_CONFIDENCE[app["id"]]
-        routed = "REVIEW" if conf < 0.90 else "AUTO"
-        flag = ""
-        if routed == "AUTO" and (
-            app["amount"] > 10000
-            or 580 <= app["credit_score"] <= 620
-            or not app["income_verified"]
-        ):
-            flag = " <- MISSED EDGE CASE"
-        if routed == "REVIEW" and (
-            app["credit_score"] > 700
-            and app["amount"] < 10000
-            and app["income_verified"]
-        ):
-            flag = " <- UNNECESSARY REVIEW"
-        if routed == "REVIEW":
-            conf_reviews += 1
-        print(f"  {app['id']}: conf={conf:.2f} "
-              f"-> {routed}{flag}")
+    sampled = []
+    for dt, type_docs in by_type.items():
+        picks = random.sample(type_docs,
+                              min(n_per_type, len(type_docs)))
+        sampled.extend(picks)
+    return sampled
 
-    # Deterministic routing
-    print("\n  --- Deterministic rules ---")
-    det_reviews = 0
-    for app in APPLICATIONS:
-        result = route_application(app)
-        if result["action"] == "REVIEW":
-            det_reviews += 1
-            reasons = ", ".join(
-                n for n, _ in result["flags"]
-            )
-            print(f"  {app['id']}: -> REVIEW "
-                  f"({reasons})")
+
+def random_sample(docs, n=9):
+    """Pick n documents at random (not stratified)."""
+    return random.sample(docs, min(n, len(docs)))
+
+
+def demo_sampling():
+    print("\n" + "=" * 60)
+    print("STEP 5: STRATIFIED VS RANDOM SAMPLING")
+    print("=" * 60)
+
+    # Run 5 trials of each approach
+    print("\n  --- 5 trials of random sampling (9 docs) ---")
+    for trial in range(5):
+        random.seed(trial + 100)
+        sample = random_sample(DOCUMENTS, 9)
+        types_seen = set(d["doc_type"] for d in sample)
+        hw_count = sum(1 for d in sample
+                       if d["doc_type"]
+                       == "handwritten_receipt")
+        acc = compute_aggregate_accuracy(sample)
+        print(f"    Trial {trial+1}: {acc:.0%} accuracy, "
+              f"{hw_count} handwritten receipts, "
+              f"types seen: {len(types_seen)}")
+
+    print("\n  --- 5 trials of stratified sampling "
+          "(3 per type) ---")
+    for trial in range(5):
+        random.seed(trial + 200)
+        sample = stratified_sample(DOCUMENTS, 3)
+        types_seen = set(d["doc_type"] for d in sample)
+        hw_count = sum(1 for d in sample
+                       if d["doc_type"]
+                       == "handwritten_receipt")
+        acc = compute_aggregate_accuracy(sample)
+        print(f"    Trial {trial+1}: {acc:.0%} accuracy, "
+              f"{hw_count} handwritten receipts, "
+              f"types seen: {len(types_seen)}")
+
+    random.seed(42)
+    print(f"\n  Random sampling sometimes gets 0 "
+          f"handwritten receipts.")
+    print(f"  Stratified ALWAYS gets 3 -- catches the "
+          f"62% failure rate.")
+```
+
+### Step 6: Calibrate confidence thresholds
+
+```python
+# -- STEP 6: Confidence calibration -----------------------
+
+def calibrate_confidence(docs):
+    """Check: among high-confidence extractions,
+    how many are actually correct?"""
+    buckets = {
+        "0.95+": {"total": 0, "correct": 0},
+        "0.90-0.95": {"total": 0, "correct": 0},
+        "0.85-0.90": {"total": 0, "correct": 0},
+        "<0.85": {"total": 0, "correct": 0},
+    }
+
+    for doc in docs:
+        conf = doc["confidence"]
+        if conf >= 0.95:
+            bucket = "0.95+"
+        elif conf >= 0.90:
+            bucket = "0.90-0.95"
+        elif conf >= 0.85:
+            bucket = "0.85-0.90"
         else:
-            print(f"  {app['id']}: -> "
-                  f"{result['action']}")
+            bucket = "<0.85"
 
-    print(f"\n  Confidence routed {conf_reviews}/5 "
-          f"to review")
-    print(f"  Deterministic routed {det_reviews}/5 "
-          f"to review")
-    print(f"  Deterministic catches edge cases that "
-          f"confidence misses")
+        all_correct = all(
+            f["correct"] for f in doc["fields"].values()
+        )
+        buckets[bucket]["total"] += 1
+        if all_correct:
+            buckets[bucket]["correct"] += 1
+
+    return buckets
+
+
+def demo_calibration():
+    print("\n" + "=" * 60)
+    print("STEP 6: CONFIDENCE CALIBRATION")
+    print("=" * 60)
+    print(f"\n  Among docs where model reports high "
+          f"confidence,")
+    print(f"  how many are actually all-fields-correct?")
+
+    buckets = calibrate_confidence(DOCUMENTS)
+    for label, data in buckets.items():
+        if data["total"] > 0:
+            actual = data["correct"] / data["total"]
+            gap = ""
+            if label == "0.90-0.95" and actual < 0.90:
+                gap = " <-- OVERCONFIDENT"
+            if label == "0.85-0.90" and actual < 0.85:
+                gap = " <-- OVERCONFIDENT"
+            print(f"    Confidence {label}: "
+                  f"{data['correct']}/{data['total']} "
+                  f"actually correct "
+                  f"({actual:.0%}){gap}")
+
+    print(f"\n  High confidence != high accuracy.")
+    print(f"  Handwritten receipts get 0.85-0.95 "
+          f"confidence but 62% actual accuracy.")
+    print(f"  Calibration using labeled data reveals "
+          f"the gap.")
 ```
 
-### Step 5: Build the review queue with priority
+### Step 7: Full validation report
 
 ```python
-# ============================================================
-# PART 5: PRIORITY REVIEW QUEUE
-# ============================================================
+# -- STEP 7: Combined validation report -------------------
 
-def build_review_queue(applications):
-    """Build priority-ordered review queue."""
-    queue = []
-    for app in applications:
-        result = route_application(app)
-        if result["action"] == "REVIEW":
-            handoff = build_handoff(app, result)
-            queue.append(handoff)
+def full_validation_report():
+    """Run the complete validation workflow."""
+    demo_aggregate()
+    demo_by_type()
+    demo_by_field()
+    demo_sampling()
+    demo_calibration()
 
-    # Sort by priority (highest first)
-    queue.sort(key=lambda x: x["priority_score"],
-               reverse=True)
-    return queue
-```
-
-### Step 6: Add demo runner and run
-
-```python
-# ============================================================
-# PART 6: DEMO
-# ============================================================
-
-def run_demo():
-    compare_approaches()
-
-    sep = "=" * 60
-    print(f"\n{sep}")
-    print("REVIEW QUEUE (priority-ordered)")
-    print(sep)
-
-    queue = build_review_queue(APPLICATIONS)
-    for i, item in enumerate(queue, 1):
-        print(f"\n  #{i} (priority: "
-              f"{item['priority_score']:,})")
-        print(f"  {item['application_id']}: "
-              f"{item['applicant']}")
-        print(f"  {item['summary']}")
-        print(f"  Flags: "
-              + ", ".join(item["routing_flags"]))
-        print(f"  Recommendation: "
-              f"{item['recommendation']}")
-
-    print(f"\n{sep}")
-    print("ROUTING RULES REFERENCE")
-    print(sep)
-    for name, rule in ROUTING_RULES.items():
-        print(f"  {name}:")
-        print(f"    If: {rule['condition']}")
-        print(f"    Then: {rule['action']}")
-        print(f"    Why: {rule['reason']}")
+    print("\n" + "=" * 60)
+    print("VALIDATION VERDICT")
+    print("=" * 60)
+    print(f"\n  SAFE TO AUTOMATE:")
+    print(f"    standard_invoice -- 99% accuracy, "
+          f"all fields strong")
+    print(f"\n  NEEDS HUMAN REVIEW:")
+    print(f"    handwritten_receipt -- 62% accuracy, "
+          f"vendor_name at 45%")
+    print(f"\n  MONITOR CLOSELY:")
+    print(f"    purchase_order -- 94% accuracy, "
+          f"vendor_name at 90%")
+    print(f"\n  ONGOING: Stratified sampling (3 per type "
+          f"per cycle)")
+    print(f"  catches novel errors in high-confidence "
+          f"extractions.")
 
 
 if __name__ == "__main__":
-    run_demo()
+    full_validation_report()
 ```
 
-Run the script:
+### Step 8: Run it
 
 ```bash
 cd ~/claude-architect-labs
-python lab-d5-context-reliability/review_router.py
+python lab-d5-context-reliability/accuracy_validator.py
 ```
 
 You should see:
-- **Confidence-based:** APP-002 (gray zone, 0.91 confidence) auto-approved -- MISSED. APP-005 (high amount, 0.87) sent to review.
-- **Deterministic:** APP-002 routed to REVIEW (gray_zone_credit + high_amount). APP-003 routed (missing_docs). APP-001 auto-approved (clear case). APP-004 auto-denied (clear denial).
-- **Review queue:** Priority-ordered by risk (highest-dollar gray-zone cases first)
-- **Structured handoff:** Each review case has summary, flags, recommendation
 
-## Try it yourself
+1. **Aggregate accuracy:** ~94% -- looks great.
+2. **By document type:** standard_invoice ~98%, purchase_order ~88%, handwritten_receipt ~62%. The 94% was hiding a critical failure.
+3. **By field:** vendor_name is the weakest field overall. On handwritten receipts, vendor_name drops to ~45%.
+4. **Sampling comparison:** Random sampling sometimes gets 0 handwritten receipts in a 9-document sample -- missing the failure entirely. Stratified sampling always includes 3 receipts per type -- catches the problem every time.
+5. **Confidence calibration:** Documents with 0.90+ confidence are NOT all correct. Handwritten receipts get high confidence but low actual accuracy. The model is overconfident.
+6. **Verdict:** Automate standard invoices, route handwritten receipts to human review, monitor purchase orders with stratified sampling.
 
-Take a different decision task: refund approval.
+## Break it / Debug it
 
-1. Define deterministic routing rules: amount > $500 --> review, reason is "policy gap" --> review, customer has 3+ refunds in 30 days --> review.
-2. Create 5 test refund requests with varying amounts, reasons, and history.
-3. Run the router and verify: clear refunds auto-approved, edge cases routed to review.
+### Break: Replace stratified sampling with pure random
+
+In `demo_sampling()`, change the stratified section to use `random_sample(DOCUMENTS, 9)` instead of `stratified_sample(DOCUMENTS, 3)`:
+
+```python
+    # Change this:
+    sample = stratified_sample(DOCUMENTS, 3)
+    # To this:
+    sample = random_sample(DOCUMENTS, 9)
+```
+
+Run 10 trials. Count how many times you get 0 handwritten receipts in the sample. With only 8 receipts out of 100 documents, pure random sampling misses them roughly 40% of the time. When you miss them, your accuracy estimate is ~97% and you conclude everything is fine. When you catch them, accuracy drops to ~88%.
+
+**This is why stratified sampling matters.** Random sampling gives inconsistent accuracy estimates. Stratified sampling guarantees every document type is represented in every review cycle.
+
+Revert the change before continuing.
 
 ## Check your understanding
 
-**Q1.** Your loan approval agent uses self-assessed confidence (0.0-1.0) to decide which applications to route to human review. An edge case with credit score 605 (gray zone) gets confidence 0.92 and is auto-approved. What is the root problem?
+**Q1.** Your extraction system achieves 97% overall accuracy on a test set of 500 documents. A stakeholder proposes eliminating human review. What should you do first?
 
-**A.** The confidence threshold should be set higher (0.95)
-**B.** LLM self-assessed confidence is not calibrated to decision difficulty -- a gray-zone edge case gets similar confidence to a clear approval. Use deterministic rules based on observable case properties instead.
-**C.** The model needs more training data on edge cases
-**D.** Add a second model to verify the first model's confidence
+**A.** Agree -- 97% accuracy is above the industry benchmark
+**B.** Analyze accuracy by document type and field to verify consistent performance across all segments before automating -- aggregate accuracy may mask poor performance on specific document types or fields
+**C.** Increase the confidence threshold to 0.99 to further reduce errors
+**D.** Run on a larger test set to confirm the 97% holds
 
-**Correct: B.** Self-assessed confidence does not correlate with case difficulty. The model reports 0.92 whether the case is clear or borderline. Deterministic rules (credit score 580-620 = gray zone = review) catch edge cases that confidence misses. **Why not A:** Higher thresholds still rely on uncalibrated scores. **Why not C:** Training data does not fix the fundamental miscalibration. **Why not D:** A second model has the same calibration problem.
-
----
-
-**Q2.** A human reviewer receives a flagged application with no context -- just "APP-002: needs review." They spend 15 minutes reconstructing the case from scratch. What should the routing system provide?
-
-**A.** Just the application ID -- the reviewer can look it up
-**B.** A structured handoff with: summary, agent reasoning, specific routing flags, and the agent's recommendation -- so the reviewer can start from the agent's analysis instead of from scratch
-**C.** The full conversation history between the agent and the applicant
-**D.** The model's confidence score so the reviewer knows how certain the agent was
-
-**Correct: B.** Structured handoff context lets the reviewer start from the agent's analysis. The summary, flags, and recommendation provide immediate context. **Why not A:** Looking up the case from scratch wastes reviewer time. **Why not C:** Full conversation history is too verbose -- the reviewer needs a focused summary. **Why not D:** Confidence scores are not calibrated and don't help the reviewer make the decision.
+**Correct: B.** Aggregate accuracy hides per-type and per-field failures. A system that is 99% on invoices but 55% on handwritten receipts reports high aggregate accuracy because invoices dominate the test set. You must validate by document type and field before eliminating review. **Why not A:** An industry benchmark says nothing about whether your system works consistently across all document types in your specific pipeline. **Why not C:** Increasing a confidence threshold assumes the model's confidence is calibrated -- but if it reports 0.95 confidence on documents it extracts incorrectly, thresholds will not help. **Why not D:** A larger test set may confirm the aggregate number without revealing per-segment performance gaps.
 
 ---
 
-**Q3.** Your review queue processes cases in FIFO order. A $50,000 gray-zone application sits behind twenty $500 clear approvals that were unnecessarily flagged. What should change?
+**Q2.** Your system has been running at high accuracy for three months. You currently review all extractions where the model reports low confidence. A manager suggests eliminating human review entirely since performance has been stable. What is the right approach?
 
-**A.** Process all cases faster by adding more reviewers
-**B.** Priority-order the queue by risk (dollar amount x number of flags) so high-stakes edge cases are reviewed first
-**C.** Auto-approve everything under $1,000 to clear the queue
-**D.** Remove the routing rules so fewer cases enter the queue
+**A.** Agree -- three months of good performance demonstrates reliability
+**B.** Implement stratified random sampling of high-confidence extractions for ongoing error rate measurement and novel pattern detection, rather than eliminating review entirely
+**C.** Keep the low-confidence review but lower the threshold further to reduce review volume
+**D.** Switch to reviewing a fixed random 5% sample regardless of document type
 
-**Correct: B.** Priority ordering ensures high-risk cases (large amounts, multiple flags) get reviewed first. The $50k gray-zone case is higher priority than $500 clear approvals. **Why not A:** More reviewers doesn't fix the ordering problem. **Why not C:** Auto-approving by amount alone bypasses the routing rules that exist for good reasons. **Why not D:** Removing rules would let edge cases through without review.
+**Correct: B.** Stratified random sampling of high-confidence extractions catches novel error patterns that confidence-based review misses. New document formats, vendor changes, or data drift can introduce errors the model is confidently wrong about. Ongoing stratified sampling -- pulling N samples per document type per cycle -- is the safety net that enables confident automation. **Why not A:** Past performance does not guarantee future accuracy. New document types, format changes, or regulatory updates can introduce novel errors at any time. **Why not C:** Lowering the threshold still only reviews low-confidence extractions -- it misses errors in high-confidence ones where the model is wrong but does not know it. **Why not D:** Fixed random sampling may undersample rare document types where errors are most likely. Stratification ensures every type is represented.
+
+---
+
+**Q3.** Your extraction system reports confidence scores. Among documents with confidence > 0.95, actual accuracy is 98%. Among documents with confidence 0.85-0.90, actual accuracy is 71%. You want to reduce human review. What should you do?
+
+**A.** Route all documents with confidence > 0.90 to auto-processing since higher confidence means higher accuracy
+**B.** Validate accuracy by document type within each confidence band -- a 0.92 confidence invoice and a 0.92 confidence handwritten receipt may have very different actual accuracy
+**C.** Set the review threshold at 0.95 since that is the band with highest actual accuracy
+**D.** Discard confidence scores entirely and review everything manually
+
+**Correct: B.** Confidence bands that look good in aggregate may still contain per-type failures. A confidence bucket with 92% overall accuracy might be 99% on invoices and 45% on handwritten receipts within that same bucket. Validate by document type within each confidence band before setting automation thresholds. **Why not A:** Confidence > 0.90 includes the 0.90-0.95 band which has only 71% actual accuracy -- this would automate many incorrect extractions. **Why not C:** Setting a threshold at 0.95 helps, but without per-type validation you might still automate handwritten receipts at 0.95 confidence that are actually only 60% correct for that type. **Why not D:** Discarding confidence entirely wastes information. The right approach is to calibrate confidence against labeled data by document type.
 
 ## Key takeaways
 
-- LLM self-assessed confidence is NOT calibrated to decision difficulty -- do not use for routing
-- Deterministic routing rules check observable properties: dollar thresholds, gray-zone ranges, missing docs
-- Structured handoff: summary + reasoning + flags + recommendation (reviewer starts from agent's analysis)
-- Priority-order the review queue by risk, not FIFO
-- Clear cases should auto-decide; only genuine edge cases should route to humans
+- Aggregate accuracy (e.g., 96%) masks per-document-type and per-field failures -- always stratify before automating
+- Validate accuracy by document type AND by field before reducing human review
+- Stratified random sampling (N per document type) catches novel error patterns that random sampling misses
+- Calibrate confidence thresholds using labeled validation sets -- model-reported confidence is not the same as actual accuracy
+- High confidence != high accuracy: the model can be confidently wrong on document types it handles poorly
+- The complete workflow: aggregate metric --> document-type breakdown --> field-level breakdown --> stratified sampling --> threshold calibration
 
 ## Exam tips
 
-- **"Agent routes wrong cases to review"** --> replace confidence-based routing with deterministic rules
-- **"Reviewer starts from scratch"** --> add structured handoff context
-- **Wrong answer trap:** "Calibrate confidence scores" -- requires labeled data and ongoing maintenance; deterministic rules are simpler and more reliable
-- **Wrong answer trap:** "Self-reported confidence with threshold" -- same uncalibrated signal at any threshold
-- **The core pattern:** deterministic rules for routing; structured handoff for reviewers; priority queue for ordering
+- **"Overall accuracy is X%, automate everything"** --> the right answer validates by document type and field before automating. Aggregate accuracy alone is a distractor.
+- **"Review only low-confidence extractions"** --> the right answer adds stratified sampling of HIGH-confidence extractions to detect novel error patterns. Confidence-only review misses errors the model is confidently wrong about.
+- **Wrong answer trap: "Increase the confidence threshold"** -- threshold tuning does not improve accuracy of the high-confidence bucket. Stratified sampling does.
+- **Wrong answer trap: "Run on a larger test set"** -- a larger test set may confirm the aggregate without revealing per-type failures. Per-type breakdown is what you need.
+- **Wrong answer trap: "Fixed random 5% sampling"** -- unstratified random sampling may undersample rare document types where errors concentrate. Stratification guarantees every type is represented.
+- **The core pattern:** aggregate metric is the starting point, not the answer. Break it down by type, then by field, then calibrate and sample.
 
 **Next:** Lab 5.6 covers information provenance and multi-source synthesis -- how to preserve the source of every claim through a synthesis pipeline and surface conflicts instead of silently resolving them.
 
@@ -13682,9 +13784,9 @@ paths:
 - Callback: Lab 5.2 deterministic triggers
 
 ## Review Routing
-- Use deterministic rules, NOT model self-confidence
-- Gray-zone cases -> human review
-- Callback: Lab 5.5 routing rules
+- Validate accuracy by document type and field before automating
+- Stratified sampling of high-confidence extractions for ongoing measurement
+- Callback: Lab 5.5 accuracy validation workflow
 ```
 
 ### Step 4: Create the slash command (Domain 3)
@@ -14257,7 +14359,7 @@ if __name__ == "__main__":
   Domain 5 -- Context & Reliability:
     Case facts block (Lab 5.1), tool result trimming
     (Lab 5.1), deterministic escalation (Lab 5.2),
-    routing rules not confidence (Lab 5.5)
+    accuracy validation by document type (Lab 5.5)
 """)
 ```
 
@@ -14311,7 +14413,7 @@ Every part of this build traces back to a specific lab:
 | Case facts block | 5 | Lab 5.1 |
 | Tool result trimming | 5 | Lab 5.1 |
 | Deterministic escalation triggers | 5 | Lab 5.2 |
-| Routing rules (not confidence) | 5 | Lab 5.5 |
+| Accuracy validation by document type | 5 | Lab 5.5 |
 
 ## Try it yourself
 
