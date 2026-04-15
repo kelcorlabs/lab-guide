@@ -47,39 +47,51 @@ Every lab follows this structure:
 
 # SETUP — Do This First
 
-Complete all 3 steps below before starting any labs.
+Complete all 4 steps below before starting any labs.
 
 ## Step 1: Install Claude Code
 
-You need Claude Code — Anthropic's official CLI or IDE extension. Choose one:
+You need Claude Code — Anthropic's official CLI or IDE extension. Pick one:
 
-**Option A — CLI (recommended)**
+**Option A — VS Code (recommended for this course)**
+
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
+3. Search for "Claude Code" by Anthropic
+4. Click Install
+5. Sign in with your Claude Pro, Max, or Team account when prompted
+
+**Option B — CLI**
+
+Open a terminal and run:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-**Option B — IDE Extension**
+Then sign in:
 
-Install the Claude Code extension for VS Code or JetBrains from the marketplace.
+```bash
+claude
+```
 
-Both options require a Claude Pro, Max, or Team subscription.
+Follow the authentication prompts. You need a Claude Pro, Max, or Team subscription.
 
 ## Step 2: Install Python
 
-Many labs include Python scripts that demonstrate the patterns you'll see on the exam. You need Python to run them.
+Labs include Python scripts you'll run to see the exam patterns in action. The scripts use simulated data — no Anthropic API key or `pip install` required.
 
-Check if Python is installed:
+Check if Python is installed. Open a terminal (in VS Code: Terminal > New Terminal) and run:
 
 ```bash
 python --version
 ```
 
-If you see `Python 3.8` or higher, you're good. If not, install from python.org.
-
-The lab scripts use simulated data — no Anthropic API key or `pip install` required.
+If you see `Python 3.8` or higher, move to Step 3. If not, download and install from python.org. On some systems, use `python3` instead of `python`.
 
 ## Step 3: Create your lab workspace
+
+Open a terminal and run this block to create the folder structure for all 31 labs:
 
 ```bash
 mkdir -p ~/claude-architect-labs
@@ -92,24 +104,45 @@ mkdir -p lab-d5-context-reliability
 mkdir -p lab-final-capstone
 ```
 
-Then start Claude Code from inside that directory:
+Then open this folder in VS Code: **File > Open Folder** and select `~/claude-architect-labs`. This is your workspace for the entire course.
+
+## Step 4: Verify everything works
+
+Open the Claude Code panel in VS Code (click the Claude icon in the sidebar) or start it from the terminal:
 
 ```bash
 cd ~/claude-architect-labs
 claude
 ```
 
-This is where you'll do all your lab work.
+Test that Claude Code and Python both work by giving Claude this prompt:
 
-## Troubleshooting — Common Issues
+```
+Create a file called lab-d1-agentic-arch/hello.py with a single print statement, then run it.
+```
 
-1. **Claude Code not connecting**: Inside Claude Code, type `/doctor` to run diagnostics. If Claude Code won't start at all, check that your subscription is active at claude.ai.
+You should see Claude create the file and print the output. If that works, delete `hello.py` and you're ready for Lab 1.1.
 
-2. **`python: command not found`**: Python isn't installed or isn't in your PATH. Install from python.org. On some systems, use `python3` instead of `python`.
+## How labs work
 
-3. **Claude Code not recognizing CLAUDE.md**: Restart Claude Code after creating/modifying CLAUDE.md files. Use `/memory` to verify what's loaded.
+Each lab has a **Reference code** section with a Python script. Here's how to run them:
 
-4. **Labs produce different output than expected**: Claude's responses vary between runs. Focus on the STRUCTURE (stop_reason values, error categories, tool calls) not exact text.
+1. **Copy the code** from the lab's Reference code section (use the Copy button on the code block)
+2. **Create the file** — either paste it into a new file in VS Code, or tell Claude Code: "Create `lab-d1-agentic-arch/basic_loop.py` with this content:" and paste the code
+3. **Run the script** from your terminal: `python lab-d1-agentic-arch/basic_loop.py`
+4. **Read the output** and compare it to the lab's walkthrough steps, which explain what each part of the output means
+
+Some labs also have **Try it** sections with Claude Code prompts. Type these directly into Claude Code to see the concept in action.
+
+## Troubleshooting
+
+1. **Claude Code not connecting**: Type `/doctor` inside Claude Code to run diagnostics. If Claude Code won't start, check that your subscription is active at claude.ai.
+
+2. **`python: command not found`**: Python isn't in your PATH. Install from python.org. On macOS/Linux, try `python3` instead of `python`.
+
+3. **Claude Code not recognizing CLAUDE.md**: Restart Claude Code after creating or modifying CLAUDE.md files. Type `/memory` to verify what's loaded.
+
+4. **Output doesn't match the lab exactly**: Claude's responses vary between runs. Focus on the STRUCTURE (stop_reason values, error categories, tool calls) not exact text.
 
 ---
 
