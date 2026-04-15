@@ -159,6 +159,7 @@ finalContent += `
     <div class="em-card"><div class="em-val">720</div><div class="em-lbl">Pass Score</div></div>
     <div class="em-card" id="etime-card"><div class="em-val">120m</div><div class="em-lbl">Time Limit</div></div>
   </div>
+  <p class="exam-desc" style="font-size:0.82rem;margin-top:1.25rem;color:var(--text-light)">Score 900+ in Exam Mode before scheduling the real CCA Foundations exam. If a domain scores below 80%, re-read those module labs and focus on the <strong>Exam tips</strong> sections.</p>
   <button class="exam-start" onclick="window._exam.start()">Start Exam</button>
 </div>
 

@@ -1,6 +1,8 @@
 ﻿# Claude Certified Architect – Foundations
 # HANDS-ON LAB GUIDE
 
+New here? Click **Setup** in the sidebar to begin, or use the Next button below.
+
 ---
 
 # SETUP
@@ -11,7 +13,7 @@ This is hands-on prep for the Claude Certified Architect — Foundations exam. 3
 
 ## What you need
 
-- **VS Code** with the **Claude Code extension** (search "Claude Code" by Anthropic in Extensions, then sign in)
+- **VS Code** with the **Claude Code extension** (search "Claude Code" by Anthropic in Extensions, then sign in) — required for several labs that involve running Claude Code commands directly, especially Module 3
 - **A Claude Pro, Max, or Team subscription** (required by Claude Code)
 - **Python 3.8 or later** (check with `python --version` — install from python.org if missing)
 - **Basic Python reading ability** (you won't write code from scratch, but you need to follow what the scripts do)
@@ -19,6 +21,20 @@ This is hands-on prep for the Claude Certified Architect — Foundations exam. 3
 > **Windows users:** Lab commands use Unix syntax (`mkdir -p`, `~/`). Use Git Bash, WSL, or VS Code's integrated terminal with Git Bash as the default shell.
 
 All lab scripts use simulated data. No Anthropic API key, no `pip install`, no external packages.
+
+## The 5 domains
+
+Each module maps to one exam domain. Work through them in order — each builds on the previous.
+
+| Module | Exam Domain | Weight |
+|--------|-------------|--------|
+| 1. Agentic Architecture & Orchestration | Domain 1 | 27% |
+| 2. Tool Design & MCP Integration | Domain 2 | 18% |
+| 3. Claude Code Configuration & Workflows | Domain 3 | 20% |
+| 4. Prompt Engineering & Structured Output | Domain 4 | 20% |
+| 5. Context Management & Reliability | Domain 5 | 15% |
+
+After Module 5, a Final Scenario lab integrates all five domains. Then the practice exam.
 
 ## Create your workspace
 
@@ -45,32 +61,14 @@ Click the Claude icon in the VS Code sidebar. Give it this prompt:
 Create a file called lab-d1-agentic-arch/hello.py with a single print statement, then run it.
 ```
 
-If you see print output, setup is done. Delete `hello.py`.
-
-## The 5 domains
-
-Each module maps to one exam domain. Work through them in order — each builds on the previous.
-
-| Module | Exam Domain | Weight |
-|--------|-------------|--------|
-| 1. Agentic Architecture & Orchestration | Domain 1 | 27% |
-| 2. Tool Design & MCP Integration | Domain 2 | 18% |
-| 3. Claude Code Configuration & Workflows | Domain 3 | 20% |
-| 4. Prompt Engineering & Structured Output | Domain 4 | 20% |
-| 5. Context Management & Reliability | Domain 5 | 15% |
-
-After Module 5, a Final Scenario lab integrates all five domains. Then the practice exam.
+If you see print output, setup is done. Right-click `hello.py` in the VS Code Explorer sidebar and select Delete.
 
 ## How to use this guide
 
 1. **Read the labs in order.** Module 1 through 5, then Lab Final. Each lab builds on the previous. Use the Next button at the bottom of each section.
-2. **Run the code.** Each lab has a Reference code section with a Python script. Copy the code block, create the file in your workspace (paste into VS Code or tell Claude Code to create it), and run it: `python lab-d1-agentic-arch/basic_loop.py`. The walkthrough explains the output.
+2. **Run the code.** Each lab has a Reference code section with a Python script. Copy the code block, create a new file in your workspace (right-click the folder in VS Code Explorer > New File > paste), and run it: `python lab-d1-agentic-arch/basic_loop.py`. The walkthrough explains the output.
 3. **Answer the Check Your Understanding questions** at the end of each lab. These mirror the exam format.
-4. **Take the practice exam** when you finish all labs. Start with Study Mode (no timer, explanations after each answer). Then Exam Mode (120 minutes, no feedback until submit). Pass threshold is 720/1000.
-
-## When you're ready for the real exam
-
-Take the practice exam in Exam Mode and score 900 or higher before scheduling the CCA Foundations exam. If a domain scores below 80%, re-read those module labs and focus on the **Exam tips** sections — they catalog the wrong-answer traps.
+4. **Take the practice exam** after Lab Final. The exam section explains the two modes (Study and Exam) and scoring when you get there.
 
 ## Troubleshooting
 
@@ -78,6 +76,10 @@ Take the practice exam in Exam Mode and score 900 or higher before scheduling th
 - **`python: command not found`:** Install from python.org. On macOS/Linux, try `python3`.
 - **CLAUDE.md not loading:** Restart Claude Code after editing CLAUDE.md files. Type `/memory` to check.
 - **Output doesn't match exactly:** Claude varies between runs. Focus on structure (stop_reason, error categories, tool calls), not exact wording.
+
+## Start
+
+Click **Lab 1.1** in the sidebar, or use the Next button below.
 
 ---
 
