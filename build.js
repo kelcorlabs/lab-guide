@@ -539,6 +539,7 @@ const html = `<!DOCTYPE html>
       margin-left: var(--sidebar-width);
       flex: 1;
       min-height: 100vh;
+      transition: margin-left 0.3s ease;
     }
 
     .main {
@@ -1082,6 +1083,7 @@ const html = `<!DOCTYPE html>
       right: 0;
       height: 2px;
       background: var(--border);
+      transition: left 0.3s ease;
       z-index: 200;
     }
 
@@ -1092,9 +1094,9 @@ const html = `<!DOCTYPE html>
       transition: width 0.15s ease;
     }
 
-    /* ─── Mobile ─── */
+    /* ─── Sidebar toggle (all screen sizes) ─── */
     .menu-toggle {
-      display: none;
+      display: block;
       position: fixed;
       top: 0.75rem;
       left: 0.75rem;
@@ -1106,6 +1108,18 @@ const html = `<!DOCTYPE html>
       border-radius: 8px;
       cursor: pointer;
       font-size: 1.1rem;
+      transition: left 0.3s ease;
+    }
+
+    /* Desktop: sidebar open by default, collapses on toggle */
+    .sidebar-collapsed .sidebar { transform: translateX(-100%); }
+    .sidebar-collapsed .main { margin-left: 0; }
+    .sidebar-collapsed .progress-bar { left: 0; }
+    .sidebar-collapsed .menu-toggle { left: 0.75rem; }
+
+    /* When sidebar is open on desktop, shift toggle to right edge of sidebar */
+    body:not(.sidebar-collapsed) .menu-toggle {
+      left: calc(var(--sidebar-width) - 2.75rem);
     }
 
     @media (max-width: 900px) {
@@ -1113,7 +1127,7 @@ const html = `<!DOCTYPE html>
       .sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.08); }
       .main { margin-left: 0; }
       .progress-bar { left: 0; }
-      .menu-toggle { display: block; }
+      .menu-toggle { left: 0.75rem !important; }
       .content { padding: 3rem 1rem 6rem; }
       h1:first-child { font-size: 1.6rem; }
       pre { font-size: 0.8rem; padding: 0.75rem; }
@@ -1627,9 +1641,13 @@ const html = `<!DOCTYPE html>
     // Hide progress bar (not useful in section view)
     document.getElementById('progress').parentElement.style.display = 'none';
 
-    // ── Mobile menu ──
+    // ── Sidebar toggle ──
     document.getElementById('menuToggle').addEventListener('click', () => {
-      document.getElementById('sidebar').classList.toggle('open');
+      if (window.innerWidth <= 900) {
+        document.getElementById('sidebar').classList.toggle('open');
+      } else {
+        document.body.classList.toggle('sidebar-collapsed');
+      }
     });
 
     // Close on outside click (mobile)
