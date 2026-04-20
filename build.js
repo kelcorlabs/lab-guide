@@ -2071,20 +2071,30 @@ const html = `<!DOCTYPE html>
       else section.appendChild(row);
     }
 
-    // ── Accordion behavior: click header opens group AND shows its content section ──
+    // ── Accordion behavior: clicking an open group collapses it; clicking a closed
+    // group expands it and navigates to its first lab (closing other groups). ──
     function toggleGroup(g) {
-      // Close all groups
+      const wasOpen = g.header.classList.contains('open');
+
+      if (wasOpen) {
+        // User clicked an already-open group — collapse it and stop here.
+        g.header.classList.remove('open');
+        g.children.classList.remove('open');
+        g.header.setAttribute('aria-expanded', 'false');
+        return;
+      }
+
+      // Close all other groups so only the clicked one is open.
       groups.forEach(other => {
         other.header.classList.remove('open');
         other.children.classList.remove('open');
         other.header.setAttribute('aria-expanded', 'false');
       });
-      // Open this group
       g.header.classList.add('open');
       g.children.classList.add('open');
       g.header.setAttribute('aria-expanded', 'true');
 
-      // Show this group's content section (use the first link in the group)
+      // Show this group's content section (use the first link in the group).
       const firstLink = g.children.querySelector('a');
       if (firstLink) {
         const id = firstLink.getAttribute('href').substring(1);
