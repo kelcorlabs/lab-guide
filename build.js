@@ -59,7 +59,16 @@ const content = marked.parse(processed);
 // ── Post-process: Add copy buttons, fix IDs ──
 let finalContent = content
   // Merge consecutive lab-meta divs into single container
-  .replace(/(<\/div>\n?<div class="lab-meta">)/g, ' ');
+  .replace(/(<\/div>\n?<div class="lab-meta">)/g, ' ')
+  // Inject stable H1 ids at build time so cross-lab anchor links resolve in
+  // the static HTML (the sidebar JS also sets ids client-side but by then
+  // links have already been clicked). Uses the same slug rule as the client JS.
+  .replace(/<h1>([\s\S]+?)<\/h1>/g, (m, inner) => {
+    const plain = inner.replace(/<[^>]+>/g, '').trim();
+    if (!plain) return m;
+    const slug = plain.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
+    return `<h1 id="${slug}">${inner}</h1>`;
+  });
 
 // ── Inject interactive practice exam section ──
 const examJSON = JSON.stringify(examQuestions);
@@ -1839,8 +1848,8 @@ const html = `<!DOCTYPE html>
       const isLab = /^LAB\\b/i.test(text);
       const isPracticeExam = /^PRACTICE EXAM/i.test(text);
       const isScenario = /^SCENARIO \\d/i.test(text);
-      const isSection = /PRACTICE QUESTIONS|SCENARIO-BASED|EXAM READINESS|EXAM ANSWER|EXAM DAY/i.test(text);
-      const isReference = /ANTI-PATTERNS CHEAT SHEET/i.test(text);
+      const isSection = /PRACTICE QUESTIONS|SCENARIO-BASED|EXAM READINESS|EXAM ANSWER|EXAM DAY|SCENARIO WALKTHROUGHS?/i.test(text);
+      const isReference = /ANTI-PATTERNS CHEAT SHEET|^FAQ\\b/i.test(text);
 
       // Skip non-navigable headings except first (Overview) and reference entries (cheat sheet)
       if (!isModule && !isLab && !isPracticeExam && !isScenario && !isSection && !isReference) {
@@ -1860,14 +1869,18 @@ const html = `<!DOCTYPE html>
         return;
       }
 
-      // Reference entries (e.g., anti-patterns cheat sheet): flat top-level link, not a group
+      // Reference entries (cheat sheet, FAQ, etc.): flat top-level links, not groups
       if (isReference) {
         const li = document.createElement('li');
         li.dataset.navRole = 'reference';
         const a = document.createElement('a');
         a.className = 'nav-lab';
         a.href = '#' + h.id;
-        a.textContent = 'Anti-Patterns Cheat Sheet';
+        let refLabel;
+        if (/ANTI-PATTERNS CHEAT SHEET/i.test(text)) refLabel = 'Anti-Patterns Cheat Sheet';
+        else if (/^FAQ\\b/i.test(text)) refLabel = 'FAQ';
+        else refLabel = text.length > 40 ? text.substring(0, 38) + '\\u2026' : text;
+        a.textContent = refLabel;
         a.dataset.search = text.toLowerCase();
         a.style.fontWeight = '600';
         a.style.paddingLeft = '1rem';
@@ -1958,10 +1971,11 @@ const html = `<!DOCTYPE html>
       }
     });
 
-    // ── Sidebar section dividers: split COURSE (Setup + Modules) from REFERENCE (cheat sheet) from ASSESSMENTS (Scenarios + Practice Exam) ──
+    // ── Sidebar section dividers: Course (modules) → Scenarios (walkthroughs) → Reference (cheat sheet, FAQ) → Assessments (practice exam) ──
     (function insertNavDividers() {
       const firstCourseGroup = groups.find(g => /setup|^module|^\\d+\\./i.test(g.header.textContent.trim()));
-      const firstAssessmentGroup = groups.find(g => /practice exam|scenario/i.test(g.header.textContent.trim()));
+      const firstScenarioGroup = groups.find(g => /scenario walkthrough/i.test(g.header.textContent.trim()));
+      const firstAssessmentGroup = groups.find(g => /practice exam/i.test(g.header.textContent.trim()));
       const firstReferenceItem = navList.querySelector('li[data-nav-role="reference"]');
       function makeDivider(text) {
         const li = document.createElement('li');
@@ -1972,6 +1986,9 @@ const html = `<!DOCTYPE html>
       }
       if (firstCourseGroup) {
         navList.insertBefore(makeDivider('Course'), firstCourseGroup.el);
+      }
+      if (firstScenarioGroup) {
+        navList.insertBefore(makeDivider('Scenarios'), firstScenarioGroup.el);
       }
       if (firstReferenceItem) {
         navList.insertBefore(makeDivider('Reference'), firstReferenceItem);

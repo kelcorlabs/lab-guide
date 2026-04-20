@@ -4442,6 +4442,91 @@ This capstone demonstrates how each domain's pattern applies in an integrated sy
 
 ---
 
+# SCENARIO WALKTHROUGHS
+
+The exam draws 4 of 6 scenarios at random. The Final Capstone above is a worked implementation of Scenario 1 (Customer Support). These narratives frame the other scenarios — what they test, which labs cover them, and the traps that catch exam-takers who studied the labs in isolation without seeing how the patterns combine.
+
+---
+
+# SCENARIO 2: CODE GENERATION WITH CLAUDE CODE
+
+## The setup
+
+Your team uses Claude Code across the software-delivery workflow: refactoring, debugging, generating boilerplate, authoring docs. You need it to behave consistently across the team, integrate with CI/CD, and stay useful across long sessions. The architectural questions are about *configuration* and *workflow selection*, not about the model's reasoning.
+
+## Primary domains tested
+
+- **Domain 3: Claude Code Configuration & Workflows** (dominant)
+- **Domain 5: Context Management & Reliability** (supporting, for longer sessions)
+
+## Key architectural decisions
+
+### 1. Where does each rule belong?
+
+The CLAUDE.md hierarchy is the single most-tested concept in this scenario.
+
+| Rule type | Goes in | Why |
+|---|---|---|
+| Team coding standards, testing conventions | `.claude/CLAUDE.md` (project) | Committed to git, every developer gets it automatically |
+| Verbosity / tone / editor-style preferences | `~/.claude/CLAUDE.md` (user) | Personal, not imposed on the team |
+| Scoped rules (e.g., API directory must use Zod) | Directory-level `CLAUDE.md` or `.claude/rules/` with `paths:` frontmatter | Applies only where relevant |
+| Topic-specific rules (testing, accessibility, etc.) | Individual files in `.claude/rules/` | Avoids monolithic CLAUDE.md merge conflicts |
+
+**Exam trap:** "A new contractor sees different Claude behavior than the existing team." The cause is almost always a rule that lives in a full-time developer's `~/.claude/CLAUDE.md` but should live in `.claude/CLAUDE.md`. The fix is moving the rule, not rewriting the prompt.
+
+See [Lab 3.1](#lab-3-1-claude-md-hierarchy-and-modular-organization), [Lab 3.3](#lab-3-3-path-specific-rules).
+
+### 2. Slash command or skill?
+
+A slash command runs in the current session's context. A Skill runs in a forked sub-context with restricted `allowed-tools`. Use a Skill when the command would otherwise pollute the session with exploration noise, or when you want to restrict what tools Claude can use for that specific operation.
+
+**Exam trap:** "My `/review` command fills the session with file contents so the rest of the conversation gets confused." A Skill with `context: fork` isolates the verbose exploration and returns only the summary.
+
+See [Lab 3.2](#lab-3-2-custom-slash-commands-and-skills).
+
+### 3. Plan mode or direct execution?
+
+Plan mode is for tasks where the *design* is the hard part: multi-file refactors, architectural changes, anything where reviewing the plan first is cheaper than reviewing the diff. Direct execution is for tasks where the design is obvious: single-file fixes, typos, straightforward renames.
+
+**Exam trap:** A question describing a one-line typo fix with plan mode as a distractor answer — plan mode is overkill. Conversely, a multi-file refactor with direct execution as a distractor — direct execution skips the review step that the task deserves.
+
+See [Lab 3.4](#lab-3-4-plan-mode-vs-direct-execution).
+
+### 4. Iterative refinement
+
+When Claude's first attempt is wrong, replacing vague prompts with concrete examples works better than making the prompt longer. Test-driven iteration (write the failing test, then implement) produces more consistent results than free-form iteration. The interview pattern (Claude asks clarifying questions before implementing) beats guessing defaults.
+
+See [Lab 3.5](#lab-3-5-iterative-refinement-techniques).
+
+### 5. CI/CD integration
+
+CI runs need the `-p` flag for non-interactive mode (without it, Claude Code hangs waiting for terminal input). Structured output uses `--output-format json` with `--json-schema` when the pipeline needs to parse findings. **Separate sessions for generation and review** — same-session self-review has confirmation bias; independent review finds issues the generator was blind to.
+
+See [Lab 3.6](#lab-3-6-ci-cd-integration), [Lab 4.6](#lab-4-6-multi-instance-and-multi-pass-review).
+
+### 6. Context across long sessions
+
+Long refactor sessions accumulate verbose tool outputs. Symptoms: Claude starts giving generic answers like "this pattern typically handles X" instead of referencing specific classes it found earlier. Mitigation: `/compact` or a fresh session seeded with a structured summary of prior findings — not a full transcript.
+
+See [Lab 5.1](#lab-5-1-context-management-across-long-interactions), [Lab 1.7](#lab-1-7-session-state-resumption-and-forking).
+
+## What the exam actually tests
+
+- Diagnosing configuration problems from symptoms (not from reading the config)
+- Choosing between commands, skills, and CLAUDE.md rules for a given requirement
+- Matching plan mode vs direct execution to task shape
+- Recognizing session-isolation problems in CI (generator + reviewer in the same session)
+- Recognizing context degradation in long sessions and choosing the right recovery
+
+## Common wrong answers
+
+- "Strengthen the system prompt" when the fix is moving a rule to project-level CLAUDE.md
+- "Restart the session" when the fix is `/memory` to surface loaded rules
+- "Use plan mode everywhere" — overkill for small tasks
+- "Keep the session open indefinitely" — accumulated context degrades answer quality
+
+---
+
 # ANTI-PATTERNS CHEAT SHEET
 
 A consolidated reference across all five domains. Use this in the final week before the exam to drill pattern recognition. Each entry maps to the lab where it is taught in depth.
@@ -4689,5 +4774,77 @@ A consolidated reference across all five domains. Use this in the final week bef
 ---
 
 **How to use this sheet:** In the week before your exam, read one domain per day and quiz yourself on the "Symptom" without looking at the "Fix." If you can recall the fix and cite the pattern, that anti-pattern is locked in. If not, re-read the linked lab.
+
+---
+
+# FAQ
+
+Practical answers for learners using this guide to prepare for the Claude Certified Architect — Foundations exam.
+
+## About the exam
+
+### What is the CCA Foundations exam?
+
+Anthropic's entry-level certification for solution architects who design and build production applications with Claude. It validates practical judgment across the Claude Agent SDK, the Claude API, Claude Code, and the Model Context Protocol (MCP).
+
+### What's the format?
+
+60 multiple-choice questions. Each question has one correct answer and three distractors. Unanswered questions are scored as incorrect. The exam is scenario-based: 4 of 6 scenarios are selected at random, and each scenario frames a set of questions.
+
+### What's the passing score and time limit?
+
+720 out of 1000, scaled. The scaled score adjusts for form-to-form difficulty differences, so you do not literally need 72% correct. On this repo's practice exam, aim for 90%+ in Exam Mode before you schedule the real exam. Time limit is 120 minutes.
+
+### What does the exam cost?
+
+Free at the time of writing.
+
+### Do I need to write code during the exam?
+
+No. You will *read* Python, bash, and JSON fluently — recognizing correct implementations vs anti-patterns in code shown in questions — but you will not write code. Every question is multiple choice.
+
+### How do I register?
+
+[Anthropic's registration page](https://anthropic.skilljar.com/claude-certified-architect-foundations-access-request).
+
+## Using this guide
+
+### What's the intended order?
+
+Work Modules 1 → 5 in order. Each lab is ~20 minutes. After the Final Capstone, take the Practice Exam in Exam Mode. If any domain scores below 80%, re-read those labs and retake the exam.
+
+### Can I skip labs on topics I already know?
+
+The Check-Your-Understanding questions and Anti-pattern blocks are where most exam-relevant details live. A concept you think you understand may have a wrong-answer trap you haven't internalized yet — the labs are short enough that skimming them costs little and catches gaps you didn't know you had.
+
+### How do I know I'm ready?
+
+Three criteria: (1) you complete all 31 labs including the capstone, (2) you score 900+ on the Practice Exam in Exam Mode, and (3) for any domain below 90%, you can close your eyes and recite the two or three hardest anti-patterns without prompting. If all three hold, schedule the exam.
+
+### What if a domain scores low on the practice exam?
+
+Start with the [Anti-Patterns Cheat Sheet](#anti-patterns-cheat-sheet) entries for that domain. Each entry links back to the lab that teaches the pattern. Re-read the lab, redo its Check-Your-Understanding questions, then retry the practice exam. Most domain weaknesses resolve with one focused re-read.
+
+### How long should it take?
+
+Roughly 10–12 hours of focused work across the labs, plus 1–2 hours for the Practice Exam. Most learners spread this across 2–3 weeks.
+
+## About this course
+
+### How does this compare to claudecertifications.com?
+
+The reference site summarizes each domain in 3–4 subsections. This repo maps 1:1 to all 30 official task statements from Anthropic's OG Exam Guide, with worked Python code and Q&A drills for each. Our content is broader and more technically specific; the reference site has some framing tools this repo does not (e.g., narrative walkthroughs for all 6 scenarios — see [Scenario 2](#scenario-2-code-generation-with-claude-code) for one of them here).
+
+### Where does the canonical exam content live?
+
+The [OG Exam Guide](OG Exam Guide) in this repo is Anthropic's official exam guide — the authoritative source. When anything in this course or any external reference contradicts the OG Guide, trust the OG Guide.
+
+### Which Claude model do the code examples use?
+
+`claude-sonnet-4-5`. If you are running the examples yourself against the Anthropic API, update the model ID to the latest Sonnet available at the time.
+
+### Where do I report errors or suggest improvements?
+
+Open an issue on [the GitHub repo](https://github.com/kelcorlabs/lab-guide/issues). Include the lab number and a short description of what's wrong or could be clearer.
 
 
