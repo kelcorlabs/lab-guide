@@ -718,6 +718,90 @@ const html = `<!DOCTYPE html>
     /* When sidebar is collapsed we can still show the TOC comfortably */
     .sidebar-collapsed .page-toc { right: 2rem; }
 
+    /* Mobile/tablet (<1200px): TOC becomes a bottom-sheet drawer */
+    @media (max-width: 1199px) {
+      .page-toc {
+        position: fixed;
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: 60vh;
+        padding: 1.25rem 1.25rem 1.5rem;
+        background: var(--surface-white);
+        border-left: none;
+        border-top: 1px solid var(--border);
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 24px rgba(0,0,0,0.08);
+        transform: translateY(100%);
+        transition: transform 0.25s ease;
+        display: block;
+        z-index: 220;
+      }
+      .page-toc.open { transform: translateY(0); }
+      .page-toc a { padding-left: 0.75rem; margin-left: 0; }
+      .page-toc-handle {
+        width: 36px;
+        height: 4px;
+        background: var(--border-medium);
+        border-radius: 100vw;
+        margin: -0.3rem auto 0.8rem;
+      }
+      .page-toc-close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.9rem;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0.3rem;
+      }
+      .page-toc-close:hover { color: var(--text); }
+    }
+
+    /* Floating TOC trigger button (mobile/tablet only) */
+    .page-toc-fab {
+      display: none;
+      position: fixed;
+      bottom: 2rem;
+      right: 4.5rem;
+      background: var(--text);
+      color: var(--bg);
+      border: none;
+      border-radius: 100vw;
+      padding: 0.55rem 0.9rem;
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: background 0.15s, opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .page-toc-fab.visible { opacity: 1; pointer-events: auto; }
+    .page-toc-fab:hover { background: var(--accent-dim); }
+    @media (max-width: 1199px) {
+      .page-toc-fab.available { display: inline-flex; align-items: center; gap: 0.35rem; }
+    }
+
+    /* TOC scrim (mobile) */
+    .page-toc-scrim {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.25);
+      z-index: 210;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .page-toc-scrim.open { display: block; opacity: 1; }
+
     /* ─── Hero ─── */
     .hero-subtitle {
       font-size: 0.85rem;
@@ -1415,6 +1499,27 @@ const html = `<!DOCTYPE html>
 
     .quiz-explanation strong { color: var(--text); }
 
+    .quiz-reset {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-top: 0.85rem;
+      padding: 0.4rem 0.85rem;
+      background: transparent;
+      border: 1px solid var(--border-medium);
+      border-radius: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .quiz-reset:hover {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--text-light);
+    }
+
     /* ─── Exam Pattern Cards ─── */
     .pattern-card {
       background: var(--surface);
@@ -1632,6 +1737,8 @@ const html = `<!DOCTYPE html>
   </div>
 
   <button class="back-to-top" id="backToTop" aria-label="Back to top">\u2191</button>
+  <button class="page-toc-fab" id="pageTocFab" aria-label="Show on-page navigation" aria-expanded="false">\u2630 On this page</button>
+  <div class="page-toc-scrim" id="pageTocScrim" aria-hidden="true"></div>
 
   <script>
   (function() {
@@ -1963,17 +2070,37 @@ const html = `<!DOCTYPE html>
       sections.push(section);
     });
 
-    // Show first section by default
-    if (sections.length > 0) {
-      sections[0].style.display = '';
+    // Show initial section: honor URL hash if it points to a known section, else first section
+    const initialHash = (location.hash || '').replace(/^#/, '');
+    const initialSection = sections.find(s => s.dataset.sectionId === initialHash) || sections[0];
+    if (initialSection) {
+      sections.forEach(s => { s.style.display = 'none'; });
+      initialSection.style.display = '';
+      if (initialHash && initialHash === initialSection.dataset.sectionId) {
+        history.replaceState({ sectionId: initialHash }, '', '#' + initialHash);
+        // Run full showSection logic (nav bar + TOC + completion) by calling it once — replace avoids pushState
+        setTimeout(() => showSection(initialHash, { replace: true }), 0);
+      }
     }
 
     // Initialise completion UI (sidebar pill + dots) and inject into initial section if it's a lab
     updateCompletionUI();
-    if (sections[0]) injectLabCompletionUI(sections[0]);
+    if (initialSection) injectLabCompletionUI(initialSection);
+
+    // Sync sidebar active state for initial section
+    if (initialSection) activateNavLink(initialSection.dataset.sectionId);
 
     // Build TOC for initial section (after a tick so DOM settles)
-    setTimeout(() => { if (sections[0]) buildPageToc(sections[0]); }, 0);
+    setTimeout(() => { if (initialSection) buildPageToc(initialSection); }, 0);
+
+    // Respond to browser back/forward
+    window.addEventListener('popstate', (e) => {
+      const hash = (location.hash || '').replace(/^#/, '');
+      const target = sections.find(s => s.dataset.sectionId === hash) || sections[0];
+      if (!target) return;
+      showSection(target.dataset.sectionId, { fromPopstate: true });
+      activateNavLink(target.dataset.sectionId);
+    });
 
     const allNavLinks = Array.from(navList.querySelectorAll('a[href^="#"]'));
 
@@ -2006,12 +2133,22 @@ const html = `<!DOCTYPE html>
     }
 
     // Function to show a specific section
-    function showSection(sectionId) {
+    function showSection(sectionId, opts) {
+      opts = opts || {};
       sections.forEach(s => { s.style.display = 'none'; });
       const target = sections.find(s => s.dataset.sectionId === sectionId);
       if (target) {
         target.style.display = '';
         window.scrollTo({ top: 0, behavior: 'instant' });
+
+        // Sync URL hash without triggering native hash-scroll
+        if (!opts.fromPopstate) {
+          const newHash = '#' + sectionId;
+          if (location.hash !== newHash) {
+            if (opts.replace) history.replaceState({ sectionId }, '', newHash);
+            else history.pushState({ sectionId }, '', newHash);
+          }
+        }
 
         // Remove old nav bar
         const oldNav = target.querySelector('.lesson-nav');
@@ -2060,12 +2197,42 @@ const html = `<!DOCTYPE html>
       }
     }
 
-    // ── On-this-page right-rail TOC ──
+    // ── On-this-page TOC (right-rail on wide screens, bottom-sheet drawer on narrow) ──
+    const pageTocFab = document.getElementById('pageTocFab');
+    const pageTocScrim = document.getElementById('pageTocScrim');
     let pageTocEl = null;
     let tocObserver = null;
+
+    function closePageToc() {
+      if (!pageTocEl) return;
+      pageTocEl.classList.remove('open');
+      pageTocScrim.classList.remove('open');
+      pageTocScrim.setAttribute('aria-hidden', 'true');
+      if (pageTocFab) pageTocFab.setAttribute('aria-expanded', 'false');
+    }
+    function openPageToc() {
+      if (!pageTocEl) return;
+      pageTocEl.classList.add('open');
+      pageTocScrim.classList.add('open');
+      pageTocScrim.setAttribute('aria-hidden', 'false');
+      if (pageTocFab) pageTocFab.setAttribute('aria-expanded', 'true');
+    }
+    if (pageTocFab) {
+      pageTocFab.addEventListener('click', () => {
+        if (pageTocEl && pageTocEl.classList.contains('open')) closePageToc();
+        else openPageToc();
+      });
+    }
+    if (pageTocScrim) pageTocScrim.addEventListener('click', closePageToc);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pageTocEl && pageTocEl.classList.contains('open')) closePageToc();
+    });
+
     function buildPageToc(section) {
       if (pageTocEl) { pageTocEl.remove(); pageTocEl = null; }
       if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+      if (pageTocFab) pageTocFab.classList.remove('available');
+      closePageToc();
 
       const h2s = Array.from(section.querySelectorAll('h2'));
       if (h2s.length < 2) return; // not worth showing for short sections
@@ -2073,9 +2240,15 @@ const html = `<!DOCTYPE html>
       const toc = document.createElement('aside');
       toc.className = 'page-toc';
       toc.setAttribute('aria-label', 'On this page');
-      toc.innerHTML = '<div class="page-toc-label">On this page</div><ul class="page-toc-list" id="pageTocList"></ul>';
+      toc.innerHTML =
+        '<div class="page-toc-handle" aria-hidden="true"></div>' +
+        '<button type="button" class="page-toc-close" aria-label="Close on-page navigation">\\u00d7</button>' +
+        '<div class="page-toc-label">On this page</div>' +
+        '<ul class="page-toc-list" id="pageTocList"></ul>';
       document.body.appendChild(toc);
       pageTocEl = toc;
+
+      toc.querySelector('.page-toc-close').addEventListener('click', closePageToc);
 
       const list = toc.querySelector('#pageTocList');
       const tocLinks = [];
@@ -2094,11 +2267,16 @@ const html = `<!DOCTYPE html>
           e.preventDefault();
           const el = document.getElementById(h2.id);
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // On mobile, close drawer after selection
+          if (window.innerWidth < 1200) closePageToc();
         });
         li.appendChild(a);
         list.appendChild(li);
         tocLinks.push({ a, h2 });
       });
+
+      // Make FAB available now that we have a TOC to show
+      if (pageTocFab) pageTocFab.classList.add('available');
 
       // Scroll-spy: observe which H2 is in view
       if ('IntersectionObserver' in window) {
@@ -2336,6 +2514,10 @@ const html = `<!DOCTYPE html>
 
             // Show explanation
             card.querySelector('.quiz-explanation').style.display = 'block';
+
+            // Show reset affordance
+            const resetBtn = card.querySelector('.quiz-reset');
+            if (resetBtn) resetBtn.style.display = '';
           });
 
           choiceBox.appendChild(btn);
@@ -2355,6 +2537,25 @@ const html = `<!DOCTYPE html>
         if (q.answer) expl.innerHTML = q.answer.innerHTML;
         card.appendChild(expl);
 
+        // Reset button (hidden until answered)
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'quiz-reset';
+        resetBtn.textContent = '\\u21bb Try again';
+        resetBtn.style.display = 'none';
+        resetBtn.addEventListener('click', () => {
+          card.classList.remove('quiz-answered');
+          choiceBox.querySelectorAll('.quiz-choice').forEach(c => {
+            c.classList.remove('correct', 'incorrect');
+          });
+          res.style.display = 'none';
+          res.className = 'quiz-result';
+          res.textContent = '';
+          expl.style.display = 'none';
+          resetBtn.style.display = 'none';
+        });
+        card.appendChild(resetBtn);
+
         // Replace originals
         q.stem.parentNode.insertBefore(card, q.stem);
         q.all.forEach(e => e.remove());
@@ -2366,9 +2567,11 @@ const html = `<!DOCTYPE html>
       });
     });
 
-    // ── Back to top on scroll ──
+    // ── Back to top + TOC FAB on scroll ──
     window.addEventListener('scroll', () => {
-      document.getElementById('backToTop').classList.toggle('visible', window.scrollY > 600);
+      const scrolled = window.scrollY > 600;
+      document.getElementById('backToTop').classList.toggle('visible', scrolled);
+      if (pageTocFab) pageTocFab.classList.toggle('visible', scrolled);
     }, { passive: true });
 
     document.getElementById('backToTop').addEventListener('click', () => {
