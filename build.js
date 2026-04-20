@@ -47,8 +47,8 @@ let processed = markdown
   .replace(/^# (Covers all .+)$/gm, '<p class="subtitle">$1</p>')
   // "Model: claude-sonnet..." subtitle
   .replace(/^# (Model: .+)$/gm, '<p class="subtitle model-tag">$1</p>')
-  // "HANDS-ON LAB GUIDE" → subtitle (not a separate H1)
-  .replace(/^# (HANDS-ON LAB GUIDE.+)$/gm, '<p class="hero-subtitle">$1</p>')
+  // "HANDS-ON LAB GUIDE" or "STUDY GUIDE" → subtitle (not a separate H1)
+  .replace(/^# (HANDS-ON LAB GUIDE.+|STUDY GUIDE.*)$/gm, '<p class="hero-subtitle">$1</p>')
   // "Powered by Claude Code" → subtitle (not a separate H1)
   .replace(/^# (Powered by .+)$/gm, '<p class="subtitle">$1</p>')
   // Domain 5 — Task Statement 5.x → combined patterns
@@ -108,12 +108,20 @@ finalContent += `
 #exam-app .eq-nav button { border: 1px solid var(--border-medium); border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.85rem; font-family: var(--font-sans); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.15s; }
 #exam-app .eq-nav button:hover { background: var(--surface-raised); }
 #exam-app .eq-nav button:disabled { opacity: 0.35; cursor: default; }
-#exam-app .eq-revlink { display: block; text-align: center; margin-top: 1rem; color: var(--text-muted); text-decoration: underline; cursor: pointer; font-size: 0.85rem; }
+#exam-app .eq-nav-mid { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+#exam-app .ebtn-flag.eflagged { background: #fceee9; color: var(--red); border-color: var(--red); }
+#exam-app .ebtn-jump { color: var(--brand); border-color: var(--brand); }
+#exam-app .ebtn-jump:hover { background: #fdf1ea; }
+#exam-app .eq-kb-hint { margin-top: 0.75rem; text-align: center; font-size: 0.7rem; color: var(--text-light); font-family: var(--font-sans); }
+#exam-app .eq-kb-hint kbd { font-family: var(--font-mono); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 3px; padding: 0.05rem 0.3rem; font-size: 0.7rem; color: var(--text-muted); }
+#exam-app .egrid-cell.eflagged { position: relative; }
+#exam-app .egrid-cell.eflagged::after { content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+#exam-app .el-flag { background: var(--bg); border: 1px solid var(--red); position: relative; }
+#exam-app .el-flag::after { content: ""; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--red); }
 #exam-app .egrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; margin: 1rem 0; }
 #exam-app .egrid-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s; }
 #exam-app .egrid-cell:hover { transform: scale(1.1); }
 #exam-app .egrid-cell.eans { background: #eef4f9; color: var(--blue); border-color: var(--blue); }
-#exam-app .egrid-cell.eflag { background: #f5f0e6; color: var(--yellow); border-color: var(--yellow); }
 #exam-app .egrid-cell.eunans { background: var(--surface-raised); color: var(--text-light); }
 #exam-app .egrid-cell.eok { background: #eef3e8; color: var(--green); border-color: var(--green); }
 #exam-app .egrid-cell.eko { background: #fceee9; color: var(--red); border-color: var(--red); }
@@ -121,7 +129,6 @@ finalContent += `
 #exam-app .egrid-legend span { display: flex; align-items: center; gap: 0.3rem; }
 #exam-app .egrid-legend .el-dot { width: 10px; height: 10px; border-radius: 3px; }
 #exam-app .el-ans { background: #eef4f9; border: 1px solid var(--blue); }
-#exam-app .el-flag { background: #f5f0e6; border: 1px solid var(--yellow); }
 #exam-app .el-unans { background: var(--surface-raised); border: 1px solid var(--text-light); }
 #exam-app .el-ok { background: #eef3e8; border: 1px solid var(--green); }
 #exam-app .el-ko { background: #fceee9; border: 1px solid var(--red); }
@@ -172,15 +179,18 @@ finalContent += `
   <div id="eqexpl" class="eq-expl" style="display:none"></div>
   <div class="eq-nav">
     <button id="ebtn-prev" onclick="window._exam.prev()">&#8592; Previous</button>
-    <button id="ebtn-flag" onclick="window._exam.flag()">&#9873; Flag</button>
+    <div class="eq-nav-mid">
+      <button id="ebtn-flag" class="ebtn-flag" onclick="window._exam.toggleFlag()" aria-pressed="false">\u2691 Flag for review</button>
+      <button id="ebtn-jump" class="ebtn-jump" onclick="window._exam.jumpNextUnanswered()" style="display:none">Jump to next unanswered &#8594;</button>
+    </div>
     <button id="ebtn-next" onclick="window._exam.next()">Next &#8594;</button>
   </div>
-  <div class="eq-revlink" onclick="window._exam.showReview()">Review all questions</div>
+  <div class="eq-kb-hint">Keys: <kbd>A</kbd>\u2013<kbd>D</kbd> select \u00b7 <kbd>\u2190</kbd>/<kbd>\u2192</kbd> navigate \u00b7 <kbd>F</kbd> flag</div>
 </div>
 
 <div id="exam-review" class="exam-screen">
   <h2 style="text-transform:none;font-size:1.1rem;color:var(--text);letter-spacing:0">Review Questions</h2>
-  <div class="egrid-legend"><span><span class="el-dot el-ans"></span>Answered</span><span><span class="el-dot el-flag"></span>Flagged</span><span><span class="el-dot el-unans"></span>Unanswered</span></div>
+  <div class="egrid-legend"><span><span class="el-dot el-ans"></span>Answered</span><span><span class="el-dot el-unans"></span>Unanswered</span><span><span class="el-dot el-flag"></span>Flagged</span></div>
   <div class="egrid" id="erev-grid"></div>
   <div class="ewarn-txt" id="ewarn"></div>
   <div class="esubmit">
@@ -216,15 +226,18 @@ function setMode(m){mode=m;document.getElementById("ebtn-exam").classList.toggle
 function isVisible(){var el=document.getElementById("exam-app");if(!el)return false;var sec=el.closest(".content-section");return sec&&sec.style.display!=="none";}
 function startTimer(){var end=startT+120*60*1000;tInt=setInterval(function(){if(!isVisible()){if(!pausedRemaining){pausedRemaining=end-Date.now();}return;}if(pausedRemaining){end=Date.now()+pausedRemaining;pausedRemaining=null;}var rem=end-Date.now();if(rem<=0){clearInterval(tInt);submitExam();return;}var m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);var el=document.getElementById("etimer");el.textContent=m+":"+(s<10?"0":"")+s;el.classList.toggle("ewarn",rem<300000);},500);}
 function start(){ans={};flags={};cur=0;submitted=false;endT=null;pausedRemaining=null;startT=Date.now();if(mode==="exam")startTimer();scr("exam-question");renderQ();}
-function renderQ(){var q=Q[cur];document.getElementById("eqnum").textContent="Question "+(cur+1)+" of 60";document.getElementById("eqdom").textContent=q.domain_code+" \\u2014 "+(DOMS[q.domain_code]||q.domain_name);document.getElementById("eqtext").textContent=q.question;document.getElementById("eprog").style.width=((cur+1)/60*100)+"%";document.getElementById("etimer").style.display=mode==="exam"&&!submitted?"block":"none";document.getElementById("ebtn-prev").disabled=cur===0;document.getElementById("ebtn-flag").innerHTML=flags[cur]?"&#9873; Unflag":"&#9873; Flag";
+function toggleFlag(){if(submitted&&mode==="exam")return;flags[cur]=!flags[cur];renderQ();}
+function jumpNextUnanswered(){for(var i=1;i<=60;i++){var idx=(cur+i)%60;if(!ans[idx]){cur=idx;renderQ();return;}}}
+function renderQ(){var q=Q[cur];document.getElementById("eqnum").textContent="Question "+(cur+1)+" of 60";document.getElementById("eqdom").textContent=q.domain_code+" \\u2014 "+(DOMS[q.domain_code]||q.domain_name);document.getElementById("eqtext").textContent=q.question;document.getElementById("eprog").style.width=((cur+1)/60*100)+"%";document.getElementById("etimer").style.display=mode==="exam"&&!submitted?"block":"none";document.getElementById("ebtn-prev").disabled=cur===0;var nb=document.getElementById("ebtn-next");if(cur===59&&!submitted){nb.innerHTML="Review &amp; Submit &#8594;";nb.disabled=false;}else{nb.innerHTML="Next &#8594;";nb.disabled=cur===59;}
+var fb=document.getElementById("ebtn-flag");if(fb){fb.classList.toggle("eflagged",!!flags[cur]);fb.setAttribute("aria-pressed",flags[cur]?"true":"false");fb.innerHTML=(flags[cur]?"\\u2691 Flagged":"\\u2691 Flag for review");fb.style.display=submitted?"none":"";}
+var jb=document.getElementById("ebtn-jump");if(jb){var anyUnans=false;for(var i=0;i<60;i++){if(!ans[i]){anyUnans=true;break;}}jb.style.display=(anyUnans&&!submitted)?"":"none";}
 var ul=document.getElementById("eqchoices");ul.innerHTML="";["A","B","C","D"].forEach(function(L){var li=document.createElement("li");li.className="eq-choice";li.setAttribute("tabindex","0");li.setAttribute("role","radio");li.innerHTML='<span class="eq-letter">'+L+")</span> "+esc(q.choices[L]);if(ans[cur]===L)li.classList.add("esel");if(mode==="study"&&ans[cur]){li.classList.remove("esel");if(L===q.correct_answer)li.classList.add("ecorrect");else if(L===ans[cur])li.classList.add("ewrong");}if(mode==="exam"&&submitted){li.classList.remove("esel");if(L===q.correct_answer)li.classList.add("ecorrect");else if(L===ans[cur]&&L!==q.correct_answer)li.classList.add("ewrong");}li.onclick=function(){selAns(L);};li.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();selAns(L);}};ul.appendChild(li);});
 var ex=document.getElementById("eqexpl");if((mode==="study"&&ans[cur])||(mode==="exam"&&submitted)){ex.innerHTML=fmt(q.explanation)+'<span class="eq-labref">Source: '+esc(q.lab_reference)+"</span>";ex.style.display="block";}else{ex.style.display="none";}}
 function selAns(L){if(submitted&&mode==="exam")return;if(mode==="study"&&ans[cur])return;ans[cur]=L;renderQ();}
 function prev(){if(cur>0){cur--;renderQ();}}
-function next(){if(cur<59){cur++;renderQ();}}
-function flagQ(){flags[cur]=!flags[cur];renderQ();}
+function next(){if(cur<59){cur++;renderQ();}else if(!submitted){showReview();}}
 function goQ(i){cur=i;scr("exam-question");renderQ();}
-function showReview(){var g=document.getElementById("erev-grid");g.innerHTML="";for(var i=0;i<60;i++){var c=document.createElement("div");c.className="egrid-cell";c.textContent=i+1;if(flags[i])c.classList.add("eflag");else if(ans[i])c.classList.add("eans");else c.classList.add("eunans");c.onclick=(function(idx){return function(){goQ(idx);};})(i);c.setAttribute("tabindex","0");g.appendChild(c);}var u=60-Object.keys(ans).length;document.getElementById("ewarn").textContent=u>0?u+" question(s) unanswered":"";scr("exam-review");}
+function showReview(){var g=document.getElementById("erev-grid");g.innerHTML="";for(var i=0;i<60;i++){var c=document.createElement("div");c.className="egrid-cell";c.textContent=i+1;if(ans[i])c.classList.add("eans");else c.classList.add("eunans");if(flags[i])c.classList.add("eflagged");c.onclick=(function(idx){return function(){goQ(idx);};})(i);c.setAttribute("tabindex","0");g.appendChild(c);}var u=60-Object.keys(ans).length;var f=Object.keys(flags).filter(function(k){return flags[k];}).length;var msg=[];if(u>0)msg.push(u+" unanswered");if(f>0)msg.push(f+" flagged");document.getElementById("ewarn").textContent=msg.join(" \\u00b7 ");scr("exam-review");}
 function confirmSubmit(){var u=60-Object.keys(ans).length;if(confirm(u>0?"You have "+u+" unanswered question(s). Submit anyway?":"Submit your exam?"))submitExam();}
 function submitExam(){if(tInt)clearInterval(tInt);endT=Date.now();submitted=true;showResults();}
 function showResults(){var correct=0;Q.forEach(function(q,i){if(ans[i]===q.correct_answer)correct++;});var pct=Math.round(correct/60*100),scaled=Math.round(correct/60*1000),passed=scaled>=720;var el=Math.round((endT-startT)/1000),em=Math.floor(el/60),es=el%60;
@@ -236,8 +249,8 @@ var g=document.getElementById("eres-grid");g.innerHTML="";for(var i=0;i<60;i++){
 document.getElementById("edetail").style.display="none";scr("exam-results");}
 function showDetail(i){var q=Q[i],p=document.getElementById("edetail");var h='<div class="eq-header"><span class="eq-num">Question '+(i+1)+'</span><span class="eq-badge">'+q.domain_code+"</span></div>";h+='<div class="eq-text">'+esc(q.question)+"</div>";h+='<ul class="eq-choices" style="pointer-events:none">';["A","B","C","D"].forEach(function(L){var cls="eq-choice";if(L===q.correct_answer)cls+=" ecorrect";else if(L===ans[i]&&L!==q.correct_answer)cls+=" ewrong";h+='<li class="'+cls+'"><span class="eq-letter">'+L+")</span> "+esc(q.choices[L])+"</li>";});h+="</ul>";if(ans[i]&&ans[i]!==q.correct_answer)h+='<p style="color:var(--red);font-size:0.8rem;margin-bottom:0.5rem">Your answer: '+ans[i]+"</p>";h+='<div class="eq-expl">'+fmt(q.explanation)+'<span class="eq-labref">Source: '+esc(q.lab_reference)+"</span></div>";p.innerHTML=h;p.style.display="block";p.scrollIntoView({behavior:"smooth"});}
 function restart(){if(tInt)clearInterval(tInt);pausedRemaining=null;scr("exam-welcome");}
-document.addEventListener("keydown",function(e){if(!isVisible())return;var qs=document.getElementById("exam-question");if(qs&&qs.classList.contains("exam-active")&&!submitted){var k=e.key.toUpperCase();if(["A","B","C","D"].indexOf(k)>=0){selAns(k);e.preventDefault();}if(e.key==="ArrowRight"||e.key==="ArrowDown"){next();e.preventDefault();}if(e.key==="ArrowLeft"||e.key==="ArrowUp"){prev();e.preventDefault();}if(k==="F"&&!e.ctrlKey&&!e.metaKey){flagQ();e.preventDefault();}}});
-window._exam={setMode:setMode,start:start,prev:prev,next:next,flag:flagQ,goQ:goQ,showReview:showReview,confirmSubmit:confirmSubmit,restart:restart,get cur(){return cur;}};
+document.addEventListener("keydown",function(e){if(!isVisible())return;var qs=document.getElementById("exam-question");if(qs&&qs.classList.contains("exam-active")&&!submitted){var k=e.key.toUpperCase();if(["A","B","C","D"].indexOf(k)>=0){selAns(k);e.preventDefault();}if(e.key==="ArrowRight"||e.key==="ArrowDown"){next();e.preventDefault();}if(e.key==="ArrowLeft"||e.key==="ArrowUp"){prev();e.preventDefault();}if(k==="F"){toggleFlag();e.preventDefault();}}});
+window._exam={setMode:setMode,start:start,prev:prev,next:next,goQ:goQ,showReview:showReview,confirmSubmit:confirmSubmit,restart:restart,toggleFlag:toggleFlag,jumpNextUnanswered:jumpNextUnanswered,get cur(){return cur;}};
 })();
 </script>
 `;
@@ -248,7 +261,7 @@ const html = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Certified Architect — Hands-on Lab Guide</title>
+  <title>Claude Certified Architect — Foundations Study Guide</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -371,37 +384,6 @@ const html = `<!DOCTYPE html>
       font-family: var(--font-sans);
     }
 
-    /* ─── Sidebar Progress Bar ─── */
-    .sidebar-progress {
-      padding: 0.75rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .sidebar-progress-label {
-      font-size: 0.68rem;
-      font-family: var(--font-sans);
-      color: var(--text-muted);
-      margin-bottom: 0.35rem;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .sidebar-progress-bar {
-      height: 4px;
-      background: var(--border);
-      border-radius: 100vw;
-      overflow: hidden;
-    }
-
-    .sidebar-progress-fill {
-      height: 100%;
-      background: var(--text);
-      border-radius: 100vw;
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
     /* Search */
     .search-box {
       padding: 0.75rem 1rem;
@@ -433,6 +415,23 @@ const html = `<!DOCTYPE html>
 
     .sidebar nav ul { list-style: none; }
 
+    /* Sidebar section divider (non-clickable, groups accordions) */
+    .nav-divider {
+      padding: 1rem 1.25rem 0.35rem;
+      font-family: var(--font-sans);
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-light);
+      border-top: 1px solid var(--border);
+      margin-top: 0.25rem;
+    }
+    .nav-divider:first-child {
+      border-top: none;
+      margin-top: 0;
+    }
+
     /* ─── Accordion Groups ─── */
     .nav-group { border-bottom: 1px solid var(--border); }
     .nav-group:last-child { border-bottom: none; }
@@ -460,10 +459,11 @@ const html = `<!DOCTYPE html>
     }
 
     .nav-group-header .nav-chevron {
-      font-size: 0.5rem;
+      font-size: 0.7rem;
       color: var(--text-light);
       transition: transform 0.2s ease;
       flex-shrink: 0;
+      line-height: 1;
     }
 
     .nav-group-header.open .nav-chevron {
@@ -521,6 +521,33 @@ const html = `<!DOCTYPE html>
       border-left-color: var(--text);
     }
 
+    .nav-lab:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: -2px;
+      background: var(--surface-raised);
+    }
+    .nav-group-header:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: -2px;
+    }
+
+    /* Skip to content link (keyboard-only, visible on focus) */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0.5rem;
+      z-index: 1000;
+      background: var(--text);
+      color: var(--bg);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      text-decoration: none;
+      transition: top 0.15s;
+    }
+    .skip-link:focus { top: 0.5rem; outline: 2px solid var(--brand); outline-offset: 2px; }
+
     .nav-dot {
       width: 5px;
       height: 5px;
@@ -551,7 +578,62 @@ const html = `<!DOCTYPE html>
       max-width: 720px;
       margin: 0 auto;
       padding: 2.5rem 2.5rem 6rem;
+      position: relative;
     }
+
+    /* ─── On-this-page sub-TOC (right rail) ─── */
+    .page-toc {
+      position: fixed;
+      top: 2.5rem;
+      right: 2rem;
+      width: 220px;
+      max-height: calc(100vh - 5rem);
+      overflow-y: auto;
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      display: none;
+      padding-left: 0.9rem;
+      border-left: 1px solid var(--border);
+      z-index: 50;
+    }
+    .page-toc-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-light);
+      margin-bottom: 0.55rem;
+    }
+    .page-toc-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .page-toc a {
+      display: block;
+      padding: 0.3rem 0;
+      color: var(--text-muted);
+      text-decoration: none;
+      line-height: 1.35;
+      border-left: 2px solid transparent;
+      padding-left: 0.65rem;
+      margin-left: -0.9rem;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .page-toc a:hover { color: var(--text); }
+    .page-toc a.active {
+      color: var(--text);
+      border-left-color: var(--text);
+      font-weight: 600;
+    }
+    @media (min-width: 1200px) {
+      .page-toc { display: block; }
+    }
+    /* When sidebar is collapsed we can still show the TOC comfortably */
+    .sidebar-collapsed .page-toc { right: 2rem; }
 
     /* ─── Hero ─── */
     .hero-subtitle {
@@ -581,27 +663,6 @@ const html = `<!DOCTYPE html>
       color: var(--text-muted);
       margin: 0.5rem 0;
       border: 1px solid var(--border);
-    }
-
-    /* ─── Course Stats Bar ─── */
-    .course-stats {
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      padding: 1rem 0;
-      margin: 1rem 0;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      font-family: var(--font-sans);
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      flex-wrap: wrap;
-    }
-
-    .course-stats .stat-num {
-      font-weight: 700;
-      color: var(--brand);
-      margin-right: 0.25rem;
     }
 
     /* ─── Get Started / Share Buttons ─── */
@@ -656,16 +717,28 @@ const html = `<!DOCTYPE html>
       display: flex;
       flex-wrap: wrap;
       gap: 0.4rem;
-      margin: 0.25rem 0 1rem;
+      align-items: center;
+      margin: 0.6rem 0 1.1rem;
+      padding-bottom: 1.1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    /* When multiple lab-meta divs sit in a row after H1, remove extra bottom borders/margins */
+    .lab-meta + .lab-meta {
+      margin-top: -0.8rem;
+      padding-bottom: 1.1rem;
+      border-top: none;
     }
 
     .badge {
-      display: inline-block;
-      padding: 0.2rem 0.55rem;
-      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0.22rem 0.6rem;
+      border-radius: 100vw;
       font-size: 0.72rem;
       font-weight: 500;
       font-family: var(--font-sans);
+      line-height: 1.2;
+      letter-spacing: 0.005em;
     }
 
     .badge-domain {
@@ -760,28 +833,36 @@ const html = `<!DOCTYPE html>
     /* ─── Typography ─── */
     h1 {
       font-family: var(--font-serif);
-      font-size: 1.75rem;
+      font-size: 1.9rem;
       font-weight: 600;
       color: var(--text);
-      margin: 2rem 0 0.75rem;
+      margin: 2rem 0 0.5rem;
       padding-bottom: 0;
       border-bottom: none;
-      letter-spacing: -0.025em;
+      letter-spacing: -0.028em;
       scroll-margin-top: 1rem;
-      line-height: 1.2;
+      line-height: 1.15;
     }
 
     h1:first-child {
       margin-top: 0;
-      font-size: 2.1rem;
-      letter-spacing: -0.03em;
+      font-size: 2.35rem;
+      letter-spacing: -0.032em;
+    }
+
+    /* First paragraph after H1 acts as a muted deck/lead */
+    h1 + p {
+      font-size: 1.08rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-top: 0.2rem;
     }
 
     .content > h1 { position: relative; }
 
     h2 {
       font-family: var(--font-sans);
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -791,6 +872,38 @@ const html = `<!DOCTYPE html>
       border-bottom: none;
       scroll-margin-top: 1rem;
     }
+
+    /* High-signal section headings: promote to serif and add accent bar */
+    h2.h2-signal {
+      font-family: var(--font-serif);
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: -0.015em;
+      margin: 2.75rem 0 0.9rem;
+      padding: 0.1rem 0 0.1rem 0.85rem;
+      border-left: 3px solid var(--border-medium);
+      line-height: 1.25;
+    }
+    h2.h2-signal .h2-kicker {
+      display: block;
+      font-family: var(--font-sans);
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-light);
+      margin-bottom: 0.2rem;
+    }
+    h2.h2-signal.h2-exam-tips { border-left-color: var(--brand); }
+    h2.h2-signal.h2-exam-tips .h2-kicker { color: var(--brand); }
+    h2.h2-signal.h2-check { border-left-color: var(--blue); }
+    h2.h2-signal.h2-check .h2-kicker { color: var(--blue); }
+    h2.h2-signal.h2-takeaways { border-left-color: var(--green); }
+    h2.h2-signal.h2-takeaways .h2-kicker { color: var(--green); }
+    h2.h2-signal.h2-exam-tests { border-left-color: var(--purple); }
+    h2.h2-signal.h2-exam-tests .h2-kicker { color: var(--purple); }
 
     h3 {
       font-family: var(--font-sans);
@@ -899,6 +1012,94 @@ const html = `<!DOCTYPE html>
     .copy-btn.copied {
       color: var(--green);
       border-color: var(--green);
+    }
+
+    /* ─── Collapsible long code blocks ─── */
+    .code-wrap.code-long pre {
+      max-height: 28rem;
+      overflow-y: hidden;
+      position: relative;
+    }
+    .code-wrap.code-long.code-expanded pre {
+      max-height: none;
+      overflow-y: visible;
+    }
+    .code-wrap.code-long pre::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 4rem;
+      background: linear-gradient(180deg, transparent, var(--code-bg));
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .code-wrap.code-long.code-expanded pre::after { opacity: 0; }
+    .code-wrap.code-anti.code-long pre::after { background: linear-gradient(180deg, transparent, #fdf6f3); }
+    .code-wrap.code-correct.code-long pre::after { background: linear-gradient(180deg, transparent, #f6f9f2); }
+    .code-wrap.code-long .code-expand {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-top: none;
+      background: var(--surface);
+      color: var(--text-muted);
+      padding: 0.45rem;
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      cursor: pointer;
+      border-radius: 0 0 8px 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .code-wrap.code-long .code-expand:hover {
+      background: var(--surface-raised);
+      color: var(--text);
+    }
+    .code-wrap.code-long.code-expanded .code-expand::before { content: "Collapse"; }
+    .code-wrap.code-long:not(.code-expanded) .code-expand::before { content: attr(data-show-label); }
+
+    /* ─── Anti-pattern / correct-pattern code blocks ─── */
+    .code-wrap { margin: 1rem 0; }
+    .code-wrap .code-header { margin-top: 0; }
+    .code-wrap pre { margin-top: 0; margin-bottom: 0; }
+
+    .code-wrap.code-anti .code-header {
+      background: #fceee9;
+      border-color: #f0d6cd;
+      color: var(--red);
+    }
+    .code-wrap.code-anti .code-lang { color: var(--red); }
+    .code-wrap.code-anti pre {
+      border-color: #f0d6cd;
+      border-left: 3px solid var(--red);
+      background: #fdf6f3;
+    }
+    .code-wrap.code-anti .code-header::before {
+      content: "\u2717";
+      color: var(--red);
+      font-weight: 700;
+      margin-right: 0.4rem;
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+
+    .code-wrap.code-correct .code-header {
+      background: #eef3e8;
+      border-color: #d7e0cc;
+      color: var(--green);
+    }
+    .code-wrap.code-correct .code-lang { color: var(--green); }
+    .code-wrap.code-correct pre {
+      border-color: #d7e0cc;
+      border-left: 3px solid var(--green);
+      background: #f6f9f2;
+    }
+    .code-wrap.code-correct .code-header::before {
+      content: "\u2713";
+      color: var(--green);
+      font-weight: 700;
+      margin-right: 0.4rem;
+      font-size: 0.85rem;
+      line-height: 1;
     }
 
     code {
@@ -1010,6 +1211,127 @@ const html = `<!DOCTYPE html>
       margin-top: 0.75rem;
     }
 
+    /* ─── Interactive Quiz Cards ─── */
+    .quiz-card {
+      background: var(--surface-white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .quiz-card + .quiz-card { margin-top: 1rem; }
+
+    .quiz-stem {
+      font-family: var(--font-serif);
+      font-size: 1rem;
+      line-height: 1.7;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    .quiz-stem strong:first-child {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 0.35rem;
+    }
+
+    .quiz-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .quiz-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: var(--font-serif);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--text);
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .quiz-choice:hover:not(.correct):not(.incorrect) {
+      border-color: var(--text-light);
+      background: var(--surface-raised);
+    }
+
+    .quiz-choice .quiz-letter {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      width: 1.5rem;
+      padding-top: 0.05rem;
+    }
+
+    .quiz-choice.correct {
+      border-color: var(--green);
+      background: #eef3e8;
+      cursor: default;
+    }
+
+    .quiz-choice.correct .quiz-letter { color: var(--green); }
+
+    .quiz-choice.incorrect {
+      border-color: var(--red);
+      background: #fceee9;
+      cursor: default;
+    }
+
+    .quiz-choice.incorrect .quiz-letter { color: var(--red); }
+
+    .quiz-answered .quiz-choice:not(.correct):not(.incorrect) {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .quiz-result {
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      margin: 0.75rem 0;
+      text-align: center;
+    }
+
+    .quiz-result.quiz-correct {
+      background: #eef3e8;
+      color: var(--green);
+    }
+
+    .quiz-result.quiz-incorrect {
+      background: #fceee9;
+      color: var(--red);
+    }
+
+    .quiz-explanation {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--text);
+      border-left: 3px solid var(--green);
+    }
+
+    .quiz-explanation strong { color: var(--text); }
+
     /* ─── Exam Pattern Cards ─── */
     .pattern-card {
       background: var(--surface);
@@ -1076,25 +1398,6 @@ const html = `<!DOCTYPE html>
       margin-bottom: 0.1rem;
     }
 
-    /* ─── Progress Bar ─── */
-    .progress-bar {
-      position: fixed;
-      top: 0;
-      left: var(--sidebar-width);
-      right: 0;
-      height: 2px;
-      background: var(--border);
-      transition: left 0.3s ease;
-      z-index: 200;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent-dim));
-      width: 0%;
-      transition: width 0.15s ease;
-    }
-
     /* ─── Sidebar toggle (all screen sizes) ─── */
     .menu-toggle {
       display: block;
@@ -1124,18 +1427,17 @@ const html = `<!DOCTYPE html>
     /* Desktop: sidebar open by default, collapses on toggle */
     .sidebar-collapsed .sidebar { transform: translateX(-100%); }
     .sidebar-collapsed .main { margin-left: 0; }
-    .sidebar-collapsed .progress-bar { left: 0; }
     .sidebar-collapsed .menu-toggle { left: 0.75rem; }
 
     @media (max-width: 900px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.08); }
       .main { margin-left: 0; }
-      .progress-bar { left: 0; }
       .menu-toggle { left: 0.75rem !important; }
       .sidebar.open ~ .menu-toggle { left: calc(var(--sidebar-width) - 40px) !important; }
       .content { padding: 3rem 1rem 6rem; }
-      h1:first-child { font-size: 1.6rem; }
+      h1:first-child { font-size: 1.7rem; }
+      h2.h2-signal { font-size: 1.1rem; }
       pre { font-size: 0.8rem; padding: 0.75rem; }
     }
 
@@ -1212,7 +1514,7 @@ const html = `<!DOCTYPE html>
 
     /* ─── Print ─── */
     @media print {
-      .sidebar, .menu-toggle, .progress-bar, .back-to-top, .copy-btn, .code-header, .search-box, .hero-actions, .course-stats { display: none !important; }
+      .sidebar, .menu-toggle, .back-to-top, .copy-btn, .code-header, .search-box, .hero-actions, .skip-link { display: none !important; }
       .main { margin-left: 0; }
       .content-section { display: block !important; }
       body { background: white; color: #1a1a1a; }
@@ -1225,16 +1527,14 @@ const html = `<!DOCTYPE html>
   </style>
 </head>
 <body>
+  <a href="#content" class="skip-link">Skip to content</a>
   <button class="menu-toggle" id="menuToggle" aria-label="Toggle sidebar"><span class="toggle-icon">\u2039</span></button>
-
-  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
 
   <aside class="sidebar" id="sidebar" role="navigation" aria-label="Lab navigation">
     <div class="sidebar-header">
       <h2>Claude Certified Architect</h2>
-      <p>Foundations \u2014 Hands-on Lab Guide</p>
+      <p>Foundations \u2014 Study Guide</p>
     </div>
-    <div id="sidebarProgress" style="display:none"><div id="progressFill"></div><span id="progressText"></span></div>
     <div class="search-box">
       <input type="search" id="searchInput" placeholder="Search... (Ctrl+K)" aria-label="Search labs">
     </div>
@@ -1298,6 +1598,9 @@ const html = `<!DOCTYPE html>
         const header = document.createElement('div');
         header.className = 'nav-group-header' + (isPracticeExam ? ' type-exam' : isSection ? ' type-section' : '');
         header.dataset.search = text.toLowerCase();
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.setAttribute('aria-expanded', 'false');
 
         let label;
         if (isModule) {
@@ -1316,15 +1619,17 @@ const html = `<!DOCTYPE html>
         const children = document.createElement('div');
         children.className = 'nav-group-children';
 
-        // Add a link to the group header itself
+        // Add a link to the group header itself (skip for modules — header click navigates there)
         const headerLink = document.createElement('a');
         headerLink.className = 'nav-lab';
         headerLink.href = '#' + h.id;
-        headerLink.textContent = (isModule ? 'Overview' : label);
         headerLink.dataset.search = text.toLowerCase();
-        headerLink.style.fontSize = '0.72rem';
-        headerLink.style.color = 'var(--text-light)';
-        children.appendChild(headerLink);
+        if (!isModule) {
+          headerLink.textContent = label;
+          headerLink.style.fontSize = '0.72rem';
+          headerLink.style.color = 'var(--text-light)';
+          children.appendChild(headerLink);
+        }
 
         groupEl.appendChild(header);
         groupEl.appendChild(children);
@@ -1366,25 +1671,54 @@ const html = `<!DOCTYPE html>
       }
     });
 
-    // ── Accordion behavior: click header opens group AND shows its content section ──
-    groups.forEach(g => {
-      g.header.addEventListener('click', () => {
-        // Close all groups
-        groups.forEach(other => {
-          other.header.classList.remove('open');
-          other.children.classList.remove('open');
-        });
-        // Open this group
-        g.header.classList.add('open');
-        g.children.classList.add('open');
+    // ── Sidebar section dividers: split COURSE (Setup + Modules) from ASSESSMENTS (Scenarios + Practice Exam) ──
+    (function insertNavDividers() {
+      const firstCourseGroup = groups.find(g => /setup|^module|^\\d+\\./i.test(g.header.textContent.trim()));
+      const firstAssessmentGroup = groups.find(g => /practice exam|scenario/i.test(g.header.textContent.trim()));
+      function makeDivider(text) {
+        const li = document.createElement('li');
+        li.className = 'nav-divider';
+        li.setAttribute('role', 'presentation');
+        li.textContent = text;
+        return li;
+      }
+      if (firstCourseGroup) {
+        navList.insertBefore(makeDivider('Course'), firstCourseGroup.el);
+      }
+      if (firstAssessmentGroup) {
+        navList.insertBefore(makeDivider('Assessments'), firstAssessmentGroup.el);
+      }
+    })();
 
-        // Show this group's content section (use the first link in the group)
-        const firstLink = g.children.querySelector('a');
-        if (firstLink) {
-          const id = firstLink.getAttribute('href').substring(1);
-          showSection(id);
-          navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
-          firstLink.classList.add('active');
+    // ── Accordion behavior: click header opens group AND shows its content section ──
+    function toggleGroup(g) {
+      // Close all groups
+      groups.forEach(other => {
+        other.header.classList.remove('open');
+        other.children.classList.remove('open');
+        other.header.setAttribute('aria-expanded', 'false');
+      });
+      // Open this group
+      g.header.classList.add('open');
+      g.children.classList.add('open');
+      g.header.setAttribute('aria-expanded', 'true');
+
+      // Show this group's content section (use the first link in the group)
+      const firstLink = g.children.querySelector('a');
+      if (firstLink) {
+        const id = firstLink.getAttribute('href').substring(1);
+        showSection(id);
+        navList.querySelectorAll('a').forEach(a => { a.classList.remove('active'); a.removeAttribute('aria-current'); });
+        firstLink.classList.add('active');
+        firstLink.setAttribute('aria-current', 'page');
+      }
+    }
+    groups.forEach(g => {
+      g.header.addEventListener('click', () => toggleGroup(g));
+      g.header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleGroup(g);
         }
       });
     });
@@ -1460,32 +1794,13 @@ const html = `<!DOCTYPE html>
       sections.push(section);
     });
 
-    // Show first section by default and inject hero content
+    // Show first section by default
     if (sections.length > 0) {
       sections[0].style.display = '';
-
-      // Inject course stats + action buttons after the first section's intro
-      const firstH1 = sections[0].querySelector('h1');
-      if (firstH1) {
-        const heroEl = document.createElement('div');
-        heroEl.innerHTML = '<div class="course-stats">' +
-          '<span><span class="stat-num">31</span> labs</span>' +
-          '<span><span class="stat-num">78</span> practice questions</span>' +
-          '<span><span class="stat-num">5</span> domains</span>' +
-          '<span>\\u2713 Exam-aligned</span>' +
-          '</div>';
-
-        // Insert after the subtitle/model-tag elements
-        const lastMeta = sections[0].querySelector('.model-tag') || sections[0].querySelector('.subtitle:last-of-type') || firstH1;
-        if (lastMeta && lastMeta.nextSibling) {
-          lastMeta.parentNode.insertBefore(heroEl, lastMeta.nextSibling);
-        } else {
-          sections[0].appendChild(heroEl);
-        }
-
-        // No action needed — stats bar is self-contained
-      }
     }
+
+    // Build TOC for initial section (after a tick so DOM settles)
+    setTimeout(() => { if (sections[0]) buildPageToc(sections[0]); }, 0);
 
     const allNavLinks = Array.from(navList.querySelectorAll('a[href^="#"]'));
 
@@ -1494,15 +1809,22 @@ const html = `<!DOCTYPE html>
 
     // Update sidebar active state and expand the target group
     function activateNavLink(sectionId) {
-      navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+      navList.querySelectorAll('a').forEach(a => { a.classList.remove('active'); a.removeAttribute('aria-current'); });
       const link = navList.querySelector('a[href="#' + CSS.escape(sectionId) + '"]');
       if (link) {
         link.classList.add('active');
+        link.setAttribute('aria-current', 'page');
         const pg = link.closest('.nav-group');
         if (pg) {
-          groups.forEach(g => { g.header.classList.remove('open'); g.children.classList.remove('open'); });
-          pg.querySelector('.nav-group-header').classList.add('open');
+          groups.forEach(g => {
+            g.header.classList.remove('open');
+            g.children.classList.remove('open');
+            g.header.setAttribute('aria-expanded', 'false');
+          });
+          const ph = pg.querySelector('.nav-group-header');
+          ph.classList.add('open');
           pg.querySelector('.nav-group-children').classList.add('open');
+          ph.setAttribute('aria-expanded', 'true');
         }
       }
       if (window.innerWidth <= 900) {
@@ -1560,6 +1882,63 @@ const html = `<!DOCTYPE html>
         }
 
         target.appendChild(nav);
+        buildPageToc(target);
+      }
+    }
+
+    // ── On-this-page right-rail TOC ──
+    let pageTocEl = null;
+    let tocObserver = null;
+    function buildPageToc(section) {
+      if (pageTocEl) { pageTocEl.remove(); pageTocEl = null; }
+      if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+
+      const h2s = Array.from(section.querySelectorAll('h2'));
+      if (h2s.length < 2) return; // not worth showing for short sections
+
+      const toc = document.createElement('aside');
+      toc.className = 'page-toc';
+      toc.setAttribute('aria-label', 'On this page');
+      toc.innerHTML = '<div class="page-toc-label">On this page</div><ul class="page-toc-list" id="pageTocList"></ul>';
+      document.body.appendChild(toc);
+      pageTocEl = toc;
+
+      const list = toc.querySelector('#pageTocList');
+      const tocLinks = [];
+      h2s.forEach(h2 => {
+        if (!h2.id) {
+          h2.id = 'toc-' + (h2.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) + '-' + Math.random().toString(36).slice(2, 6);
+        }
+        // Use clean label (exclude kicker span)
+        const kicker = h2.querySelector('.h2-kicker');
+        const label = (kicker ? (h2.textContent.replace(kicker.textContent, '')) : h2.textContent).trim();
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#' + h2.id;
+        a.textContent = label;
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const el = document.getElementById(h2.id);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        li.appendChild(a);
+        list.appendChild(li);
+        tocLinks.push({ a, h2 });
+      });
+
+      // Scroll-spy: observe which H2 is in view
+      if ('IntersectionObserver' in window) {
+        tocObserver = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const match = tocLinks.find(l => l.h2 === entry.target);
+            if (!match) return;
+            if (entry.isIntersecting) {
+              tocLinks.forEach(l => l.a.classList.remove('active'));
+              match.a.classList.add('active');
+            }
+          });
+        }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+        h2s.forEach(h => tocObserver.observe(h));
       }
     }
 
@@ -1570,9 +1949,10 @@ const html = `<!DOCTYPE html>
         const id = link.getAttribute('href').substring(1);
         showSection(id);
 
-        // Update active state
-        navList.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+        // Update active state + aria-current
+        navList.querySelectorAll('a').forEach(a => { a.classList.remove('active'); a.removeAttribute('aria-current'); });
         link.classList.add('active');
+        link.setAttribute('aria-current', 'page');
 
         // Close sidebar on mobile
         if (window.innerWidth <= 900) {
@@ -1587,13 +1967,32 @@ const html = `<!DOCTYPE html>
       const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
       const lang = langClass ? langClass.replace('language-', '') : '';
 
-      // Create header with language label + copy button
+      // Detect anti-pattern vs correct-pattern from first code comment line
+      // Source uses '# \\u2717 ANTI-PATTERN:' and '# \\u2713 CORRECT:' markers
+      const rawText = block.textContent || '';
+      const firstLine = rawText.split(/\\r?\\n/, 1)[0] || '';
+      let variant = '';
+      let headerLabel = lang || 'code';
+      if (/ANTI-?PATTERN|\\u2717/i.test(firstLine) && /^\\s*(#|\\/\\/|--)/.test(firstLine)) {
+        variant = 'code-anti';
+        headerLabel = 'Anti-pattern';
+      } else if (/\\bCORRECT\\b|\\u2713/.test(firstLine) && /^\\s*(#|\\/\\/|--)/.test(firstLine)) {
+        variant = 'code-correct';
+        headerLabel = 'Correct pattern';
+      }
+
+      // Create header with language/variant label + copy button
       const header = document.createElement('div');
       header.className = 'code-header';
-      header.innerHTML = '<span class="code-lang">' + (lang || 'code') + '</span>' +
+      header.innerHTML = '<span class="code-lang">' + headerLabel + '</span>' +
         '<button class="copy-btn" aria-label="Copy code">Copy</button>';
 
-      pre.parentNode.insertBefore(header, pre);
+      // Wrap header + pre in a container so variant styling and left border stay aligned
+      const wrap = document.createElement('div');
+      wrap.className = 'code-wrap' + (variant ? ' ' + variant : '');
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(header);
+      wrap.appendChild(pre);
 
       // Copy functionality
       header.querySelector('.copy-btn').addEventListener('click', function() {
@@ -1603,6 +2002,22 @@ const html = `<!DOCTYPE html>
           setTimeout(() => { this.textContent = 'Copy'; this.classList.remove('copied'); }, 2000);
         });
       });
+
+      // Collapse long code blocks (>40 lines) behind an expand button
+      const lineCount = (rawText.match(/\\n/g) || []).length + 1;
+      if (lineCount > 40) {
+        wrap.classList.add('code-long');
+        const btn = document.createElement('button');
+        btn.className = 'code-expand';
+        btn.type = 'button';
+        btn.setAttribute('data-show-label', 'Show all ' + lineCount + ' lines');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.addEventListener('click', () => {
+          const expanded = wrap.classList.toggle('code-expanded');
+          btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        });
+        wrap.appendChild(btn);
+      }
     });
 
     // ── Wrap tables ──
@@ -1613,6 +2028,24 @@ const html = `<!DOCTYPE html>
         table.parentNode.insertBefore(wrapper, table);
         wrapper.appendChild(table);
       }
+    });
+
+    // ── Promote high-signal H2s (exam tips / check understanding / takeaways / exam tests) ──
+    const h2SignalMap = [
+      { re: /^exam\\s+tips?$/i, cls: 'h2-exam-tips', kicker: 'Exam' },
+      { re: /^check\\s+your\\s+understanding$/i, cls: 'h2-check', kicker: 'Practice' },
+      { re: /^key\\s+takeaways?$/i, cls: 'h2-takeaways', kicker: 'Summary' },
+      { re: /^what\\s+the\\s+exam\\s+tests$/i, cls: 'h2-exam-tests', kicker: 'Exam focus' }
+    ];
+    document.querySelectorAll('h2').forEach(h2 => {
+      const txt = (h2.textContent || '').trim();
+      const match = h2SignalMap.find(m => m.re.test(txt));
+      if (!match) return;
+      h2.classList.add('h2-signal', match.cls);
+      const kicker = document.createElement('span');
+      kicker.className = 'h2-kicker';
+      kicker.textContent = match.kicker;
+      h2.insertBefore(kicker, h2.firstChild);
     });
 
     // ── Auto-detect callout paragraphs ──
@@ -1635,6 +2068,130 @@ const html = `<!DOCTYPE html>
       }
     });
 
+    // ── Interactive Quiz Questions ──
+    document.querySelectorAll('h2').forEach(h2 => {
+      if (!/check your understanding/i.test(h2.textContent)) return;
+
+      // Collect elements between this h2 and the next h2
+      const elements = [];
+      let el = h2.nextElementSibling;
+      while (el && el.tagName !== 'H2') {
+        elements.push(el);
+        el = el.nextElementSibling;
+      }
+
+      // Group into questions: stem (Q1.), choices (A-D in one <p>), answer (Correct:)
+      const questions = [];
+      let curQ = null;
+
+      elements.forEach(el => {
+        if (el.tagName === 'HR') return;
+        const s = el.querySelector && el.querySelector('strong');
+
+        if (s && /^Q\\d+\\./.test(s.textContent)) {
+          // New question stem
+          curQ = { stem: el, choiceEl: null, answer: null, all: [el] };
+          questions.push(curQ);
+        } else if (curQ && el.classList && el.classList.contains('answer-reveal')) {
+          curQ.answer = el;
+          curQ.all.push(el);
+        } else if (curQ && !curQ.choiceEl && el.tagName === 'P' && /^A\\)/.test(el.textContent.trim())) {
+          // The paragraph containing all choices A) ... B) ... C) ... D) ...
+          curQ.choiceEl = el;
+          curQ.all.push(el);
+        }
+      });
+
+      questions.forEach(q => {
+        if (!q.choiceEl) return;
+
+        // Parse correct letter from answer
+        const ansHTML = q.answer ? q.answer.innerHTML : '';
+        const cm = ansHTML.match(/Correct:\\s*([A-D])/);
+        const correct = cm ? cm[1] : '';
+
+        // Split the single choice <p> into individual A/B/C/D choices
+        // The innerHTML has choices separated by newlines: "A) text\\nB) text\\n..."
+        const choiceHTML = q.choiceEl.innerHTML;
+        const choiceParts = choiceHTML.split(/\\n(?=[A-D]\\))/);
+
+        // Build card
+        const card = document.createElement('div');
+        card.className = 'quiz-card';
+
+        // Stem
+        const stem = document.createElement('div');
+        stem.className = 'quiz-stem';
+        stem.innerHTML = q.stem.innerHTML;
+        card.appendChild(stem);
+
+        // Choices
+        const choiceBox = document.createElement('div');
+        choiceBox.className = 'quiz-choices';
+
+        choiceParts.forEach(part => {
+          const trimmed = part.trim();
+          if (!trimmed) return;
+          const letterMatch = trimmed.match(/^([A-D])\\)/);
+          if (!letterMatch) return;
+          const letter = letterMatch[1];
+          const text = trimmed.replace(/^[A-D]\\)\\s*/, '');
+
+          const btn = document.createElement('button');
+          btn.className = 'quiz-choice';
+          btn.dataset.letter = letter;
+          btn.innerHTML = '<span class="quiz-letter">' + letter + '</span><span>' + text + '</span>';
+
+          btn.addEventListener('click', () => {
+            if (card.classList.contains('quiz-answered')) return;
+            card.classList.add('quiz-answered');
+
+            const isRight = letter === correct;
+            btn.classList.add(isRight ? 'correct' : 'incorrect');
+
+            // Always highlight the correct choice
+            choiceBox.querySelectorAll('.quiz-choice').forEach(c => {
+              if (c.dataset.letter === correct) c.classList.add('correct');
+            });
+
+            // Show result banner
+            const res = card.querySelector('.quiz-result');
+            res.style.display = 'block';
+            res.textContent = isRight ? 'Correct!' : 'Incorrect';
+            res.className = 'quiz-result ' + (isRight ? 'quiz-correct' : 'quiz-incorrect');
+
+            // Show explanation
+            card.querySelector('.quiz-explanation').style.display = 'block';
+          });
+
+          choiceBox.appendChild(btn);
+        });
+        card.appendChild(choiceBox);
+
+        // Result banner (hidden)
+        const res = document.createElement('div');
+        res.className = 'quiz-result';
+        res.style.display = 'none';
+        card.appendChild(res);
+
+        // Explanation (hidden)
+        const expl = document.createElement('div');
+        expl.className = 'quiz-explanation';
+        expl.style.display = 'none';
+        if (q.answer) expl.innerHTML = q.answer.innerHTML;
+        card.appendChild(expl);
+
+        // Replace originals
+        q.stem.parentNode.insertBefore(card, q.stem);
+        q.all.forEach(e => e.remove());
+      });
+
+      // Remove leftover hr separators between questions
+      elements.forEach(el => {
+        if (el.tagName === 'HR' && el.parentNode) el.remove();
+      });
+    });
+
     // ── Back to top on scroll ──
     window.addEventListener('scroll', () => {
       document.getElementById('backToTop').classList.toggle('visible', window.scrollY > 600);
@@ -1643,9 +2200,6 @@ const html = `<!DOCTYPE html>
     document.getElementById('backToTop').addEventListener('click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-
-    // Hide progress bar (not useful in section view)
-    document.getElementById('progress').parentElement.style.display = 'none';
 
     // ── Sidebar toggle ──
     document.getElementById('menuToggle').addEventListener('click', () => {
