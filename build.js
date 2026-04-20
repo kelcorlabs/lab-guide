@@ -687,6 +687,9 @@ const html = `<!DOCTYPE html>
       color: var(--text-light);
       margin-bottom: 0.55rem;
     }
+    /* Close button: only shown in mobile/tablet drawer mode. Hidden on desktop
+       since the right-rail TOC is always visible. */
+    .page-toc-close { display: none; }
     .page-toc-list {
       list-style: none;
       padding: 0;
@@ -749,6 +752,7 @@ const html = `<!DOCTYPE html>
         margin: -0.3rem auto 0.8rem;
       }
       .page-toc-close {
+        display: block;
         position: absolute;
         top: 0.75rem;
         right: 0.9rem;
@@ -951,6 +955,83 @@ const html = `<!DOCTYPE html>
       color: var(--red);
       border: none;
       font-weight: 600;
+    }
+
+    /* ─── Anti-patterns cheat sheet priority pills ─── */
+    .ap-priority {
+      display: inline-block;
+      padding: 0.12rem 0.55rem;
+      margin-left: 0.5rem;
+      border-radius: 100vw;
+      font-family: var(--font-sans);
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      vertical-align: middle;
+      line-height: 1.4;
+    }
+    .ap-priority.ap-critical { background: #fceee9; color: var(--red); }
+    .ap-priority.ap-high     { background: #f5f0e6; color: var(--yellow); }
+    .ap-priority.ap-medium   { background: var(--surface-raised); color: var(--text-muted); }
+
+    /* ─── Module-intro task-statement tabs ─── */
+    .module-tabs {
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+      margin: 1.75rem 0 1.5rem;
+      padding: 0.35rem;
+      background: var(--surface);
+      border-radius: 100vw;
+      font-family: var(--font-sans);
+    }
+    .mod-tab {
+      padding: 0.4rem 0.85rem;
+      border-radius: 100vw;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .mod-tab:hover {
+      background: var(--surface-white);
+      color: var(--text);
+    }
+    .mod-tab .mod-tab-num {
+      color: var(--text-light);
+      font-variant-numeric: tabular-nums;
+      margin-right: 0.35rem;
+      font-weight: 600;
+    }
+    .mod-tab:hover .mod-tab-num { color: var(--text-muted); }
+    .mod-tab:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 2px;
+    }
+    @media (max-width: 640px) {
+      .module-tabs {
+        border-radius: 14px;
+        padding: 0.5rem;
+      }
+      .mod-tab { font-size: 0.72rem; padding: 0.35rem 0.7rem; }
+    }
+
+    /* Cheat-sheet entry styling: denser than a full lab */
+    #anti-patterns-cheat-sheet ~ h3 {
+      margin-top: 1.5rem;
+      font-size: 1.05rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+    #anti-patterns-cheat-sheet ~ h3 + p,
+    #anti-patterns-cheat-sheet ~ h3 + p + p,
+    #anti-patterns-cheat-sheet ~ h3 + p + p + p {
+      margin: 0.3rem 0;
+      font-size: 0.92rem;
+      line-height: 1.55;
     }
 
     /* ─── Details/Summary (Answer Reveals) ─── */
@@ -1737,7 +1818,7 @@ const html = `<!DOCTYPE html>
   </div>
 
   <button class="back-to-top" id="backToTop" aria-label="Back to top">\u2191</button>
-  <button class="page-toc-fab" id="pageTocFab" aria-label="Show on-page navigation" aria-expanded="false">\u2630 On this page</button>
+  <button class="page-toc-fab" id="pageTocFab" aria-label="Show on-page navigation" aria-expanded="false"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>On this page</button>
   <div class="page-toc-scrim" id="pageTocScrim" aria-hidden="true"></div>
 
   <script>
@@ -1762,9 +1843,10 @@ const html = `<!DOCTYPE html>
       const isPracticeExam = /^PRACTICE EXAM/i.test(text);
       const isScenario = /^SCENARIO \\d/i.test(text);
       const isSection = /PRACTICE QUESTIONS|SCENARIO-BASED|EXAM READINESS|EXAM ANSWER|EXAM DAY/i.test(text);
+      const isReference = /ANTI-PATTERNS CHEAT SHEET/i.test(text);
 
-      // Skip non-navigable headings except first (Overview)
-      if (!isModule && !isLab && !isPracticeExam && !isScenario && !isSection) {
+      // Skip non-navigable headings except first (Overview) and reference entries (cheat sheet)
+      if (!isModule && !isLab && !isPracticeExam && !isScenario && !isSection && !isReference) {
         if (h === h1s[0]) {
           const li = document.createElement('li');
           const a = document.createElement('a');
@@ -1778,6 +1860,23 @@ const html = `<!DOCTYPE html>
           navList.appendChild(li);
           navItems.push({ el: li, text: text.toLowerCase(), heading: h, link: a });
         }
+        return;
+      }
+
+      // Reference entries (e.g., anti-patterns cheat sheet): flat top-level link, not a group
+      if (isReference) {
+        const li = document.createElement('li');
+        li.dataset.navRole = 'reference';
+        const a = document.createElement('a');
+        a.className = 'nav-lab';
+        a.href = '#' + h.id;
+        a.textContent = 'Anti-Patterns Cheat Sheet';
+        a.dataset.search = text.toLowerCase();
+        a.style.fontWeight = '600';
+        a.style.paddingLeft = '1rem';
+        li.appendChild(a);
+        navList.appendChild(li);
+        navItems.push({ el: li, text: text.toLowerCase(), heading: h, link: a });
         return;
       }
 
@@ -1862,10 +1961,11 @@ const html = `<!DOCTYPE html>
       }
     });
 
-    // ── Sidebar section dividers: split COURSE (Setup + Modules) from ASSESSMENTS (Scenarios + Practice Exam) ──
+    // ── Sidebar section dividers: split COURSE (Setup + Modules) from REFERENCE (cheat sheet) from ASSESSMENTS (Scenarios + Practice Exam) ──
     (function insertNavDividers() {
       const firstCourseGroup = groups.find(g => /setup|^module|^\\d+\\./i.test(g.header.textContent.trim()));
       const firstAssessmentGroup = groups.find(g => /practice exam|scenario/i.test(g.header.textContent.trim()));
+      const firstReferenceItem = navList.querySelector('li[data-nav-role="reference"]');
       function makeDivider(text) {
         const li = document.createElement('li');
         li.className = 'nav-divider';
@@ -1875,6 +1975,9 @@ const html = `<!DOCTYPE html>
       }
       if (firstCourseGroup) {
         navList.insertBefore(makeDivider('Course'), firstCourseGroup.el);
+      }
+      if (firstReferenceItem) {
+        navList.insertBefore(makeDivider('Reference'), firstReferenceItem);
       }
       if (firstAssessmentGroup) {
         navList.insertBefore(makeDivider('Assessments'), firstAssessmentGroup.el);
@@ -2070,6 +2173,63 @@ const html = `<!DOCTYPE html>
       sections.push(section);
     });
 
+    // ── Module-intro task-statement tab strip ──
+    // For each MODULE section, find its sibling LAB X.Y sections and inject a pill-group.
+    (function injectModuleTabs() {
+      sections.forEach(moduleSection => {
+        const h1 = moduleSection.querySelector('h1');
+        if (!h1) return;
+        const moduleMatch = (h1.textContent || '').trim().match(/^MODULE\\s+(\\d+)\\b/i);
+        if (!moduleMatch) return;
+        const moduleNum = moduleMatch[1];
+
+        // Find every section whose H1 starts with "LAB X.Y" for this module number
+        const labPattern = new RegExp('^LAB\\\\s+' + moduleNum + '\\\\.(\\\\d+)\\\\b[:]?\\\\s*(.*)', 'i');
+        const labs = sections.map(s => {
+          const lh = s.querySelector('h1');
+          if (!lh) return null;
+          const m = (lh.textContent || '').trim().match(labPattern);
+          if (!m) return null;
+          return { section: s, id: s.dataset.sectionId, num: moduleNum + '.' + m[1], label: m[2].trim() };
+        }).filter(Boolean);
+
+        if (labs.length < 2) return; // nothing to tab
+
+        const nav = document.createElement('nav');
+        nav.className = 'module-tabs';
+        nav.setAttribute('aria-label', 'Labs in this module');
+        labs.forEach(lab => {
+          const a = document.createElement('a');
+          a.className = 'mod-tab';
+          a.href = '#' + lab.id;
+          // Truncate long labels for compact pill display
+          const short = lab.label.length > 34 ? lab.label.substring(0, 32).replace(/\\s+\\S*$/, '') + '\\u2026' : lab.label;
+          a.innerHTML = '<span class="mod-tab-num">' + lab.num + '</span>' + short.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+          a.title = 'LAB ' + lab.num + ': ' + lab.label;
+          // Route through section router so the target section becomes visible
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            showSection(lab.id);
+            activateNavLink(lab.id);
+          });
+          nav.appendChild(a);
+        });
+
+        // Insert after the first lab-meta badges if present, else after the H1
+        const anchor = moduleSection.querySelector('.lab-meta');
+        if (anchor && anchor.parentNode === moduleSection) {
+          // Skip over any consecutive lab-meta siblings (multiple metadata rows)
+          let last = anchor;
+          while (last.nextElementSibling && last.nextElementSibling.classList && last.nextElementSibling.classList.contains('lab-meta')) {
+            last = last.nextElementSibling;
+          }
+          last.parentNode.insertBefore(nav, last.nextSibling);
+        } else {
+          h1.parentNode.insertBefore(nav, h1.nextSibling);
+        }
+      });
+    })();
+
     // Show initial section: honor URL hash if it points to a known section, else first section
     const initialHash = (location.hash || '').replace(/^#/, '');
     const initialSection = sections.find(s => s.dataset.sectionId === initialHash) || sections[0];
@@ -2242,7 +2402,7 @@ const html = `<!DOCTYPE html>
       toc.setAttribute('aria-label', 'On this page');
       toc.innerHTML =
         '<div class="page-toc-handle" aria-hidden="true"></div>' +
-        '<button type="button" class="page-toc-close" aria-label="Close on-page navigation">\\u00d7</button>' +
+        '<button type="button" class="page-toc-close" aria-label="Close on-page navigation"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" fill="none"/></svg></button>' +
         '<div class="page-toc-label">On this page</div>' +
         '<ul class="page-toc-list" id="pageTocList"></ul>';
       document.body.appendChild(toc);
