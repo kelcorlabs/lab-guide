@@ -164,7 +164,6 @@ finalContent += `
 </style>
 
 <div id="exam-welcome" class="exam-screen exam-active">
-  <h2 class="exam-title" style="font-family:var(--font-serif);text-transform:none;font-size:1.75rem;letter-spacing:-0.025em;color:var(--text)">Practice Exam</h2>
   <p class="exam-desc">60 scenario-based questions across 5 domains. Simulates the real CCA Foundations certification exam.</p>
   <div class="exam-mode-toggle">
     <button id="ebtn-exam" class="esel" onclick="window._exam.setMode('exam')">Exam Mode</button>
