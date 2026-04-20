@@ -935,32 +935,6 @@ const html = `<!DOCTYPE html>
       border: none;
     }
 
-    .badge-time {
-      background: #f5f0e6;
-      color: var(--yellow);
-      border: none;
-    }
-
-    .badge-diff-Guided {
-      background: #eef3e8;
-      color: var(--green);
-      border: none;
-      font-weight: 600;
-    }
-
-    .badge-diff-Intermediate {
-      background: #eef4f9;
-      color: var(--blue);
-      border: none;
-      font-weight: 600;
-    }
-
-    .badge-diff-Advanced {
-      background: #fceee9;
-      color: var(--red);
-      border: none;
-      font-weight: 600;
-    }
 
     /* ─── Anti-patterns cheat sheet priority pills ─── */
     .ap-priority {
