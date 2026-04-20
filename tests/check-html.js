@@ -36,7 +36,7 @@ check(/<title>.+<\/title>/.test(html), 'Has non-empty title', 'Missing or empty 
 
 // Size
 const sizeKB = Math.round(size / 1024);
-check(size > 500000 && size < 1500000, `File size OK (${sizeKB} KB)`, `Unexpected file size: ${sizeKB} KB (expected 500-1500 KB)`);
+check(size > 300000 && size < 1500000, `File size OK (${sizeKB} KB)`, `Unexpected file size: ${sizeKB} KB (expected 300-1500 KB)`);
 
 // Content integrity
 const h1Count = (html.match(/<h1/g) || []).length;

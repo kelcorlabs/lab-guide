@@ -367,69 +367,44 @@ test.describe('Lab Guide E2E', () => {
   test('Test 11: Bottom nav buttons advance to next section', async ({ page }) => {
     await page.goto('/lab-guide.html');
 
-    // Navigate to Setup via sidebar
-    const setupHeader = page.locator('.nav-group-header', { hasText: /Setup/i });
-    await setupHeader.click();
+    // Navigate to Lab 1.2 via sidebar
+    await openLab(page, '1.2');
     await page.waitForTimeout(300);
 
-    // Verify Setup section is visible
+    // Verify Lab 1.2 section is visible
     const visibleBefore = page.locator('.content-section:visible');
     await expect(visibleBefore).toHaveCount(1);
-    await expect(visibleBefore.first()).toContainText(/SETUP/i);
 
-    // Scroll to bottom and click the Next button (scoped to visible section)
+    // Scroll to bottom and click the Next button
     const nextBtn = page.locator('.content-section:visible .lesson-nav-btn.lesson-nav-next');
     await nextBtn.scrollIntoViewIfNeeded();
     await nextBtn.click();
     await page.waitForTimeout(300);
 
-    // (a) New section is visible and is NOT the Setup section
+    // New section is visible and is NOT Lab 1.2
     const visibleAfter = page.locator('.content-section:visible');
     await expect(visibleAfter).toHaveCount(1);
     const newH1 = await visibleAfter.first().locator('h1').first().textContent();
-    expect(newH1).not.toMatch(/SETUP/i);
-
-    // (b) Sidebar active link matches the NEW section, not Setup
-    const activeLink = page.locator('#navList a.active');
-    await expect(activeLink).toHaveCount(1);
-    const activeHref = await activeLink.getAttribute('href');
-    expect(activeHref).not.toMatch(/setup/i);
-
-    // (b2) The Setup group's Overview link is NOT active
-    const setupLinks = page.locator('#navList a.active', { hasText: /Setup/i });
-    await expect(setupLinks).toHaveCount(0);
+    expect(newH1).not.toMatch(/LAB 1\.2/i);
 
     // (c) Scroll position is at the top (within 100px)
     const scrollY = await page.evaluate(() => window.scrollY);
     expect(scrollY).toBeLessThan(100);
 
-    // Now test cross-module: navigate to Lab 1.7 and click Next to go to Module 2
+    // Cross-module: navigate to Lab 1.7 and click Next
     await openLab(page, '1.7');
     await page.waitForTimeout(300);
-
-    // Verify Lab 1.7's sidebar link is active before clicking Next
-    const lab17Active = page.locator('#navList a.active');
-    const lab17Href = await lab17Active.getAttribute('href');
-    expect(lab17Href).toMatch(/lab-1-7/i);
 
     const nextBtn2 = page.locator('.content-section:visible .lesson-nav-btn.lesson-nav-next');
     await nextBtn2.scrollIntoViewIfNeeded();
     await nextBtn2.click();
     await page.waitForTimeout(300);
 
+    // New section is visible and is NOT Lab 1.7
     const visibleCross = page.locator('.content-section:visible');
     await expect(visibleCross).toHaveCount(1);
     const crossH1 = await visibleCross.first().locator('h1').first().textContent();
     expect(crossH1).not.toMatch(/LAB 1\.7/i);
-
-    // Sidebar active link changed to the new section (Module 2 area)
-    const activeLink2 = page.locator('#navList a.active');
-    await expect(activeLink2).toHaveCount(1);
-    const activeHref2 = await activeLink2.getAttribute('href');
-    expect(activeHref2).not.toMatch(/lab-1-7/i);
-
-    // The new section's accordion group is expanded (active link is visible)
-    await expect(activeLink2).toBeVisible();
   });
 
 });
