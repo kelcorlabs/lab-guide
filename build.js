@@ -114,6 +114,9 @@ finalContent += `
 #exam-app .ebtn-jump:hover { background: #fdf1ea; }
 #exam-app .eq-kb-hint { margin-top: 0.75rem; text-align: center; font-size: 0.7rem; color: var(--text-light); font-family: var(--font-sans); }
 #exam-app .eq-kb-hint kbd { font-family: var(--font-mono); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 3px; padding: 0.05rem 0.3rem; font-size: 0.7rem; color: var(--text-muted); }
+#exam-app .eq-revlink { display: inline-block; margin-top: 0.4rem; background: none; border: none; color: var(--text-muted); font-family: var(--font-sans); font-size: 0.78rem; cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-medium); text-underline-offset: 3px; transition: color 0.15s, text-decoration-color 0.15s; padding: 0.25rem 0.5rem; }
+#exam-app .eq-revlink:hover { color: var(--text); text-decoration-color: var(--text); }
+#exam-app .eq-revlink-wrap { text-align: center; margin-top: 0.25rem; }
 #exam-app .egrid-cell.eflagged { position: relative; }
 #exam-app .egrid-cell.eflagged::after { content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
 #exam-app .el-flag { background: var(--bg); border: 1px solid var(--red); position: relative; }
@@ -185,6 +188,7 @@ finalContent += `
     </div>
     <button id="ebtn-next" onclick="window._exam.next()">Next &#8594;</button>
   </div>
+  <div class="eq-revlink-wrap"><button type="button" class="eq-revlink" onclick="window._exam.showReview()">Review all questions</button></div>
   <div class="eq-kb-hint">Keys: <kbd>A</kbd>\u2013<kbd>D</kbd> select \u00b7 <kbd>\u2190</kbd>/<kbd>\u2192</kbd> navigate \u00b7 <kbd>F</kbd> flag</div>
 </div>
 
@@ -264,6 +268,9 @@ const html = `<!DOCTYPE html>
   <title>Claude Certified Architect — Foundations Study Guide</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://cdn.prod.website-files.com" crossorigin>
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.prod.website-files.com/67ce28cfec624e2b733f8a52/69971a00a3295036497e1a28_AnthropicSans-Roman-Web.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.prod.website-files.com/67ce28cfec624e2b733f8a52/69971a1551eb6cda0d656e8a_AnthropicSerif-Roman-Web.woff2">
   <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     @font-face {
@@ -406,6 +413,18 @@ const html = `<!DOCTYPE html>
 
     .search-box input::placeholder { color: var(--text-light); }
     .search-box input:focus { border-color: var(--border-medium); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.04); }
+
+    .nav-empty {
+      padding: 1.25rem 1.25rem 1.5rem;
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+      display: none;
+    }
+    .nav-empty.is-visible { display: block; }
+    .nav-empty strong { display: block; color: var(--text); font-weight: 600; margin-bottom: 0.2rem; }
 
     .sidebar nav {
       flex: 1;
@@ -559,6 +578,70 @@ const html = `<!DOCTYPE html>
     .nav-lab.active .nav-dot {
       background: var(--text);
     }
+
+    /* Completed lab: filled green dot */
+    .nav-lab.completed .nav-dot {
+      background: var(--green);
+      box-shadow: 0 0 0 1.5px var(--green);
+    }
+
+    /* Progress pill in sidebar header */
+    .sidebar-progress-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 100vw;
+      background: var(--surface-raised);
+      font-family: var(--font-sans);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+    .sidebar-progress-pill .sp-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .sidebar-progress-pill.complete { background: #eef3e8; color: var(--green); }
+
+    /* Per-lab "mark complete" button */
+    .lab-complete-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 3rem 0 0.5rem;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border-radius: 12px;
+      font-family: var(--font-sans);
+    }
+    .lab-complete-row label {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      cursor: pointer;
+      font-size: 0.88rem;
+      color: var(--text);
+      user-select: none;
+    }
+    .lab-complete-row input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+    .lab-complete-row .lab-complete-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+    .lab-complete-row.is-complete {
+      background: #eef3e8;
+    }
+    .lab-complete-row.is-complete label { color: var(--green); font-weight: 600; }
 
     .nav-hidden { display: none; }
 
@@ -1534,11 +1617,12 @@ const html = `<!DOCTYPE html>
     <div class="sidebar-header">
       <h2>Claude Certified Architect</h2>
       <p>Foundations \u2014 Study Guide</p>
+      <span id="sidebarProgressPill" class="sidebar-progress-pill" style="display:none"><span class="sp-dot"></span><span id="sidebarProgressText">0 of 0</span></span>
     </div>
     <div class="search-box">
       <input type="search" id="searchInput" placeholder="Search... (Ctrl+K)" aria-label="Search labs">
     </div>
-    <nav id="nav"><ul id="navList"></ul></nav>
+    <nav id="nav"><ul id="navList"></ul><div class="nav-empty" id="navEmpty"><strong>No matches</strong>Try a different search term</div></nav>
   </aside>
 
   <div class="main" role="main">
@@ -1690,6 +1774,79 @@ const html = `<!DOCTYPE html>
       }
     })();
 
+    // ── Lab completion tracking (localStorage) ──
+    const COMPLETION_KEY = 'cca-foundations-completed-labs-v1';
+    function loadCompleted() {
+      try { return JSON.parse(localStorage.getItem(COMPLETION_KEY) || '{}') || {}; }
+      catch (e) { return {}; }
+    }
+    function saveCompleted(map) {
+      try { localStorage.setItem(COMPLETION_KEY, JSON.stringify(map)); } catch (e) {}
+    }
+    const completed = loadCompleted();
+
+    // Identify lab-type sections (LAB X.Y and SCENARIO N)
+    function isLabSection(id) {
+      const h1 = document.getElementById(id);
+      if (!h1) return false;
+      const t = (h1.textContent || '').trim();
+      return /^LAB\\s+[\\d.]+/i.test(t) || /^SCENARIO\\s+\\d/i.test(t) || /^LAB\\s+FINAL/i.test(t);
+    }
+    const totalLabs = Array.from(document.querySelectorAll('h1'))
+      .filter(h => {
+        const t = (h.textContent || '').trim();
+        return /^LAB\\s+[\\d.]+/i.test(t) || /^SCENARIO\\s+\\d/i.test(t) || /^LAB\\s+FINAL/i.test(t);
+      }).length;
+
+    function updateCompletionUI() {
+      // Sidebar pill
+      const count = Object.keys(completed).filter(k => completed[k]).length;
+      const pill = document.getElementById('sidebarProgressPill');
+      const txt = document.getElementById('sidebarProgressText');
+      if (pill && txt && totalLabs > 0) {
+        pill.style.display = 'inline-flex';
+        txt.textContent = count + ' of ' + totalLabs + ' complete';
+        pill.classList.toggle('complete', count === totalLabs && totalLabs > 0);
+      }
+      // Sidebar nav dots
+      navList.querySelectorAll('a.nav-lab').forEach(a => {
+        const href = a.getAttribute('href') || '';
+        const id = href.replace(/^#/, '');
+        if (!id) return;
+        a.classList.toggle('completed', !!completed[id]);
+      });
+    }
+
+    function injectLabCompletionUI(section) {
+      const id = section.dataset.sectionId;
+      if (!isLabSection(id)) return;
+      // Avoid duplicate injection
+      if (section.querySelector('.lab-complete-row')) return;
+      const row = document.createElement('div');
+      row.className = 'lab-complete-row' + (completed[id] ? ' is-complete' : '');
+      const labelId = 'lab-complete-' + id;
+      row.innerHTML =
+        '<label for="' + labelId + '">' +
+          '<input type="checkbox" id="' + labelId + '"' + (completed[id] ? ' checked' : '') + '>' +
+          '<span class="lab-complete-text">' + (completed[id] ? 'Lab complete' : 'Mark this lab complete') + '</span>' +
+        '</label>' +
+        '<span class="lab-complete-hint">Saved in your browser</span>';
+      const cb = row.querySelector('input[type="checkbox"]');
+      const textEl = row.querySelector('.lab-complete-text');
+      cb.addEventListener('change', () => {
+        completed[id] = cb.checked;
+        if (!cb.checked) delete completed[id];
+        saveCompleted(completed);
+        row.classList.toggle('is-complete', cb.checked);
+        textEl.textContent = cb.checked ? 'Lab complete' : 'Mark this lab complete';
+        updateCompletionUI();
+      });
+      // Insert before the .lesson-nav if present, else append
+      const lessonNav = section.querySelector('.lesson-nav');
+      if (lessonNav) section.insertBefore(row, lessonNav);
+      else section.appendChild(row);
+    }
+
     // ── Accordion behavior: click header opens group AND shows its content section ──
     function toggleGroup(g) {
       // Close all groups
@@ -1725,10 +1882,12 @@ const html = `<!DOCTYPE html>
 
     // ── Search ──
     const searchInput = document.getElementById('searchInput');
+    const navEmpty = document.getElementById('navEmpty');
     searchInput.addEventListener('input', () => {
       const q = searchInput.value.toLowerCase().trim();
       if (q) {
         // Open all groups and show/hide items
+        let anyGroupVisible = false;
         groups.forEach(g => {
           g.header.classList.add('open');
           g.children.classList.add('open');
@@ -1740,7 +1899,15 @@ const html = `<!DOCTYPE html>
             if (match) hasMatch = true;
           });
           g.el.style.display = hasMatch ? '' : 'none';
+          if (hasMatch) anyGroupVisible = true;
         });
+        // Also check if the standalone Overview link (if present) matches
+        navList.querySelectorAll(':scope > li:not(.nav-group):not(.nav-divider) a').forEach(a => {
+          if (a.dataset.search && a.dataset.search.includes(q)) anyGroupVisible = true;
+        });
+        // Hide dividers while searching (they're category labels, not content)
+        navList.querySelectorAll('.nav-divider').forEach(d => { d.style.display = 'none'; });
+        if (navEmpty) navEmpty.classList.toggle('is-visible', !anyGroupVisible);
       } else {
         // Reset: show all groups, close all
         groups.forEach(g => {
@@ -1749,6 +1916,8 @@ const html = `<!DOCTYPE html>
           g.children.classList.remove('open');
           g.children.querySelectorAll('a').forEach(a => { a.style.display = ''; });
         });
+        navList.querySelectorAll('.nav-divider').forEach(d => { d.style.display = ''; });
+        if (navEmpty) navEmpty.classList.remove('is-visible');
       }
     });
 
@@ -1798,6 +1967,10 @@ const html = `<!DOCTYPE html>
     if (sections.length > 0) {
       sections[0].style.display = '';
     }
+
+    // Initialise completion UI (sidebar pill + dots) and inject into initial section if it's a lab
+    updateCompletionUI();
+    if (sections[0]) injectLabCompletionUI(sections[0]);
 
     // Build TOC for initial section (after a tick so DOM settles)
     setTimeout(() => { if (sections[0]) buildPageToc(sections[0]); }, 0);
@@ -1882,6 +2055,7 @@ const html = `<!DOCTYPE html>
         }
 
         target.appendChild(nav);
+        injectLabCompletionUI(target);
         buildPageToc(target);
       }
     }
