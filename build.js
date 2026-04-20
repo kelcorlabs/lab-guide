@@ -34,15 +34,12 @@ let processed = markdown
   .replace(/^# (Domain \d+ — \d+% of exam)$/gm, '<div class="lab-meta"><span class="badge badge-domain">$1</span></div>')
   // Task Statements line → badge
   .replace(/^# (Task Statements? .+)$/gm, '<div class="lab-meta"><span class="badge badge-tasks">$1</span></div>')
-  // Domain + Task Statement (per-lab) → badge
-  .replace(/^# (Domain \d+ — Task Statement .+)$/gm, '<div class="lab-meta"><span class="badge badge-domain">$1</span></div>')
-  // Concept line → styled subtitle
-  .replace(/^# Concept: (.+)$/gm, '<div class="lab-meta"><span class="badge badge-concept">$1</span></div>')
-  // Time line with difficulty → split into time + difficulty badges
-  .replace(/^# Time: (.+?) \| Difficulty: (Guided|Intermediate|Advanced)(.*?)$/gm,
-    '<div class="lab-meta"><span class="badge badge-time">$1</span><span class="badge badge-diff-$2">$2</span><span class="badge badge-time">$3</span></div>')
-  // Time line without difficulty → badge
-  .replace(/^# Time: (.+)$/gm, '<div class="lab-meta"><span class="badge badge-time">$1</span></div>')
+  // Per-lab metadata comment lines (domain / concept / time / difficulty) are
+  // intentionally stripped — they duplicate the H1 title and the first body
+  // section, and the pills were visual noise at the top of every lab.
+  .replace(/^# Domain \d+ — Task Statement .+\r?\n/gm, '')
+  .replace(/^# Concept: .+\r?\n/gm, '')
+  .replace(/^# Time: .+\r?\n/gm, '')
   // "Covers all 30..." subtitle
   .replace(/^# (Covers all .+)$/gm, '<p class="subtitle">$1</p>')
   // "Model: claude-sonnet..." subtitle
