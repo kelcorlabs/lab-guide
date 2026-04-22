@@ -4444,7 +4444,64 @@ This capstone demonstrates how each domain's pattern applies in an integrated sy
 
 # SCENARIO WALKTHROUGHS
 
-The exam draws 4 of 6 scenarios at random. The Final Capstone above is a worked implementation of Scenario 1 (Customer Support). These narratives frame the other scenarios — what they test, which labs cover them, and the traps that catch exam-takers who studied the labs in isolation without seeing how the patterns combine.
+The exam draws 4 of 6 scenarios at random. Each of these walkthroughs frames what the scenario tests, which labs cover it, and the traps that catch exam-takers who studied the labs in isolation without seeing how the patterns combine.
+
+---
+
+# SCENARIO 1: CUSTOMER SUPPORT RESOLUTION AGENT
+
+## The setup
+
+A support agent built on the Claude Agent SDK handles returns, billing disputes, and account issues. It integrates with backend systems via custom MCP tools (`get_customer`, `lookup_order`, `process_refund`, `escalate_to_human`). The target is 80%+ first-contact resolution while correctly escalating cases that exceed the agent's scope. This scenario is the one worked in depth as the [Final Capstone Lab](#lab-final-capstone-exam-scenario) — the walkthrough here is a study-aid summary; the full implementation is in the capstone.
+
+## Primary domains tested
+
+- **Domain 1: Agentic Architecture & Orchestration**
+- **Domain 2: Tool Design & MCP Integration**
+- **Domain 5: Context Management & Reliability**
+
+## Key architectural decisions
+
+### 1. Prerequisite gate on customer verification
+
+`process_refund` must not execute until `get_customer` returns a verified ID. Enforce it programmatically (a code-level check that blocks the tool call), not in the prompt — prompt instructions have a non-zero failure rate, and financial operations cannot tolerate any. See [Lab 1.4](#lab-1-4-prerequisite-gates-and-handoff-patterns).
+
+### 2. PreToolUse hook on refund limits
+
+Refunds above $500 require human approval. A PreToolUse hook that blocks the tool call and redirects to `escalate_to_human` is deterministic; a system-prompt instruction is probabilistic. See [Lab 1.5](#lab-1-5-agent-sdk-hooks-for-tool-interception).
+
+### 3. Structured error responses from every tool
+
+When `lookup_order` fails, the tool returns `{isError, errorCategory, isRetryable, customer_friendly}` — not a generic failure. Access failures must be distinguishable from empty results so the agent knows whether to retry, try an alternative, or escalate. See [Lab 2.2](#lab-2-2-structured-error-responses).
+
+### 4. Case facts block for long conversations
+
+Customer ID, order number, issue summary, and amount go into an immutable "CASE FACTS" block at the top of every prompt. Progressive summarization erodes specifics over long conversations; the case facts block preserves them verbatim. See [Lab 5.1](#lab-5-1-context-management-across-long-interactions).
+
+### 5. Explicit escalation criteria, not sentiment
+
+Escalate on policy gaps, capability limits, explicit customer requests, or business thresholds. Never on sentiment — an angry customer requesting a simple address change does not need a human. See [Lab 5.2](#lab-5-2-escalation-and-ambiguity-resolution).
+
+### 6. Structured handoff when escalating
+
+The handoff to a human must include customer ID, summary, root cause analysis, partial resolution status, and recommended next action. "APP-002: needs review" forces the reviewer to reconstruct the case. See [Lab 1.4 "Structured handoff" section](#lab-1-4-prerequisite-gates-and-handoff-patterns).
+
+## What the exam actually tests
+
+- Choosing programmatic gates over prompt instructions for financial/compliance rules
+- Distinguishing hooks (deterministic) from prompts (probabilistic) for business-rule enforcement
+- Identifying sentiment-based escalation as an anti-pattern
+- Recognizing when a case facts block is the fix vs. when more summarization is the fix (it's almost always the former)
+- Structured error responses that let the agent choose retry vs alternative vs escalate
+
+## Common wrong answers
+
+- "Strengthen the prompt" for a compliance rule — always probabilistic, always wrong for critical operations
+- "Escalate because the customer is angry" — sentiment ≠ complexity
+- "Summarize more aggressively" when specifics are disappearing — more summarization makes it worse
+- "Return `{}` on database timeout" — use a structured error so the agent can recover
+
+**Worked implementation:** [LAB FINAL: Capstone Exam Scenario](#lab-final-capstone-exam-scenario).
 
 ---
 
