@@ -24,11 +24,10 @@ npm run build
 | Final Scenario | All | 1 lab | — |
 | Practice Exam | All | 60 questions | — |
 
-**Total:** 31 labs + 60-question practice exam (~10 hours of study)
+**Total:** 31 labs plus a 60-question practice exam.
 
 ## Prerequisites
 
-- **Python 3.8+** — for running reference code scripts
 - **Node.js 18+** — for building the HTML guide
 - **Claude Code** (recommended) — CLI or IDE extension for interactive exercises
 
@@ -44,7 +43,6 @@ The build reads `Hands on Lab` (markdown) and produces a self-contained `lab-gui
 
 ```bash
 npm test               # Run all validation
-npm run test:python    # Run all 28 Python reference scripts
 npm run test:answers   # Verify practice exam answer count + distribution
 npm run test:links     # Check for broken internal links in HTML
 npm run test:html      # Validate HTML structure and accessibility basics
@@ -52,17 +50,13 @@ npm run test:html      # Validate HTML structure and accessibility basics
 
 ## How Each Lab Works
 
-Every lab follows a locked 9-section template:
+Every lab follows a 5-section exam-first template:
 
-1. **Scenario** — realistic problem framing
-2. **What you'll learn** — 3-5 bullets mapped to exam task statements
-3. **Concepts** — minimum prose explanation of the pattern
-4. **Walkthrough** — numbered steps with copy-paste code and expected output
-5. **Try it yourself** (or Break it / Debug it for config labs) — extension exercise
-6. **Check your understanding** — 3 MCQs (A/B/C/D) with explanations
-7. **Key takeaways** — 3-5 bullets of essential patterns
-8. **Exam tips** — distractor patterns and wrong-answer traps
-9. **Next:** — bridge to the next lab
+1. **What the exam tests** — bullets mapped to the task statement's "Knowledge of" list
+2. **Concept + code inline** — the pattern explained alongside a worked Python example
+3. **Anti-pattern blocks** — wrong approaches shown with visual `✗` / `✓` callouts
+4. **Check your understanding** — three multiple-choice questions with wrong-answer explanations
+5. **Exam tips** — distractor patterns and core takeaways
 
 ## Repository Structure
 
@@ -71,9 +65,7 @@ Hands on Lab          # Markdown source (all content)
 build.js              # Converts markdown → HTML
 lab-guide.html        # Generated output (open in browser)
 index.html            # Copy of lab-guide.html (for GitHub Pages)
-OG Exam Guide         # Official certification exam guide (reference)
 tests/                # Automated validation scripts
-docs/                 # QA reports and reference materials
 CLAUDE.md             # Claude Code configuration for this repo
 CONTRIBUTING.md       # How to contribute
 ```

@@ -5125,11 +5125,11 @@ No. You will *read* Python, bash, and JSON fluently — recognizing correct impl
 
 ### What's the intended order?
 
-Work Modules 1 → 5 in order. Each lab is ~20 minutes. After the Final Capstone, take the Practice Exam in Exam Mode. If any domain scores below 80%, re-read those labs and retake the exam.
+Work Modules 1 → 5 in order. After the Final Capstone, take the Practice Exam in Exam Mode. If any domain scores below 80%, re-read those labs and retake the exam.
 
 ### Can I skip labs on topics I already know?
 
-The Check-Your-Understanding questions and Anti-pattern blocks are where most exam-relevant details live. A concept you think you understand may have a wrong-answer trap you haven't internalized yet — the labs are short enough that skimming them costs little and catches gaps you didn't know you had.
+The Check-Your-Understanding questions and Anti-pattern blocks are where most exam-relevant details live. A concept you think you understand may have a wrong-answer trap you haven't internalized yet — skimming a lab you think you know costs little and often catches gaps you didn't know you had.
 
 ### How do I know I'm ready?
 
@@ -5139,19 +5139,11 @@ Three criteria: (1) you complete all 31 labs including the capstone, (2) you sco
 
 Start with the [Anti-Patterns Cheat Sheet](#anti-patterns-cheat-sheet) entries for that domain. Each entry links back to the lab that teaches the pattern. Re-read the lab, redo its Check-Your-Understanding questions, then retry the practice exam. Most domain weaknesses resolve with one focused re-read.
 
-### How long should it take?
-
-Roughly 10–12 hours of focused work across the labs, plus 1–2 hours for the Practice Exam. Most learners spread this across 2–3 weeks.
-
-## About this course
-
-### How does this compare to claudecertifications.com?
-
-The reference site summarizes each domain in 3–4 subsections. This repo maps 1:1 to all 30 official task statements from Anthropic's OG Exam Guide, with worked Python code and Q&A drills for each. Our content is broader and more technically specific; the reference site has some framing tools this repo does not (e.g., narrative walkthroughs for all 6 scenarios — see [Scenario 2](#scenario-2-code-generation-with-claude-code) for one of them here).
+## About this guide
 
 ### Where does the canonical exam content live?
 
-The [OG Exam Guide](OG Exam Guide) in this repo is Anthropic's official exam guide — the authoritative source. When anything in this course or any external reference contradicts the OG Guide, trust the OG Guide.
+Anthropic's official exam guide is the authoritative source. When anything in this guide or any external reference contradicts the official guide, trust the official guide.
 
 ### Which Claude model do the code examples use?
 
