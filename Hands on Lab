@@ -4527,6 +4527,263 @@ See [Lab 5.1](#lab-5-1-context-management-across-long-interactions), [Lab 1.7](#
 
 ---
 
+# SCENARIO 3: MULTI-AGENT RESEARCH SYSTEM
+
+## The setup
+
+A coordinator agent receives research topics and delegates to specialized subagents: one searches the web, one analyzes documents, one synthesizes findings, and one formats the final cited report. The system needs to produce comprehensive reports without gaps, without duplicated work, and with traceable provenance for every claim. This is the hardest scenario in the exam because it exercises multi-agent orchestration deeply — most wrong answers come from subtle context-isolation or provenance violations.
+
+## Primary domains tested
+
+- **Domain 1: Agentic Architecture & Orchestration** (dominant)
+- **Domain 2: Tool Design & MCP Integration**
+- **Domain 5: Context Management & Reliability**
+
+## Key architectural decisions
+
+### 1. Hub-and-spoke, never flat
+
+The coordinator is the only agent that talks to other agents. Subagents don't message each other or share state. Flat architectures where every agent sees the global conversation look simpler but produce worse results: subagents get distracted by irrelevant context, tool selection degrades, and the coordinator loses the ability to arbitrate conflicts.
+
+See [Lab 1.2](#lab-1-2-multi-agent-coordinator).
+
+### 2. Pass only what the subagent needs
+
+The coordinator's conversation history is long and full of context from other delegations. Forwarding it to each subagent wastes tokens and confuses the subagent about what its specific task is. Each `Task` call should pass a focused, task-scoped prompt — not `coordinator.full_conversation_history`.
+
+**Exam trap:** A question shows a `Task` call with `context=coordinator_history` and asks what's wrong. The answer is always that subagents need explicit, scoped context — not the full coordinator state.
+
+See [Lab 1.3](#lab-1-3-subagent-context-passing-and-spawning).
+
+### 3. Parallel spawning, not sequential
+
+Four independent 20-second subtasks done sequentially take 80 seconds. Four `Task` calls emitted in one coordinator response run in parallel and finish in ~20 seconds. The exam tests this specifically — a scenario describing "slow research system" where the fix is parallel spawning, not switching to a faster model.
+
+### 4. Provenance on every claim
+
+When two subagents return conflicting statistics (one says 23%, another says 27%), the coordinator can't resolve the conflict without provenance — which source, from when, at what confidence level. The synthesis agent attaches `{source, confidence, timestamp, agent_id}` to every claim and surfaces conflicts explicitly rather than silently averaging or picking one.
+
+See [Lab 5.6](#lab-5-6-information-provenance-and-multi-source-synthesis).
+
+### 5. Structured error propagation
+
+A subagent whose tool call fails must distinguish *access failure* ("couldn't reach the database") from *empty result* ("searched, found nothing"). Silent empty-returns on access failures cause the coordinator to synthesize confidently from nothing. Structured error dicts with `failure_type`, `attempted_query`, and `partial_results` let the coordinator decide: use partial data, retry, or escalate.
+
+See [Lab 5.3](#lab-5-3-error-propagation-in-multi-agent-systems).
+
+### 6. Narrow decomposition is the usual root cause of "missing coverage"
+
+If the final report has gaps, the instinct is to blame the search agent. The exam-relevant answer is almost always: the coordinator's decomposition was too narrow. Broaden the task split and the coverage improves without changing any subagent.
+
+See [Lab 1.2 "narrow decomposition" section](#lab-1-2-multi-agent-coordinator).
+
+## What the exam actually tests
+
+- Recognizing context-isolation violations from code (pass-full-history anti-pattern)
+- Diagnosing slow multi-agent systems (sequential vs parallel)
+- Conflict resolution rules (provenance-based, not averaging)
+- Distinguishing access failures from empty results in subagent responses
+- Narrow-decomposition diagnosis when coverage is incomplete
+
+## Common wrong answers
+
+- "Give each subagent the full coordinator context" — always wrong
+- "Average conflicting statistics" — wrong; surface the conflict with source attribution
+- "Return an empty list on database timeout" — wrong; structured error with `failure_type: "access_failure"`
+- "Add more tools to the search agent" — wrong; the fix is usually decomposition, not tooling
+
+---
+
+# SCENARIO 4: DEVELOPER PRODUCTIVITY WITH CLAUDE
+
+## The setup
+
+An agent built on the Claude Agent SDK helps engineers explore unfamiliar codebases, understand legacy systems, generate boilerplate, and automate repetitive tasks. It uses the built-in tools (Read, Write, Edit, Bash, Grep, Glob) and integrates with MCP servers. Most questions in this scenario reward engineers who know the tool taxonomy cold — Grep vs Glob, Edit's failure modes, when Bash is wrong — and who think carefully about agent scope.
+
+## Primary domains tested
+
+- **Domain 2: Tool Design & MCP Integration** (dominant)
+- **Domain 3: Claude Code Configuration & Workflows**
+- **Domain 1: Agentic Architecture & Orchestration**
+
+## Key architectural decisions
+
+### 1. Keep each agent to 4-5 tools
+
+An agent with 18 tools calls `delete_account` when asked about billing. The fix is not better tool descriptions or a bigger model — it is scoping. A billing agent gets billing tools. Account-modification tools live behind a different subagent that the coordinator invokes only when needed.
+
+See [Lab 2.3](#lab-2-3-tool-choice-and-scoped-access).
+
+### 2. Grep searches content; Glob searches names
+
+This is the single most-tested tool-taxonomy distinction. "Find files that call `processRefund`" → Grep (content). "Find all files named `*.test.tsx`" → Glob (names). Passing a function name to Glob returns zero hits; passing a glob pattern to Grep returns confusing content matches on the literal pattern string.
+
+See [Lab 2.5](#lab-2-5-built-in-tools).
+
+### 3. Edit's non-unique-match failure has an escalation ladder
+
+Edit fails when the `old` string appears multiple times. Try these in order: (1) add surrounding context to make the match unique; (2) if every occurrence should change identically, use `replace_all: true`; (3) if the occurrences must change differently, Read the full file, modify in memory, Write the result. Writing over an existing file as the *first* move is always wrong — Write replaces everything, losing any content you didn't touch.
+
+### 4. MCP secrets via `${ENV_VAR}`, never hardcoded
+
+Team tooling lives in `.mcp.json` (committed). Personal experiments live in `~/.claude.json` (not committed). Authentication tokens always use `${ENV_VAR}` expansion. A hardcoded `ghp_abc123` in `.mcp.json` survives in git history forever even after removal — treat it as already compromised.
+
+See [Lab 2.4](#lab-2-4-mcp-server-configuration).
+
+### 5. Incremental exploration, not read-everything
+
+Reading 500 files upfront overflows the context window before Claude finds the relevant code. The correct pattern: Grep to find entry points → Read the primary implementation → follow imports via further Grep calls. Each step narrows the search based on what was found.
+
+See [Lab 2.5 "Incremental codebase understanding" section](#lab-2-5-built-in-tools).
+
+### 6. Built-in tool over Bash equivalent
+
+`Bash("cat config.json")` is wrong when `Read("config.json")` exists. `Bash("grep pattern file")` is wrong when `Grep("pattern")` exists. Purpose-built tools give Claude structured results and are safer than shelling out. Bash is for operations that have no built-in equivalent.
+
+## What the exam actually tests
+
+- Tool-taxonomy questions (Grep vs Glob, Read vs Write vs Edit)
+- Scope diagnosis (18-tool agent misbehaving → distribute, don't describe)
+- MCP config placement (.mcp.json vs ~/.claude.json)
+- Edit failure recovery (ladder: context → replace_all → Read+Write)
+- Built-in-over-Bash preference
+
+## Common wrong answers
+
+- "Make tool descriptions more detailed" when the real fix is reducing tool count
+- "Use Bash" when a built-in tool exists
+- "Use Write to change a line" — Write replaces the whole file
+- "Put the token in `.mcp.json` directly" — always wrong
+
+---
+
+# SCENARIO 5: CLAUDE CODE FOR CONTINUOUS INTEGRATION
+
+## The setup
+
+Claude Code runs inside a CI/CD pipeline: on every PR it reviews the diff, flags issues, and sometimes generates tests. The pipeline needs structured output that other tools can parse, consistent review quality across runs, and behavior that doesn't hang a runner for hours. Teams care about false-positive rates because noisy findings train engineers to ignore the tool entirely.
+
+## Primary domains tested
+
+- **Domain 3: Claude Code Configuration & Workflows** (dominant)
+- **Domain 4: Prompt Engineering & Structured Output**
+
+## Key architectural decisions
+
+### 1. Non-interactive mode is mandatory
+
+Without `-p` (`--print`), Claude Code waits for terminal input. In a GitHub Actions runner there is no terminal — the job hangs until the runner times out. The first question on CI/CD questions is almost always: "why is my CI job running for 6 hours?" Answer: missing `-p`.
+
+See [Lab 3.6](#lab-3-6-ci-cd-integration).
+
+### 2. Structured output with schema enforcement
+
+`-p --output-format json --json-schema '{…}'` produces JSON that matches a declared shape every time. A SIEM or PR-comment bot needs `severity`, `file`, `line`, `description` — enforce that with a schema, not with regex on prose. Parsing natural-language findings with regex breaks the moment Claude phrases something slightly differently.
+
+### 3. Separate session for review
+
+Same-session self-review inherits the generator's reasoning and rationalizes its own decisions. An independent session sees only the code and evaluates it on its merits. The classic pattern: `claude -p "write X"` in Session A, then `claude -p "review diff: $(git diff)"` in Session B. The review catches things the generator was blind to.
+
+See [Lab 3.6](#lab-3-6-ci-cd-integration) and [Lab 4.6](#lab-4-6-multi-instance-and-multi-pass-review).
+
+### 4. Batch API when nobody is waiting
+
+Nightly test-generation for 1000 files? Batch API, 50% cheaper, processes within 24 hours. Pre-merge PR check where the developer is waiting to merge? Synchronous, never Batch — the 24-hour window is unacceptable. The decision rule: is someone waiting → sync; nobody waiting → Batch.
+
+See [Lab 4.5](#lab-4-5-batch-processing-with-message-batches-api).
+
+### 5. Explicit criteria to avoid the false-positive trust spiral
+
+"Flag long functions" returns 30 findings with 20 false positives. Engineers stop reading the output. "Flag functions exceeding 50 lines of code" returns 8 findings, all actionable. Quantify everything: line thresholds, complexity thresholds, severity cutoffs.
+
+See [Lab 4.1](#lab-4-1-explicit-criteria-to-reduce-false-positives).
+
+### 6. Prior review findings prevent duplicate comments
+
+When CI re-runs on a new commit, feed the previous review's findings back in: "previous review found X, Y, Z. Report only NEW issues or issues still unaddressed." Without this, Claude re-flags the same issues and drowns the PR thread.
+
+## What the exam actually tests
+
+- Diagnosing hanging CI jobs (missing `-p`)
+- Designing structured output for downstream parsing
+- Identifying same-session self-review bias
+- Choosing Batch vs sync based on latency requirement
+- Fixing false-positive trust problems via explicit criteria
+
+## Common wrong answers
+
+- "Increase the job timeout" instead of adding `-p`
+- "Parse the review output with regex" instead of `--json-schema`
+- "Have Claude review its own generation" — always wrong in CI
+- "Use Batch API for pre-merge checks" — 24-hour window is a deal-breaker for blocking work
+
+---
+
+# SCENARIO 6: STRUCTURED DATA EXTRACTION
+
+## The setup
+
+Extract structured data from unstructured documents — invoices, receipts, contracts, resumes — validate against a JSON schema, and hand off to a downstream system. The pipeline must handle edge cases (missing fields, unexpected document types, handwritten entries) without either crashing or fabricating values. Aggregate accuracy metrics will look fine; the real question is whether invoices specifically extract at 97% or 70%.
+
+## Primary domains tested
+
+- **Domain 4: Prompt Engineering & Structured Output** (dominant)
+- **Domain 5: Context Management & Reliability**
+
+## Key architectural decisions
+
+### 1. `tool_use` for schema compliance, not plain-text prompting
+
+"Output as JSON" in a system prompt is probabilistic — the model can return prose instead, and pipelines downstream break. `tool_use` with a JSON schema guarantees the response matches the schema's structure. Force a specific tool with `tool_choice: {"type": "tool", "name": "extract_invoice"}` so the model can't return text at all.
+
+See [Lab 4.3](#lab-4-3-structured-output-with-tool-use-and-json-schemas).
+
+### 2. Structure ≠ semantics
+
+Schema compliance means the JSON fields are in the right shape. It does **not** mean the values are correct. An invoice phone number may be fabricated even though the field is valid. Validate the values against business rules (sum checks, date ranges, format constraints) as a separate semantic layer.
+
+**Exam trap:** An extraction system shows schema-valid but semantically-wrong output. The fix is business-rule validation, not "strengthen the schema."
+
+### 3. Nullable fields, not required-everywhere
+
+Required fields force the model to fabricate when the source doesn't contain them. If the invoice has no phone number, `"phone": null` is honest; a made-up "+1-555-0000" satisfies the schema but is wrong. Mark fields `nullable: true` when the source may legitimately lack them.
+
+### 4. Retry with specific errors, never generic
+
+Validation fails. You retry. "Please try again" produces the same error. "The `total` field was 150.00 but the sum of `line_items` is 149.00 — check for a missing line item or rounding" gives Claude actionable signal. Append the specific field, expected value, and what was detected.
+
+See [Lab 4.4](#lab-4-4-validation-and-retry-loops).
+
+### 5. Few-shot examples cover the edge cases
+
+2-4 examples — one canonical, one ambiguous, one negative/edge-case. More than 6 wastes tokens with no benefit. Include an "other" enum value and a companion detail field for unexpected document types; a rigid enum without "other" forces the model to misclassify.
+
+See [Lab 4.2](#lab-4-2-few-shot-prompting).
+
+### 6. Stratified accuracy, not aggregate
+
+"97% accuracy" across 10,000 documents can hide 62% accuracy on handwritten receipts (8% of the volume). Stratify accuracy by document type *and* by field before automating. Flat-random sampling for validation misses rare types entirely — use stratified sampling to guarantee every type appears in the review pool.
+
+See [Lab 5.5](#lab-5-5-human-review-workflows-and-confidence-calibration).
+
+## What the exam actually tests
+
+- Choosing `tool_use` + forced `tool_choice` over prompt-based JSON
+- Distinguishing structural validation from semantic validation
+- Recognizing required-field-forces-fabrication as the cause of hallucinated values
+- Designing retry messages with actionable specifics
+- Detecting aggregate-metrics traps and applying stratified sampling
+
+## Common wrong answers
+
+- "Add 'output JSON' to the prompt" — probabilistic, not guaranteed
+- "Trust schema validation and skip business rules" — structure ≠ semantics
+- "Make every field required" — forces fabrication on absent data
+- "Retry with 'there were errors'" — no signal for what to fix
+- "Deploy based on 97% aggregate" — per-type metrics will reveal the hidden failure modes
+
+---
+
 # ANTI-PATTERNS CHEAT SHEET
 
 A consolidated reference across all five domains. Use this in the final week before the exam to drill pattern recognition. Each entry maps to the lab where it is taught in depth.
