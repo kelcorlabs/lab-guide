@@ -66,7 +66,7 @@ build.js              # Converts markdown → HTML
 lab-guide.html        # Generated output (open in browser)
 index.html            # Copy of lab-guide.html (for GitHub Pages)
 tests/                # Automated validation scripts
-CLAUDE.md             # Claude Code configuration for this repo
+CLAUDE.md             # Claude Code project configuration
 CONTRIBUTING.md       # How to contribute
 ```
 

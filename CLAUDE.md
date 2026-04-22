@@ -21,7 +21,7 @@ npm test         # Runs all validation (Python scripts, answers, links, HTML)
 - **ASCII-safe only** in Python scripts — no Unicode arrows/checkmarks (breaks Windows cp1252)
 
 ## Content structure
-- Modules 1-5 → Labs covering all 30 OG Exam Guide task statements
+- Modules 1-5 → Labs covering all 30 official exam task statements
 - Final Scenario → Integrated capstone lab
 - Scenario walkthroughs → Narrative framing for additional exam scenarios
 - Anti-patterns cheat sheet → Consolidated reference with priority tags

@@ -64,9 +64,6 @@ After the 5 modules: a Final Scenario integrating all domains, then a 60-questio
 ---
 
 # LAB 1.1: THE AGENTIC LOOP
-# Domain 1 — Task Statement 1.1
-# Concept: stop_reason lifecycle, tool results, anti-patterns
-# Time: ~20 minutes | Difficulty: Guided
 
 ## What the exam tests
 
@@ -264,9 +261,6 @@ D) The model's temperature setting is too high, causing unpredictable text gener
 ---
 
 # LAB 1.2: MULTI-AGENT COORDINATOR
-# Domain 1 — Task Statement 1.2
-# Concept: Hub-and-spoke, coordinator delegation, iterative refinement
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -420,9 +414,6 @@ D) Replace the OCR agent with a more capable model that handles both formats nat
 ---
 
 # LAB 1.3: SUBAGENT CONTEXT PASSING AND SPAWNING
-# Domain 1 — Task Statement 1.3
-# Concept: Task tool, explicit context, parallel spawning, AgentDefinition
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -614,9 +605,6 @@ D) Cache results from previous due diligence runs to avoid redundant processing.
 ---
 
 # LAB 1.4: PREREQUISITE GATES AND HANDOFF PATTERNS
-# Domain 1 — Task Statement 1.4
-# Concept: Programmatic enforcement, prompt-based guidance, structured handoff
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -754,9 +742,6 @@ D) Reduce the temperature to make the model more deterministic and consistent in
 ---
 
 # LAB 1.5: AGENT SDK HOOKS FOR TOOL INTERCEPTION
-# Domain 1 — Task Statement 1.5
-# Concept: PostToolUse, PreToolUse, data normalization, policy enforcement
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -907,9 +892,6 @@ D) No -- add a PreToolUse hook that programmatically blocks any `apply_discount`
 ---
 
 # LAB 1.6: TASK DECOMPOSITION STRATEGIES
-# Domain 1 — Task Statement 1.6
-# Concept: Prompt chaining vs dynamic decomposition, per-file analysis
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -1029,9 +1011,6 @@ D) Sort the services by complexity and process only the most complex ones that n
 ---
 
 # LAB 1.7: SESSION STATE, RESUMPTION, AND FORKING
-# Domain 1 — Task Statement 1.7
-# Concept: --resume, --fork-session, stale context, structured summaries
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -1196,9 +1175,6 @@ D) Context degradation -- the session accumulated so much content that Claude lo
 ---
 
 # LAB 2.1: TOOL DESCRIPTION QUALITY
-# Domain 2 — Task Statement 2.1
-# Concept: Tool descriptions, differentiation, system prompt keywords
-# Time: ~20 minutes | Difficulty: Guided
 
 ## What the exam tests
 
@@ -1336,9 +1312,6 @@ D) Use tool_choice to force the correct behavior.
 ---
 
 # LAB 2.2: STRUCTURED ERROR RESPONSES
-# Domain 2 — Task Statement 2.2
-# Concept: isError flag, error categories, retryable vs non-retryable, access vs empty
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -1477,9 +1450,6 @@ D) Override the business rule by splitting the refund into two smaller transacti
 ---
 
 # LAB 2.3: TOOL CHOICE AND SCOPED ACCESS
-# Domain 2 — Task Statement 2.3
-# Concept: Tool distribution, tool_choice modes, scoped access
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -1617,9 +1587,6 @@ D) Use `tool_choice: "any"` and hope Claude picks the right one.
 ---
 
 # LAB 2.4: MCP SERVER CONFIGURATION
-# Domain 2 — Task Statement 2.4
-# Concept: .mcp.json, ~/.claude.json, env var expansion, MCP resources
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -1743,9 +1710,6 @@ D) Rename the MCP tool to `grep_advanced`.
 ---
 
 # LAB 2.5: BUILT-IN TOOLS
-# Domain 2 — Task Statement 2.5
-# Concept: Grep vs Glob, Read/Write/Edit, incremental codebase understanding
-# Time: ~20 minutes | Difficulty: Guided
 
 ## What the exam tests
 
@@ -1919,9 +1883,6 @@ D) Use Glob to find the refund-related files by name.
 ---
 
 # LAB 3.1: CLAUDE.MD HIERARCHY AND MODULAR ORGANIZATION
-# Domain 3 — Task Statement 3.1
-# Concept: Configuration hierarchy, @import, .claude/rules/
-# Time: ~20 minutes | Difficulty: Guided
 
 ## What the exam tests
 
@@ -2039,9 +2000,6 @@ D) Whether the file has the `.md` extension.
 ---
 
 # LAB 3.2: CUSTOM SLASH COMMANDS AND SKILLS
-# Domain 3 — Task Statement 3.2
-# Concept: Commands vs skills, context: fork, allowed-tools, argument-hint
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2149,9 +2107,6 @@ D) Use `context: fork` to prevent destructive actions.
 ---
 
 # LAB 3.3: PATH-SPECIFIC RULES
-# Domain 3 — Task Statement 3.3
-# Concept: YAML frontmatter paths, glob patterns, conditional loading
-# Time: ~15 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2248,9 +2203,6 @@ D) The developer should split into directory-level CLAUDE.md files.
 ---
 
 # LAB 3.4: PLAN MODE VS DIRECT EXECUTION
-# Domain 3 — Task Statement 3.4
-# Concept: Plan mode, direct execution, Explore subagent
-# Time: ~15 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2354,9 +2306,6 @@ D) Use the Explore subagent to analyze the function first.
 ---
 
 # LAB 3.5: ITERATIVE REFINEMENT TECHNIQUES
-# Domain 3 — Task Statement 3.5
-# Concept: Concrete examples, test-driven iteration, interview pattern
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2492,9 +2441,6 @@ D) Describe only the caller bug and let Claude find the root cause.
 ---
 
 # LAB 3.6: CI/CD INTEGRATION
-# Domain 3 — Task Statement 3.6
-# Concept: -p flag, --output-format json, session isolation, CLAUDE.md for CI
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2666,9 +2612,6 @@ D) The separate session has access to more context about the database schema.
 ---
 
 # LAB 4.1: EXPLICIT CRITERIA TO REDUCE FALSE POSITIVES
-# Domain 4 — Task Statement 4.1
-# Concept: Explicit criteria, false positive trust impact, severity definitions
-# Time: ~20 minutes | Difficulty: Guided
 
 ## What the exam tests
 
@@ -2761,9 +2704,6 @@ D) Add "be conservative" to the prompt.
 ---
 
 # LAB 4.2: FEW-SHOT PROMPTING
-# Domain 4 — Task Statement 4.2
-# Concept: Few-shot examples, ambiguous cases, generalization, hallucination reduction
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -2869,9 +2809,6 @@ D) Use tool_use to enforce the schema.
 ---
 
 # LAB 4.3: STRUCTURED OUTPUT WITH TOOL USE AND JSON SCHEMAS
-# Domain 4 — Task Statement 4.3
-# Concept: tool_use, tool_choice, schema design, semantic vs syntax errors
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -3026,9 +2963,6 @@ D) Force a specific tool with `tool_choice: {"type": "tool", "name": "..."}`.
 ---
 
 # LAB 4.4: VALIDATION AND RETRY LOOPS
-# Domain 4 — Task Statement 4.4
-# Concept: Retry-with-feedback, limits of retry, detected_pattern, semantic validation
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -3168,9 +3102,6 @@ D) Stop tracking dismissals.
 ---
 
 # LAB 4.5: BATCH PROCESSING WITH MESSAGE BATCHES API
-# Domain 4 — Task Statement 4.5
-# Concept: Batch API, 50% savings, custom_id, SLA calculation
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -3294,9 +3225,6 @@ D) Switch to the synchronous API for all 10,000.
 ---
 
 # LAB 4.6: MULTI-INSTANCE AND MULTI-PASS REVIEW
-# Domain 4 — Task Statement 4.6
-# Concept: Self-review limitations, independent instances, per-file + cross-file
-# Time: ~20 minutes | Difficulty: Advanced
 
 ## What the exam tests
 
@@ -3442,9 +3370,6 @@ D) Retry the review to get a higher confidence score.
 ---
 
 # LAB 5.1: CONTEXT MANAGEMENT ACROSS LONG INTERACTIONS
-# Domain 5 — Task Statement 5.1
-# Concept: Progressive summarization risks, case facts, lost-in-the-middle, tool result trimming
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -3575,9 +3500,6 @@ D) Sources 4-6 were in a different format.
 ---
 
 # LAB 5.2: ESCALATION AND AMBIGUITY RESOLUTION
-# Domain 5 — Task Statement 5.2
-# Concept: Escalation triggers, sentiment vs complexity, ambiguity handling
-# Time: ~20 minutes | Difficulty: Intermediate
 
 ## What the exam tests
 
@@ -3712,9 +3634,6 @@ D) Escalated to a human agent immediately.
 ---
 
 # LAB 5.3: ERROR PROPAGATION IN MULTI-AGENT SYSTEMS
-# Domain 5 — Task Statement 5.3
-# Concept: Structured error context, access failures vs empty results, local recovery
-# Time: ~20 minutes | Difficulty: Advanced
 
 ## What the exam tests
 
@@ -3866,9 +3785,6 @@ D) Increase the timeout limit.
 ---
 
 # LAB 5.4: CONTEXT MANAGEMENT IN LARGE CODEBASE EXPLORATION
-# Domain 5 — Task Statement 5.4
-# Concept: Context degradation, scratchpad files, subagent delegation, crash recovery
-# Time: ~20 minutes | Difficulty: Advanced
 
 ## What the exam tests
 
@@ -3997,9 +3913,6 @@ D) Run all phases in parallel to avoid crashes.
 ---
 
 # LAB 5.5: HUMAN REVIEW WORKFLOWS AND CONFIDENCE CALIBRATION
-# Domain 5 — Task Statement 5.5
-# Concept: Field-level accuracy validation, stratified sampling, confidence calibration
-# Time: ~20 minutes | Difficulty: Advanced
 
 ## What the exam tests
 
@@ -4148,9 +4061,6 @@ D) Handwritten receipts should be excluded from the system.
 ---
 
 # LAB 5.6: INFORMATION PROVENANCE AND MULTI-SOURCE SYNTHESIS
-# Domain 5 — Task Statement 5.6
-# Concept: Claim-source mappings, conflict surfacing, temporal metadata
-# Time: ~20 minutes | Difficulty: Advanced
 
 ## What the exam tests
 
@@ -5107,7 +5017,7 @@ Anthropic's entry-level certification for solution architects who design and bui
 
 ### What's the passing score and time limit?
 
-720 out of 1000, scaled. The scaled score adjusts for form-to-form difficulty differences, so you do not literally need 72% correct. On this repo's practice exam, aim for 90%+ in Exam Mode before you schedule the real exam. Time limit is 120 minutes.
+720 out of 1000, scaled. The scaled score adjusts for form-to-form difficulty differences, so you do not literally need 72% correct. On the Practice Exam in this guide, aim for 90%+ in Exam Mode before scheduling the real exam. Time limit is 120 minutes.
 
 ### What does the exam cost?
 
@@ -5143,7 +5053,7 @@ Start with the [Anti-Patterns Cheat Sheet](#anti-patterns-cheat-sheet) entries f
 
 ### Where does the canonical exam content live?
 
-Anthropic's official exam guide is the authoritative source. When anything in this guide or any external reference contradicts the official guide, trust the official guide.
+Anthropic's official exam guide is the authoritative source. If anything here contradicts it, trust the official guide.
 
 ### Which Claude model do the code examples use?
 
