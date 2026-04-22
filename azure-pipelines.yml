@@ -1,0 +1,27 @@
+trigger:
+  - master
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+    displayName: Install Node.js
+
+  - script: |
+      npm install
+      npm run build
+      mkdir -p _site
+      cp index.html _site/
+      cp lab-guide.html _site/
+    displayName: Build static site
+
+  - task: AzureStaticWebApp@0
+    inputs:
+      app_location: _site
+      skip_app_build: true
+      skip_api_build: true
+      azure_static_web_apps_api_token: $(DEPLOYMENT_TOKEN)
+    displayName: Deploy to Azure Static Web Apps
